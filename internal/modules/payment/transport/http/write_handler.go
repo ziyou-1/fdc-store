@@ -35,6 +35,13 @@ var (
 	ErrPaymentChannelNotAllowedForProduct  = errors.New("payment channel not allowed for product")
 	ErrPaymentChannelNotAllowedForRecharge = errors.New("payment channel not allowed for wallet recharge")
 	ErrWalletOnlyPaymentRequired           = errors.New("wallet only payment required")
+	ErrPointsTenderExclusive               = errors.New("points tender exclusive")
+	ErrPointsExchangeDisabled              = errors.New("points exchange disabled")
+	ErrPointsExchangeNotSupported          = errors.New("points exchange not supported")
+	ErrPointsInsufficient                  = errors.New("points insufficient")
+	ErrPointsCouponNotAllowed              = errors.New("points exchange coupon not allowed")
+	ErrPointsDailyLimitExceeded            = errors.New("points daily limit exceeded")
+	ErrPointsSKUDailyLimitExceeded         = errors.New("points sku daily limit exceeded")
 	ErrPaymentStatusInvalid                = errors.New("payment status invalid")
 	ErrPaymentAmountMismatch               = errors.New("payment amount mismatch")
 )
@@ -44,6 +51,7 @@ type CreatePaymentInput struct {
 	OrderID       uint
 	ChannelID     uint
 	UseBalance    bool
+	UsePoints     bool
 	ClientIP      string
 	Context       context.Context
 	RequestScheme string
@@ -76,6 +84,7 @@ type CreatePaymentRequest struct {
 	OrderNo    string `json:"order_no" binding:"required"`
 	ChannelID  uint   `json:"channel_id"`
 	UseBalance bool   `json:"use_balance"`
+	UsePoints  bool   `json:"use_points"`
 }
 
 // CreateGuestPaymentRequest 游客发起支付请求。
@@ -125,6 +134,7 @@ func (h *WriteHandler) CreatePayment(c *gin.Context) {
 		OrderID:       order.ID,
 		ChannelID:     req.ChannelID,
 		UseBalance:    req.UseBalance,
+		UsePoints:     req.UsePoints,
 		ClientIP:      c.ClientIP(),
 		Context:       c.Request.Context(),
 		RequestScheme: requestSchemeFromContext(c),
@@ -366,6 +376,13 @@ var paymentCreateErrorRules = concatMappedErrors(
 		{target: ErrPaymentChannelNotAllowedForProduct, code: response.CodeBadRequest, key: "error.payment_channel_not_allowed_for_product"},
 		{target: ErrPaymentChannelNotAllowedForRecharge, code: response.CodeBadRequest, key: "error.payment_channel_not_allowed_for_recharge"},
 		{target: ErrWalletOnlyPaymentRequired, code: response.CodeBadRequest, key: "error.wallet_only_payment_required"},
+		{target: ErrPointsTenderExclusive, code: response.CodeBadRequest, key: "error.points_tender_exclusive"},
+		{target: ErrPointsExchangeDisabled, code: response.CodeBadRequest, key: "error.points_exchange_disabled"},
+		{target: ErrPointsExchangeNotSupported, code: response.CodeBadRequest, key: "error.points_exchange_not_supported"},
+		{target: ErrPointsInsufficient, code: response.CodeBadRequest, key: "error.points_insufficient"},
+		{target: ErrPointsCouponNotAllowed, code: response.CodeBadRequest, key: "error.points_coupon_not_allowed"},
+		{target: ErrPointsDailyLimitExceeded, code: response.CodeBadRequest, key: "error.points_daily_limit_exceeded"},
+		{target: ErrPointsSKUDailyLimitExceeded, code: response.CodeBadRequest, key: "error.points_sku_daily_limit_exceeded"},
 	},
 )
 

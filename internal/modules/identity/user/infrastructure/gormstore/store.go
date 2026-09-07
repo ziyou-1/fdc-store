@@ -117,6 +117,74 @@ func (r *Store) UpdateMemberLevelIfCurrent(userID, currentLevelID, nextLevelID u
 	return result.RowsAffected, result.Error
 }
 
+// ExpireMemberships 清掉已到期的付费会员档位。
+// 折扣率回到 100（不打折）而不是 0——0 在 MembershipActive 里代表非法值，
+// 且会让任何误用它做乘法的地方把价格算成 0。
+func (r *Store) ExpireMemberships(now time.Time) (int64, error) {
+	result := r.db.Model(&userdomain.User{}).
+		Where("membership_expires_at IS NOT NULL AND membership_expires_at <= ? AND membership_period <> '' AND deleted_at IS NULL", now).
+		Updates(map[string]interface{}{
+			"membership_period":        "",
+			"membership_discount_rate": 100,
+			"membership_expires_at":    nil,
+			"membership_reminded_for":  nil,
+			"updated_at":               time.Now(),
+		})
+	return result.RowsAffected, result.Error
+}
+
+// ListMembershipsExpiringBetween 返回到期时间落在 [from, to) 的付费会员。
+func (r *Store) ListMembershipsExpiringBetween(from, to time.Time, limit int) ([]userdomain.User, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	var users []userdomain.User
+	err := r.db.
+		Where("membership_expires_at IS NOT NULL AND membership_expires_at >= ? AND membership_expires_at < ? AND membership_period <> '' AND deleted_at IS NULL", from, to).
+		Order("membership_expires_at ASC").
+		Limit(limit).
+		Find(&users).Error
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+// ClaimMembershipExpiryReminder 抢占「为当前到期时刻发提醒」的资格。
+// 与 memberlevel 侧同名方法语义一致：identity 的 Store 会被当作
+// memberlevel.UserRepository 使用，两边必须都实现。
+func (r *Store) ClaimMembershipExpiryReminder(userID uint, from, to time.Time) (bool, error) {
+	if userID == 0 {
+		return false, nil
+	}
+	result := r.db.Model(&userdomain.User{}).
+		Where("id = ? AND deleted_at IS NULL", userID).
+		Where("membership_period <> '' AND membership_expires_at IS NOT NULL").
+		Where("membership_expires_at >= ? AND membership_expires_at < ?", from, to).
+		Where("membership_reminded_for IS NULL OR membership_reminded_for <> membership_expires_at").
+		Updates(map[string]interface{}{
+			"membership_reminded_for": gorm.Expr("membership_expires_at"),
+			"updated_at":              time.Now(),
+		})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}
+
+// ReleaseMembershipExpiryReminder 撤销抢占，供发信失败后让下一轮重试。
+func (r *Store) ReleaseMembershipExpiryReminder(userID uint) error {
+	if userID == 0 {
+		return nil
+	}
+	return r.db.Model(&userdomain.User{}).
+		Where("id = ? AND deleted_at IS NULL", userID).
+		Updates(map[string]interface{}{
+			"membership_reminded_for": nil,
+			"updated_at":              time.Now(),
+		}).Error
+}
+
 // List 用户列表
 func (r *Store) List(filter usercontract.ListFilter) ([]userdomain.User, int64, error) {
 	query := r.db.Model(&userdomain.User{}).Where("users.deleted_at IS NULL")

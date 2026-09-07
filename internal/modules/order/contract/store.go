@@ -7,11 +7,14 @@ import (
 	cardsecretcontract "github.com/dujiao-next/internal/modules/cardsecret/contract"
 	productcontract "github.com/dujiao-next/internal/modules/catalog/product/contract"
 	couponcontract "github.com/dujiao-next/internal/modules/coupon/contract"
+	freeclaimcontract "github.com/dujiao-next/internal/modules/freeclaim/contract"
 	fulfillmentcontract "github.com/dujiao-next/internal/modules/fulfillment/contract"
 	orderdomain "github.com/dujiao-next/internal/modules/order/domain"
+	pointscontract "github.com/dujiao-next/internal/modules/points/contract"
 	resellercontract "github.com/dujiao-next/internal/modules/reseller/contract"
 	resellerdomain "github.com/dujiao-next/internal/modules/reseller/domain"
 	walletcontract "github.com/dujiao-next/internal/modules/wallet/contract"
+	"github.com/dujiao-next/internal/shared/jsonmap"
 	"github.com/dujiao-next/internal/shared/money"
 )
 
@@ -50,6 +53,9 @@ type Store interface {
 	CountPendingMemberByRiskIP(riskIP string) (int64, error)
 	SumPendingGuestQuantityByRiskIP(riskIP string, productIDs []uint) (map[uint]int64, error)
 	UpdateFields(id uint, updates map[string]interface{}) error
+	UpdateOrderItemManualSubmission(orderID, itemID uint, submission jsonmap.JSON, now time.Time) (int64, error)
+	// CountPointsExchangedQuantityBySKUSince 统计 since 之后该 SKU 被积分兑换的件数，用于单 SKU 每日上限。
+	CountPointsExchangedQuantityBySKUSince(skuID uint, since time.Time) (int64, error)
 	UpdateChildrenStatus(parentID uint, targetStatus string, now time.Time) (int64, error)
 	UpdateFieldsWhereWalletPaid(id uint, updates map[string]interface{}) (int64, error)
 	GetByIDForUpdate(id uint) (*orderdomain.Order, error)
@@ -77,6 +83,8 @@ type Transaction interface {
 	Products() productcontract.Repository
 	ProductSKUs() productcontract.SKURepository
 	CardSecrets() cardsecretcontract.Repository
+	Points() pointscontract.Transaction
+	FreeClaims() freeclaimcontract.Repository
 	Coupons() couponcontract.Repository
 	CouponUsages() couponcontract.UsageRepository
 	Fulfillments() fulfillmentcontract.Store

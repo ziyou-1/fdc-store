@@ -108,6 +108,7 @@ const localeLabels: Record<ResellerLocale, string> = {
   'zh-CN': '简体',
   'zh-TW': '繁體',
   'en-US': 'EN',
+  'id-ID': 'ID',
 }
 const announcementTypeOptions = [
   { value: 'info', icon: Info, iconClass: 'text-primary' },

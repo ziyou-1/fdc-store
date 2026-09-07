@@ -251,6 +251,9 @@ func (s *Store) GetRechargeOrderByPaymentIDForUpdate(paymentID uint) (*walletdom
 }
 
 func applyRechargeFilters(query *gorm.DB, filter walletcontract.RechargeListFilter, includeStatus bool) *gorm.DB {
+	if target := strings.TrimSpace(filter.CreditTarget); target != "" {
+		query = query.Where("credit_target = ?", target)
+	}
 	query = query.Where("wallet_recharge_orders.deleted_at IS NULL")
 	if filter.RechargeNo != "" {
 		query = query.Where("wallet_recharge_orders.recharge_no LIKE ?", "%"+filter.RechargeNo+"%")

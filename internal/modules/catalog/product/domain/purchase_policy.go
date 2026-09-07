@@ -46,8 +46,21 @@ func NormalizeFulfillmentType(raw string) string {
 		return constants.FulfillmentTypeAuto
 	case constants.FulfillmentTypeUpstream:
 		return constants.FulfillmentTypeUpstream
+	case constants.FulfillmentTypeContent:
+		return constants.FulfillmentTypeContent
 	default:
 		return ""
+	}
+}
+
+// NormalizeManualFormTiming 归一化人工交付表单的采集时机。
+// 空值与非法值一律回落到 checkout，保持既有商品行为不变。
+func NormalizeManualFormTiming(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case constants.ManualFormTimingAfterPayment:
+		return constants.ManualFormTimingAfterPayment
+	default:
+		return constants.ManualFormTimingCheckout
 	}
 }
 

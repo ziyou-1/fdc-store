@@ -56,3 +56,14 @@ type GoogleRedirectHandoff struct {
 	Identity  googleauthapp.VerifiedIdentity
 	CreatedAt time.Time
 }
+
+// InviterResolver 把邀请码解析成推荐人的用户 ID。
+// 邀请码复用 affiliate_profiles.affiliate_code，避免用户手上有两套码。
+type InviterResolver interface {
+	ResolveInviterUserID(code string) (uint, error)
+}
+
+// ReferralRewarder 发放推荐注册奖励。奖励失败不影响注册本身。
+type ReferralRewarder interface {
+	AwardReferralRegister(inviterUserID, inviteeUserID uint) error
+}

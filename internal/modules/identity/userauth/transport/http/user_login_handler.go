@@ -30,7 +30,7 @@ type UserLoginSettings interface {
 
 // UserLoginAuth 是注册/登录端点所需的认证端口。
 type UserLoginAuth interface {
-	Register(email, password, code string, agreementAccepted, emailVerificationEnabled bool) (*userdomain.User, string, time.Time, error)
+	Register(email, password, code, inviteCode string, agreementAccepted, emailVerificationEnabled bool) (*userdomain.User, string, time.Time, error)
 	LoginStep1(email, password string, rememberMe bool) (*AuthLoginResult, error)
 }
 
@@ -57,6 +57,7 @@ type UserRegisterRequest struct {
 	Email             string `json:"email" binding:"required"`
 	Password          string `json:"password" binding:"required"`
 	Code              string `json:"code"`
+	InviteCode        string `json:"invite_code"`
 	AgreementAccepted bool   `json:"agreement_accepted"`
 }
 
@@ -105,7 +106,7 @@ func (h *UserLoginHandler) UserRegister(c *gin.Context) {
 		return
 	}
 
-	user, token, expiresAt, err := h.auth.Register(req.Email, req.Password, req.Code, req.AgreementAccepted, emailVerificationEnabled)
+	user, token, expiresAt, err := h.auth.Register(req.Email, req.Password, req.Code, req.InviteCode, req.AgreementAccepted, emailVerificationEnabled)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidEmail):

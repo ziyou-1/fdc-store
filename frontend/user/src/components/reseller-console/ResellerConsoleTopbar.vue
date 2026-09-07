@@ -218,17 +218,19 @@ const languages = [
   { code: 'zh-CN', name: '简体中文' },
   { code: 'zh-TW', name: '繁體中文' },
   { code: 'en-US', name: 'English' },
+  { code: 'id-ID', name: 'Bahasa Indonesia' },
 ]
 
 const currentLocaleLabel = computed(() => {
   if (appStore.locale === 'en-US') return 'EN'
+  if (appStore.locale === 'id-ID') return 'ID'
   if (appStore.locale === 'zh-TW') return '繁'
   return '简'
 })
 
 const brandSiteName = computed(() => {
   const text = String(appStore.config?.brand?.site_name || '').trim()
-  return text !== '' ? text : 'Dujiao-Next'
+  return text !== '' ? text : 'Keyvo'
 })
 
 const brandLogo = computed(() => {

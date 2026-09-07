@@ -16,9 +16,12 @@ type UserProfileResp struct {
 	Nickname           string       `json:"nickname"`
 	EmailVerifiedAt    *time.Time   `json:"email_verified_at"`
 	Locale             string       `json:"locale"`
-	MemberLevelID      uint         `json:"member_level_id"`
-	TotalRecharged     money.Amount `json:"total_recharged"`
-	TotalSpent         money.Amount `json:"total_spent"`
+	MemberLevelID          uint         `json:"member_level_id"`
+	MembershipPeriod       string       `json:"membership_period"`
+	MembershipDiscountRate money.Amount `json:"membership_discount_rate"`
+	MembershipExpiresAt    *time.Time   `json:"membership_expires_at,omitempty"`
+	TotalRecharged         money.Amount `json:"total_recharged"`
+	TotalSpent             money.Amount `json:"total_spent"`
 	EmailChangeMode    string       `json:"email_change_mode,omitempty"`
 	PasswordChangeMode string       `json:"password_change_mode,omitempty"`
 }
@@ -34,9 +37,12 @@ func NewUserProfileResp(user *userdomain.User, emailMode, passwordMode string) U
 		Nickname:           user.DisplayName,
 		EmailVerifiedAt:    user.EmailVerifiedAt,
 		Locale:             user.Locale,
-		MemberLevelID:      user.MemberLevelID,
-		TotalRecharged:     user.TotalRecharged,
-		TotalSpent:         user.TotalSpent,
+		MemberLevelID:          user.MemberLevelID,
+		MembershipPeriod:       user.MembershipPeriod,
+		MembershipDiscountRate: user.MembershipDiscountRate,
+		MembershipExpiresAt:    user.MembershipExpiresAt,
+		TotalRecharged:         user.TotalRecharged,
+		TotalSpent:             user.TotalSpent,
 		EmailChangeMode:    emailMode,
 		PasswordChangeMode: passwordMode,
 	}

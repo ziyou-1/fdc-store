@@ -5,6 +5,9 @@ export interface UserProfileData {
     email_verified_at?: string | null
     locale: string
     member_level_id?: number
+    membership_period?: string
+    membership_discount_rate?: number | string
+    membership_expires_at?: string | null
     total_recharged?: number | string
     total_spent?: number | string
     email_change_mode?: 'bind_only' | 'change_with_old_and_new'
@@ -21,6 +24,34 @@ export interface PublicMemberLevel {
     spend_threshold: number
     is_default: boolean
     sort_order: number
+}
+
+export interface MembershipPlan {
+    period: 'month' | 'quarter' | 'year' | string
+    price: number | string
+    discount_rate: number
+    duration_days: number
+    name: Record<string, string>
+    description: Record<string, string>
+    is_active: boolean
+}
+
+export interface MembershipPurchasePayload {
+    period: string
+    channel_id: number
+    currency?: string
+    remark?: string
+}
+
+export interface MembershipPurchaseResult {
+    recharge_no: string
+    payment_id: number
+    payable_amount: number | string
+    currency: string
+    period: string
+    redirect_url?: string
+    qr_code?: string
+    interaction_mode?: string
 }
 
 export interface UpdateUserProfilePayload {
@@ -64,14 +95,17 @@ export interface TelegramAuthPayload {
     photo_url?: string
     auth_date: number
     hash: string
+    invite_code?: string
 }
 
 export interface TelegramMiniAppAuthPayload {
     init_data: string
+    invite_code?: string
 }
 
 export interface GoogleCredentialPayload {
     credential: string
+    invite_code?: string
 }
 
 export interface TelegramBindingData {
@@ -250,6 +284,7 @@ export interface ResellerLocalizedText {
     'zh-CN': string
     'zh-TW': string
     'en-US': string
+    'id-ID': string
 }
 
 export interface ResellerSiteConfigPayload {
@@ -464,6 +499,7 @@ export interface CreatePaymentPayload {
     order_no: string
     channel_id?: number
     use_balance?: boolean
+    use_points?: boolean
 }
 
 export interface PaymentCreateResult {
@@ -495,4 +531,201 @@ export interface CaptchaPayload {
     captcha_id?: string
     captcha_code?: string
     turnstile_token?: string
+}
+
+// ===== 在线客服 =====
+
+// SupportConversationData 每个买家恒定一条会话。unread_for_user 是买家侧未读，
+// unread_for_agent 是客服侧未读，两者互不影响。
+export interface SupportConversationData {
+    id: number
+    user_id: number
+    status: 'open' | 'closed'
+    last_message_at: string | null
+    last_message_preview: string
+    unread_for_agent: number
+    unread_for_user: number
+    created_at: string
+    updated_at: string
+}
+
+export type SupportContentType = 'text' | 'image' | 'video'
+
+export interface SupportMessageData {
+    id: number
+    conversation_id: number
+    // sender_type 为 'user'（买家）或 'agent'（客服），决定气泡左右。
+    sender_type: 'user' | 'agent'
+    sender_id: number
+    content_type: SupportContentType
+    content: string
+    media_url: string
+    created_at: string
+}
+
+export interface SupportQuickReplyData {
+    id: number
+    title: string
+    content: string
+    is_active: boolean
+    sort_order: number
+    created_at: string
+    updated_at: string
+}
+
+// SupportSendMessagePayload content_type 省略时后端按 text 处理；
+// image/video 必须带 media_url，text 必须带非空 content。
+export interface SupportSendMessagePayload {
+    content_type?: SupportContentType
+    content?: string
+    media_url?: string
+}
+
+export interface SupportAttachmentResult {
+    media_url: string
+    mime_type: string
+    content_type: 'image' | 'video'
+}
+
+export interface SupportMessageListResult {
+    conversation: SupportConversationData
+    messages: SupportMessageData[]
+    total: number
+}
+
+// ===== 积分 =====
+
+// PointsAccountData 积分余额与累计。积分是整数（后端 int64），
+// 与金额一律用字符串的约定不同，不要套用 money 工具函数。
+export interface PointsAccountData {
+    balance: number
+    total_earned: number
+    total_spent: number
+}
+
+export type PointsTransactionType =
+    | 'checkin'
+    | 'referral_register'
+    | 'referral_order'
+    | 'recharge'
+    | 'exchange'
+    | 'exchange_refund'
+    | 'admin_adjust'
+
+export interface PointsTransactionData {
+    id: number
+    type: PointsTransactionType | string
+    direction: 'in' | 'out'
+    amount: number
+    balance_after: number
+    remark: string
+    created_at: string
+}
+
+// PointsCheckinStatusData enabled 为 false 时表示站点未开启签到，整块 UI 应隐藏。
+export interface PointsCheckinStatusData {
+    checked_in: boolean
+    date: string
+    streak_days: number
+    checkin_points: number
+    enabled: boolean
+    balance: number
+}
+
+export interface PointsCheckinResult {
+    points: number
+    streak_days: number
+    balance: number
+    date: string
+}
+
+export interface PointsRechargePayload {
+    channel_id: number
+    amount: string
+    currency?: string
+    remark?: string
+}
+
+// PointsRechargeResult interaction_mode 只会是 qr 或 redirect
+// （payment_service_provider.go 限定），前台据此决定跳转还是渲染二维码。
+export interface PointsRechargeResult {
+    recharge_no: string
+    payment_id: number
+    payable_amount: string
+    currency: string
+    points_amount: number
+    redirect_url: string
+    qr_code: string
+    interaction_mode: string
+}
+
+export interface PointsRechargeRecordData {
+    recharge_no: string
+    status: string
+    amount: string
+    payable_amount: string
+    currency: string
+    points_amount: number
+    points_per_unit: number
+    paid_at: string | null
+    created_at: string
+}
+
+// PointsPublicConfigData 买家可见的积分规则子集（GET /points/config）。
+// 充值前必须靠 recharge_points_per_unit 告诉买家能换多少积分。
+export interface PointsPublicConfigData {
+    checkin_enabled: boolean
+    checkin_points: number
+    recharge_enabled: boolean
+    recharge_points_per_unit: number
+    exchange_enabled: boolean
+    referral_enabled: boolean
+    referral_register_points: number
+    referral_first_order_points: number
+}
+
+export interface PointsInviteData {
+    enabled: boolean
+    code: string
+    register_points: number
+    first_order_points: number
+}
+
+// ===== 每日免费领取 =====
+
+// FreeClaimProductData 后端补齐的商品展示快照。
+// 池条目本身只有 ID，卡片靠这个字段渲染名称/图片并跳转到商品页。
+export interface FreeClaimProductData {
+    id: number
+    slug: string
+    title: Record<string, string>
+    image: string
+    price: string
+}
+
+export interface FreeClaimPoolItemData {
+    id: number
+    product_id: number
+    sku_id: number
+    is_active: boolean
+    sort_order: number
+}
+
+// FreeClaimTodayData claimed 依赖可选鉴权：带 token 才有意义，游客恒为 false。
+export interface FreeClaimTodayData {
+    date: string
+    enabled: boolean
+    available: boolean
+    claimed: boolean
+    member_only: boolean
+    eligible: boolean
+    item?: FreeClaimPoolItemData
+    product?: FreeClaimProductData
+}
+
+export interface FreeClaimResult {
+    date: string
+    order_no: string
+    product_id: number
+    sku_id: number
 }

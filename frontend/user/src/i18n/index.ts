@@ -2,12 +2,13 @@ import { createI18n } from 'vue-i18n'
 // 默认语言（兜底语言）静态打包，其余语言按需动态加载
 import zhCN from './locales/zh-CN.json'
 
-const supportedLocales = ['zh-CN', 'zh-TW', 'en-US']
+const supportedLocales = ['zh-CN', 'zh-TW', 'en-US', 'id-ID']
 
 // 非默认语言的懒加载器：切换语言时才下载对应语言包 chunk
 const localeLoaders: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {
     'zh-TW': () => import('./locales/zh-TW.json'),
     'en-US': () => import('./locales/en-US.json'),
+    'id-ID': () => import('./locales/id-ID.json'),
 }
 
 const loadedLocales = new Set(['zh-CN'])
@@ -27,6 +28,8 @@ export function detectLocale(): string {
         return 'zh-CN'
     }
     if (langPrefix === 'en') return 'en-US'
+    // 印尼语：浏览器发 id / id-ID；旧 ISO 码 in 仍见于部分 Android 客户端
+    if (langPrefix === 'id' || langPrefix === 'in') return 'id-ID'
 
     return 'zh-CN'
 }

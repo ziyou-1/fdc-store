@@ -27,6 +27,7 @@ func TestPaymentCallbackImplementationIsSplitByResponsibility(t *testing.T) {
 			"enqueueOrderPaidNotificationAsync", "enqueueWalletRechargeSuccessAsync",
 			"enqueueOrderPaidBotNotifyAsync", "enqueueWalletRechargeBotNotifyAsync",
 			"hasManualFulfillmentItems", "enqueueManualFulfillmentPendingAsync",
+			"fulfillContentOrders", "fulfillAutoOrders",
 		},
 		"payment_service_notification_payload.go": {
 			"buildOrderNotificationPayload", "buildWalletRechargeNotificationPayload",

@@ -211,6 +211,24 @@ func shouldAutoFulfill(order *orderdomain.Order) bool {
 	return true
 }
 
+// shouldContentFulfill 判断订单是否为纯内容交付（全部条目均为 content）。
+func shouldContentFulfill(order *orderdomain.Order) bool {
+	if order == nil || len(order.Items) == 0 {
+		return false
+	}
+	for _, item := range order.Items {
+		if strings.TrimSpace(item.FulfillmentType) != constants.FulfillmentTypeContent {
+			return false
+		}
+	}
+	return true
+}
+
+// deliversImmediately 判断订单在支付成功后是否会立即完成交付（自动发卡或内容交付）。
+func deliversImmediately(order *orderdomain.Order) bool {
+	return shouldAutoFulfill(order) || shouldContentFulfill(order)
+}
+
 // isOrderFullyAutoFulfill 判断订单是否完全为自动交付。
 // 父订单：所有子订单均满足 shouldAutoFulfill；单订单：自身满足 shouldAutoFulfill。
 // 用于支付成功时跳过"已支付"邮件——自动交付会紧接着发送含卡密内容的"已完成"邮件，避免重复打扰。
@@ -220,13 +238,13 @@ func isOrderFullyAutoFulfill(order *orderdomain.Order) bool {
 	}
 	if len(order.Children) > 0 {
 		for i := range order.Children {
-			if !shouldAutoFulfill(&order.Children[i]) {
+			if !deliversImmediately(&order.Children[i]) {
 				return false
 			}
 		}
 		return true
 	}
-	return shouldAutoFulfill(order)
+	return deliversImmediately(order)
 }
 
 func buildOrderSubject(order *orderdomain.Order) string {

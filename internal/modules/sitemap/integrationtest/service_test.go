@@ -189,13 +189,13 @@ func TestSitemapServiceIncludesActiveContent(t *testing.T) {
 
 	publishedPost := contentdomain.Post{
 		Slug:        "hello",
-		Type:        constants.PostTypeBlog,
+		Type:        constants.PostTypeNotice,
 		TitleJSON:   jsonmap.JSON{"zh-CN": "hello"},
 		IsPublished: true,
 	}
 	draftPost := contentdomain.Post{
 		Slug:        "draft",
-		Type:        constants.PostTypeBlog,
+		Type:        constants.PostTypeNotice,
 		TitleJSON:   jsonmap.JSON{"zh-CN": "draft"},
 		IsPublished: false,
 	}
@@ -215,10 +215,10 @@ func TestSitemapServiceIncludesActiveContent(t *testing.T) {
 		"<urlset",
 		"https://example.com/",
 		"https://example.com/products",
-		"https://example.com/blog",
+		"https://example.com/notice",
 		"https://example.com/categories/games",
 		"https://example.com/products/visible-product",
-		"https://example.com/blog/hello",
+		"https://example.com/posts/hello",
 	}
 	for _, s := range mustContain {
 		if !strings.Contains(xmlStr, s) {
@@ -230,7 +230,8 @@ func TestSitemapServiceIncludesActiveContent(t *testing.T) {
 		"hidden",             // 停用分类
 		"draft-product",      // 下架商品
 		"in-hidden-category", // 分类停用下的商品
-		"/blog/draft",        // 未发布文章
+		"/posts/draft",       // 未发布文章
+		"/blog",              // 博客已下线，不得再出现在站点地图
 	}
 	for _, s := range mustNotContain {
 		if strings.Contains(xmlStr, s) {

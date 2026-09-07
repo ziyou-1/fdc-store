@@ -5,6 +5,7 @@ import (
 
 	memberlevelcontract "github.com/dujiao-next/internal/modules/memberlevel/contract"
 	memberleveldomain "github.com/dujiao-next/internal/modules/memberlevel/domain"
+	memberlevelpresenter "github.com/dujiao-next/internal/modules/memberlevel/transport/presenter"
 	"github.com/dujiao-next/internal/platform/http/ginutil"
 	"github.com/dujiao-next/internal/platform/http/response"
 	"github.com/dujiao-next/internal/shared/jsonmap"
@@ -25,6 +26,8 @@ type AdminService interface {
 	DeleteLevelPrice(id uint) error
 	SetUserLevel(userID, levelID uint) error
 	BackfillDefaultLevel() (int64, error)
+	ListPlans() ([]memberleveldomain.Plan, error)
+	UpdatePlan(period string, price money.Amount, name, description jsonmap.JSON, isActive bool) (*memberleveldomain.Plan, error)
 }
 
 type AdminHandler struct {
@@ -305,4 +308,48 @@ func (h *AdminHandler) BackfillMemberLevels(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"affected": affected})
+}
+
+// GetMembershipPlans GET /admin/membership-plans
+func (h *AdminHandler) GetMembershipPlans(c *gin.Context) {
+	plans, err := h.service.ListPlans()
+	if err != nil {
+		ginutil.RespondError(c, response.CodeInternal, "error.membership_plan_fetch_failed", err)
+		return
+	}
+	response.Success(c, memberlevelpresenter.NewPlans(plans))
+}
+
+type updateMembershipPlanRequest struct {
+	Price       float64      `json:"price"`
+	Name        jsonmap.JSON `json:"name"`
+	Description jsonmap.JSON `json:"description"`
+	IsActive    *bool        `json:"is_active"`
+}
+
+// UpdateMembershipPlan PUT /admin/membership-plans/:period
+func (h *AdminHandler) UpdateMembershipPlan(c *gin.Context) {
+	period := c.Param("period")
+	var req updateMembershipPlanRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		ginutil.RespondBindError(c, err)
+		return
+	}
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+	plan, err := h.service.UpdatePlan(period, money.FromDecimal(decimal.NewFromFloat(req.Price)), req.Name, req.Description, isActive)
+	if err != nil {
+		switch {
+		case errors.Is(err, memberlevelcontract.ErrInvalidPeriod):
+			ginutil.RespondError(c, response.CodeBadRequest, "error.membership_period_invalid", err)
+		case errors.Is(err, memberlevelcontract.ErrPlanNotFound):
+			ginutil.RespondError(c, response.CodeNotFound, "error.membership_plan_not_found", err)
+		default:
+			ginutil.RespondError(c, response.CodeInternal, "error.membership_plan_update_failed", err)
+		}
+		return
+	}
+	response.Success(c, memberlevelpresenter.NewPlan(*plan))
 }

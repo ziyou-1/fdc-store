@@ -137,11 +137,11 @@
                 <div class="flex flex-wrap items-center gap-2">
                   <Badge variant="accent" class="rounded-full px-3 py-1">
                     {{ t('personalCenter.memberLevel.discountRate') }}
-                    {{ userProfileStore.currentLevel && userProfileStore.currentLevel.discount_rate < 100
-                      ? t('personalCenter.memberLevel.discountOff', { n: userProfileStore.currentLevel.discount_rate / 10 })
-                      : t('personalCenter.memberLevel.noDiscount')
-                    }}
+                    {{ discountText }}
                   </Badge>
+                  <Button as-child variant="outline" size="sm" class="rounded-full">
+                    <router-link to="/me/membership">{{ t('personalCenter.memberLevel.buy') }}</router-link>
+                  </Button>
                   <Badge
                     v-if="!userProfileStore.nextLevel && userProfileStore.currentLevel"
                     variant="success"
@@ -153,7 +153,7 @@
               </div>
 
               <!-- Next level upgrade progress -->
-              <div v-if="userProfileStore.nextLevel" class="mt-5 rounded-xl border border-primary/15 bg-primary/5 p-4">
+              <div v-if="!disabledFeatures.thresholdVip && userProfileStore.nextLevel" class="mt-5 rounded-xl border border-primary/15 bg-primary/5 p-4">
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <!-- Next level info -->
                   <div class="flex items-center gap-3">
@@ -166,7 +166,7 @@
                       <div class="mt-0.5 flex items-center gap-2">
                         <span class="truncate text-sm font-bold text-muted-foreground">{{ levelName(userProfileStore.nextLevel) }}</span>
                         <span v-if="userProfileStore.nextLevel.discount_rate < 100" class="shrink-0 text-xs font-medium text-primary">
-                          {{ t('personalCenter.memberLevel.discountOff', { n: userProfileStore.nextLevel.discount_rate / 10 }) }}
+                          {{ formatDiscountOff(userProfileStore.nextLevel.discount_rate) }}
                         </span>
                       </div>
                     </div>
@@ -266,6 +266,8 @@
           <SecurityPanel v-else-if="currentSection === 'security'" />
           <OrdersPanel v-else-if="currentSection === 'orders'" />
           <WalletPanel v-else-if="currentSection === 'wallet'" />
+          <PointsPanel v-else-if="currentSection === 'points'" />
+          <MembershipPanel v-else-if="currentSection === 'membership'" />
           <AffiliatePanel v-else-if="currentSection === 'affiliate'" />
           <div v-else-if="currentSection === 'reseller' && canAccessResellerConsole" class="rounded-2xl border bg-card p-6 shadow-sm">
             <h2 class="text-xl font-bold text-foreground">{{ t('resellerConsole.title') }}</h2>
@@ -296,10 +298,13 @@ import ProfilePanel from './personal/ProfilePanel.vue'
 import SecurityPanel from './personal/SecurityPanel.vue'
 import OrdersPanel from './personal/OrdersPanel.vue'
 import WalletPanel from './personal/WalletPanel.vue'
+import PointsPanel from './personal/PointsPanel.vue'
+import MembershipPanel from './personal/MembershipPanel.vue'
 import GiftCardPanel from './personal/GiftCardPanel.vue'
 import AffiliatePanel from './personal/AffiliatePanel.vue'
 import ApiPanel from './personal/ApiPanel.vue'
 import { usePersonalCenter, type PersonalSection } from '../composables/usePersonalCenter'
+import { disabledFeatures } from '../utils/disabledFeatures'
 
 const { t } = useI18n()
 
@@ -310,6 +315,6 @@ const props = withDefaults(defineProps<{ section?: PersonalSection }>(), {
 const {
   userProfileStore, canAccessResellerConsole, visibleSectionItems, currentSection, globalAlert,
   displayInitial, switchSection, statusLabel, statusVariant, formatMoney, formatDate,
-  emailVerifiedLabel, emailVerifiedVariant, discountText, isImagePath, levelName,
+  emailVerifiedLabel, emailVerifiedVariant, discountText, formatDiscountOff, isImagePath, levelName,
 } = usePersonalCenter(() => props.section)
 </script>

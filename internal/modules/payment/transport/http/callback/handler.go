@@ -79,6 +79,7 @@ func (h *Handler) PaymentCallback(c *gin.Context) {
 		h.handleTokenPayCallback,
 		h.handleEpusdtCallback,
 		h.handleBepusdtCallback,
+		h.handlePayssionCallback,
 	} {
 		if handle(c) {
 			return

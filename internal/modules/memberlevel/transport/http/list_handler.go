@@ -19,12 +19,18 @@ type ActiveLevelReader interface {
 	ListActiveLevels() ([]memberleveldomain.MemberLevel, error)
 }
 
-// PublicHandler 处理前台公开会员等级请求。
-type PublicHandler struct {
-	levels ActiveLevelReader
+// PublicCatalog 是店面公开会员目录端口。
+type PublicCatalog interface {
+	ActiveLevelReader
+	ListActivePlans() ([]memberleveldomain.Plan, error)
 }
 
-func NewPublicHandler(levels ActiveLevelReader) *PublicHandler {
+// PublicHandler 处理前台公开会员等级请求。
+type PublicHandler struct {
+	levels PublicCatalog
+}
+
+func NewPublicHandler(levels PublicCatalog) *PublicHandler {
 	if levels == nil {
 		panic("memberlevel public handler: levels is nil")
 	}
@@ -54,6 +60,16 @@ func (h *PublicHandler) List(c *gin.Context) {
 		})
 	}
 	response.Success(c, views)
+}
+
+// ListPlans GET /public/membership-plans
+func (h *PublicHandler) ListPlans(c *gin.Context) {
+	plans, err := h.levels.ListActivePlans()
+	if err != nil {
+		ginutil.RespondError(c, response.CodeInternal, "error.membership_plan_fetch_failed", err)
+		return
+	}
+	response.Success(c, memberlevelpresenter.NewPlans(plans))
 }
 
 // ChannelHandler 处理渠道会员等级请求。

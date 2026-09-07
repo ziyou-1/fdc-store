@@ -15,10 +15,18 @@ type User struct {
 	DisplayName           string       `gorm:"default:''" json:"display_name"`                               // 昵称
 	Locale                string       `gorm:"default:'zh-CN'" json:"locale"`                                // 语言偏好
 	Status                string       `gorm:"default:'active'" json:"status"`                               // 账号状态
-	MemberLevelID         uint         `gorm:"not null;default:0" json:"member_level_id"`                    // 当前会员等级ID
-	TotalRecharged        money.Amount `gorm:"type:decimal(20,2);not null;default:0" json:"total_recharged"` // 充值累计
-	TotalSpent            money.Amount `gorm:"type:decimal(20,2);not null;default:0" json:"total_spent"`     // 消费累计
+	MemberLevelID          uint         `gorm:"not null;default:0" json:"member_level_id"`                    // 当前会员等级ID
+	MembershipPeriod       string       `gorm:"type:varchar(16);not null;default:''" json:"membership_period"`
+	MembershipDiscountRate money.Amount `gorm:"type:decimal(6,2);not null;default:100" json:"membership_discount_rate"`
+	MembershipExpiresAt    *time.Time   `gorm:"index" json:"membership_expires_at,omitempty"`
+	// MembershipRemindedFor 记录「已经为哪一个到期时刻发过续费提醒」。
+	// 存到期时刻本身而不是提醒时间：续费会把 MembershipExpiresAt 改大，
+	// 两值不再相等即自动重新武装，续费路径无需任何清理代码。
+	MembershipRemindedFor *time.Time `gorm:"index" json:"-"`
+	TotalRecharged         money.Amount `gorm:"type:decimal(20,2);not null;default:0" json:"total_recharged"` // 充值累计
+	TotalSpent             money.Amount `gorm:"type:decimal(20,2);not null;default:0" json:"total_spent"`     // 消费累计
 	AdminNote             string       `gorm:"type:text;default:''" json:"admin_note,omitempty"`             // 管理员备注（仅后台可见）
+	InviterUserID         *uint        `gorm:"index" json:"inviter_user_id,omitempty"`                       // 推荐人用户ID，注册时一次性写入，此后不再变更
 	TokenVersion          uint64       `gorm:"not null;default:0" json:"-"`                                  // Token 版本（用于全量失效）
 	TokenInvalidBefore    *time.Time   `gorm:"index" json:"-"`                                               // 该时间点前签发的 Token 失效
 	TOTPSecret            string       `gorm:"type:varchar(512);default:''" json:"-"`                        // AES-GCM 加密后的 hex 密文，未启用为空

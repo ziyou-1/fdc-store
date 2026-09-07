@@ -7,6 +7,7 @@ import type {
   AdminCoupon,
   AdminMemberLevel,
   AdminMemberLevelPrice,
+  AdminMembershipPlan,
   AdminPromotion,
   AdminWholesalePrice,
   AdminBanner,
@@ -20,6 +21,11 @@ import type {
   AdminResellerReasonPayload,
   AdminResellerSiteConfigPayload,
   AdminResellerSystemDomainPayload,
+  AdminPointsConfig,
+  AdminPointsAdjustPayload,
+  AdminSupportSendMessagePayload,
+  AdminSupportStatusPayload,
+  AdminSupportQuickReplyPayload,
 } from './types'
 
 export interface CaptchaPayload {
@@ -32,6 +38,19 @@ export interface AdminLoginRequest {
   username: string
   password: string
   captcha_payload?: CaptchaPayload
+}
+
+export interface AdminFreeClaimConfigPayload {
+  enabled: boolean
+  member_only: boolean
+  min_member_level_id: number
+}
+
+export interface AdminFreeClaimPoolItemPayload {
+  product_id: number
+  sku_id: number
+  is_active: boolean
+  sort_order: number
 }
 
 export interface AdminLoginPasswordResponse {
@@ -432,6 +451,11 @@ export const adminAPI = {
     api.get('/admin/wallet/recharges', { params }),
   adjustUserWallet: (id: number, data: AdminAdjustWalletPayload) =>
     api.post(`/admin/users/${id}/wallet/adjust`, data),
+  getUserPoints: (id: number) => api.get(`/admin/users/${id}/points`),
+  getUserPointsTransactions: (id: number, params?: Record<string, unknown>) =>
+    api.get(`/admin/users/${id}/points/transactions`, { params }),
+  adjustUserPoints: (id: number, data: AdminPointsAdjustPayload) =>
+    api.post(`/admin/users/${id}/points/adjust`, data),
   updateUser: (id: number, data: Partial<AdminUser>) => api.put(`/admin/users/${id}`, data),
   unbindUserTelegram: (id: number) => api.delete(`/admin/users/${id}/oauth/telegram`),
   unbindUserGoogle: (id: number) => api.delete(`/admin/users/${id}/oauth/google`),
@@ -545,6 +569,9 @@ export const adminAPI = {
   deleteMemberLevelPrice: (id: number) => api.delete(`/admin/member-level-prices/${id}`),
   setUserMemberLevel: (userId: number, memberLevelId: number) => api.put(`/admin/users/${userId}/member-level`, { member_level_id: memberLevelId }),
   backfillMemberLevels: () => api.post('/admin/member-levels/backfill'),
+  getMembershipPlans: () => api.get('/admin/membership-plans'),
+  updateMembershipPlan: (period: string, data: Partial<AdminMembershipPlan>) =>
+    api.put(`/admin/membership-plans/${period}`, data),
   createCardSecretBatch: (data: { product_id: number; sku_id?: number; name?: string; secrets: string[]; batch_no?: string; note?: string; deduplicate?: boolean }) => api.post('/admin/card-secrets/batch', data),
   importCardSecretCSV: (formData: FormData) =>
     api.post('/admin/card-secrets/import', formData),
@@ -636,16 +663,57 @@ export const adminAPI = {
   getTelegramBroadcastUsers: (params?: Record<string, unknown>) =>
     api.get('/admin/telegram-bot/users', { params }),
 
-  // 广告代理
-  renderAdSlot: (slotCode: string, params?: Record<string, string>) =>
-    api.get(`/admin/ads/render/${slotCode}`, { params }),
-  reportAdImpression: (data: { tenant: string; client: string; slot_code: string; items: { ad_id: number; impression_token: string }[] }) =>
-    api.post('/admin/ads/impression', data),
-
   // 文章分类
   getPostCategories: (params?: Record<string, unknown>) => api.get('/admin/post-categories', { params }),
   createPostCategory: (data: any) => api.post('/admin/post-categories', data),
   updatePostCategory: (id: number, data: any) => api.put(`/admin/post-categories/${id}`, data),
   deletePostCategory: (id: number) => api.delete(`/admin/post-categories/${id}`),
   patchPostCategoryStatus: (id: number, is_active: boolean) => api.patch(`/admin/post-categories/${id}/status`, { is_active }),
+
+  // 积分
+  getPointsConfig: () => api.get('/admin/points/config'),
+  updatePointsConfig: (data: AdminPointsConfig) => api.put('/admin/points/config', data),
+
+  // 每日免费领取
+  getFreeClaimConfig: () => api.get('/admin/free-claim/config'),
+  updateFreeClaimConfig: (data: AdminFreeClaimConfigPayload) => api.put('/admin/free-claim/config', data),
+  // 商品池接口不分页，直接返回全量数组
+  getFreeClaimPool: () => api.get('/admin/free-claim/pool'),
+  createFreeClaimPoolItem: (data: AdminFreeClaimPoolItemPayload) => api.post('/admin/free-claim/pool', data),
+  updateFreeClaimPoolItem: (id: number, data: AdminFreeClaimPoolItemPayload) =>
+    api.put(`/admin/free-claim/pool/${id}`, data),
+  deleteFreeClaimPoolItem: (id: number) => api.delete(`/admin/free-claim/pool/${id}`),
+
+  getTokenStations: () => api.get('/admin/token-stations'),
+  createTokenStation: (data: { name: string; base_url: string }) =>
+    api.post('/admin/token-stations', data),
+  updateTokenStation: (id: number, data: { name: string; base_url: string }) =>
+    api.put(`/admin/token-stations/${id}`, data),
+  deleteTokenStation: (id: number) => api.delete(`/admin/token-stations/${id}`),
+
+  // 客服工作台
+  getSupportConversations: (params?: Record<string, unknown>, options?: Record<string, unknown>) =>
+    api.get('/admin/support/conversations', { params, ...options }),
+  getSupportUnreadCount: (options?: Record<string, unknown>) =>
+    api.get('/admin/support/unread-count', options),
+  getSupportMessages: (id: number, params?: Record<string, unknown>, options?: Record<string, unknown>) =>
+    api.get(`/admin/support/conversations/${id}/messages`, { params, ...options }),
+  sendSupportMessage: (id: number, data: AdminSupportSendMessagePayload) =>
+    api.post(`/admin/support/conversations/${id}/messages`, data),
+  markSupportRead: (id: number, options?: Record<string, unknown>) =>
+    api.post(`/admin/support/conversations/${id}/read`, {}, options),
+  updateSupportStatus: (id: number, data: AdminSupportStatusPayload) =>
+    api.put(`/admin/support/conversations/${id}/status`, data),
+  uploadSupportAttachment: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/admin/support/attachments', formData, { timeout: 120000 })
+  },
+  getSupportQuickReplies: (options?: Record<string, unknown>) =>
+    api.get('/admin/support/quick-replies', options),
+  createSupportQuickReply: (data: AdminSupportQuickReplyPayload) =>
+    api.post('/admin/support/quick-replies', data),
+  updateSupportQuickReply: (id: number, data: AdminSupportQuickReplyPayload) =>
+    api.put(`/admin/support/quick-replies/${id}`, data),
+  deleteSupportQuickReply: (id: number) => api.delete(`/admin/support/quick-replies/${id}`),
 }

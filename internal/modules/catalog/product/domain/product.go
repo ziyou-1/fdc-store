@@ -21,6 +21,7 @@ type Product struct {
 	InstructionsJSON     jsonmap.JSON        `gorm:"type:json" json:"instructions"`                                       // 多语言交付后使用说明（仅订单详情可见）
 	PriceAmount          money.Amount        `gorm:"type:decimal(20,2);not null;default:0" json:"price_amount"`           // 价格金额
 	CostPriceAmount      money.Amount        `gorm:"type:decimal(20,2);not null;default:0" json:"cost_price_amount"`      // 成本价（取最低活跃SKU成本价）
+	PointsPrice          int64               `gorm:"not null;default:0" json:"points_price"`                              // 积分兑换价（0 表示不支持积分兑换）
 	WholesalePrices      WholesalePriceTiers `gorm:"type:json" json:"wholesale_prices"`                                   // 批发价阶梯
 	Images               jsonslice.Strings   `gorm:"type:json" json:"images"`                                             // 图片数组
 	Tags                 jsonslice.Strings   `gorm:"type:json" json:"tags"`                                               // 标签数组
@@ -30,6 +31,7 @@ type Product struct {
 	StockDisplayMode     string              `gorm:"type:varchar(20);not null;default:'exact'" json:"stock_display_mode"` // 公开库存展示模式（exact/status/range/hidden）
 	FulfillmentType      string              `gorm:"type:varchar(20);not null;default:'manual'" json:"fulfillment_type"`  // 交付类型（auto/manual）
 	ManualFormSchemaJSON jsonmap.JSON        `gorm:"type:json" json:"manual_form_schema"`                                 // 人工交付表单 schema
+	ManualFormTiming     string              `gorm:"type:varchar(20);not null;default:'checkout'" json:"manual_form_timing"` // 表单采集时机（checkout/after_payment）
 	ManualStockTotal     int                 `gorm:"not null;default:0" json:"manual_stock_total"`                        // 手动剩余库存（-1 表示无限库存，>=0 表示当前可售数量）
 	ManualStockLocked    int                 `gorm:"not null;default:0" json:"manual_stock_locked"`                       // 手动库存占用量（待支付）
 	ManualStockSold      int                 `gorm:"not null;default:0" json:"manual_stock_sold"`                         // 手动库存已售量（支付成功后累加）

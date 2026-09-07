@@ -13,7 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func (s *WriteService) syncSingleProductSKU(skuRepo SKURepository, productID uint, priceAmount decimal.Decimal, costPriceAmount decimal.Decimal, manualStockTotal int, createWhenMissing bool) error {
+func (s *WriteService) syncSingleProductSKU(skuRepo SKURepository, productID uint, priceAmount decimal.Decimal, costPriceAmount decimal.Decimal, pointsPrice int64, manualStockTotal int, createWhenMissing bool) error {
 	if skuRepo == nil || productID == 0 {
 		return nil
 	}
@@ -31,6 +31,7 @@ func (s *WriteService) syncSingleProductSKU(skuRepo SKURepository, productID uin
 			SpecValuesJSON:    jsonmap.JSON{},
 			PriceAmount:       money.FromDecimal(priceAmount),
 			CostPriceAmount:   money.FromDecimal(costPriceAmount),
+			PointsPrice:       pointsPrice,
 			ManualStockTotal:  manualStockTotal,
 			ManualStockLocked: 0,
 			ManualStockSold:   0,
@@ -46,6 +47,7 @@ func (s *WriteService) syncSingleProductSKU(skuRepo SKURepository, productID uin
 	target := skus[targetIndex]
 	target.PriceAmount = money.FromDecimal(priceAmount)
 	target.CostPriceAmount = money.FromDecimal(costPriceAmount)
+	target.PointsPrice = pointsPrice
 	target.ManualStockTotal = manualStockTotal
 	target.IsActive = true
 	if strings.TrimSpace(target.SKUCode) == "" {
@@ -99,6 +101,7 @@ type normalizedProductSKU struct {
 	SpecValuesJSON   jsonmap.JSON
 	PriceAmount      money.Amount
 	CostPriceAmount  money.Amount
+	PointsPrice      int64
 	ManualStockTotal int
 	IsActive         bool
 	SortOrder        int
@@ -164,6 +167,7 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 			SpecValuesJSON:   specValues,
 			PriceAmount:      money.FromDecimal(priceAmount),
 			CostPriceAmount:  money.FromDecimal(costPriceAmount),
+			PointsPrice:      input.PointsPrice,
 			ManualStockTotal: manualTotal,
 			IsActive:         isActive,
 			SortOrder:        input.SortOrder,
@@ -247,6 +251,7 @@ func (s *WriteService) applyProductSKUsWithStockGuard(
 			existing.SpecValuesJSON = row.SpecValuesJSON
 			existing.PriceAmount = row.PriceAmount
 			existing.CostPriceAmount = row.CostPriceAmount
+			existing.PointsPrice = row.PointsPrice
 			existing.ManualStockTotal = row.ManualStockTotal
 			existing.IsActive = row.IsActive
 			existing.SortOrder = row.SortOrder
@@ -263,6 +268,7 @@ func (s *WriteService) applyProductSKUsWithStockGuard(
 			existing.SpecValuesJSON = row.SpecValuesJSON
 			existing.PriceAmount = row.PriceAmount
 			existing.CostPriceAmount = row.CostPriceAmount
+			existing.PointsPrice = row.PointsPrice
 			existing.ManualStockTotal = row.ManualStockTotal
 			existing.IsActive = row.IsActive
 			existing.SortOrder = row.SortOrder
@@ -283,6 +289,7 @@ func (s *WriteService) applyProductSKUsWithStockGuard(
 			SpecValuesJSON:    row.SpecValuesJSON,
 			PriceAmount:       row.PriceAmount,
 			CostPriceAmount:   row.CostPriceAmount,
+			PointsPrice:       row.PointsPrice,
 			ManualStockTotal:  row.ManualStockTotal,
 			ManualStockLocked: 0,
 			ManualStockSold:   0,

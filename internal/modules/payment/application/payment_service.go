@@ -13,6 +13,7 @@ import (
 	orderdomain "github.com/dujiao-next/internal/modules/order/domain"
 	paymentcontract "github.com/dujiao-next/internal/modules/payment/contract"
 	paymentdomain "github.com/dujiao-next/internal/modules/payment/domain"
+	pointsapp "github.com/dujiao-next/internal/modules/points/application"
 	resellercontract "github.com/dujiao-next/internal/modules/reseller/contract"
 	settingsapp "github.com/dujiao-next/internal/modules/settings/application"
 	walletapp "github.com/dujiao-next/internal/modules/wallet/application"
@@ -63,6 +64,10 @@ type PaymentService struct {
 	notificationSvc         notificationcontract.NotificationEnqueuer
 	procurementSvc          ProcurementCreator
 	downstreamCallbackSvc   DownstreamCallbackEnqueuer
+	contentFulfillSvc       ContentFulfiller
+	autoFulfillSvc          AutoFulfiller
+	skipPayment             bool
+	pointsSvc               *pointsapp.Service
 	memberLevelSvc          MemberLevelProgressor
 	paymentProviderRegistry paymentcontract.GatewayRegistry
 	resellerAccounting      resellerAccountingTransactions
@@ -75,6 +80,18 @@ type MemberLevelProgressor interface {
 
 type ProcurementCreator interface {
 	CreateForOrder(orderID uint) error
+}
+
+// ContentFulfiller 是纯内容交付所需的最小端口。内容交付不依赖队列，
+// 支付成功后同步完成，因此未部署 Redis 时该类商品依然可以正常交付。
+type ContentFulfiller interface {
+	CreateContent(orderID uint) error
+}
+
+// AutoFulfiller 是自动发卡所需的最小端口。skip_payment 时 API 进程不同时跑 worker，
+// 必须同步发卡，否则卡密商品会停在已支付、没有交付记录。
+type AutoFulfiller interface {
+	CreateAuto(orderID uint) error
 }
 
 // DownstreamCallbackEnqueuer 是支付与交付上下文触发下游回调所需的最小端口。
@@ -97,6 +114,14 @@ func (s *PaymentService) SetProcurementService(svc ProcurementCreator) {
 }
 
 // SetDownstreamCallbackService 设置下游回调服务（解决循环依赖）
+// SetContentFulfillService 注入内容交付用例，避免支付模块直接依赖交付模块。
+func (s *PaymentService) SetContentFulfillService(svc ContentFulfiller) {
+	if s == nil {
+		return
+	}
+	s.contentFulfillSvc = svc
+}
+
 func (s *PaymentService) SetDownstreamCallbackService(svc DownstreamCallbackEnqueuer) {
 	s.downstreamCallbackSvc = svc
 }
@@ -125,6 +150,9 @@ type PaymentServiceOptions struct {
 	NotificationService     notificationcontract.NotificationEnqueuer
 	PaymentProviderRegistry paymentcontract.GatewayRegistry
 	ResellerAccounting      resellerAccountingTransactions
+	PointsService           *pointsapp.Service
+	AutoFulfill             AutoFulfiller
+	SkipPayment             bool
 }
 
 // NewPaymentService 创建支付服务
@@ -147,6 +175,9 @@ func NewPaymentService(opts PaymentServiceOptions) *PaymentService {
 		notificationSvc:         opts.NotificationService,
 		paymentProviderRegistry: opts.PaymentProviderRegistry,
 		resellerAccounting:      opts.ResellerAccounting,
+		pointsSvc:               opts.PointsService,
+		autoFulfillSvc:          opts.AutoFulfill,
+		skipPayment:             opts.SkipPayment,
 	}
 }
 

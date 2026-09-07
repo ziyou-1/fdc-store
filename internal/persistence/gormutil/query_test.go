@@ -3,6 +3,8 @@ package gormutil
 import (
 	"strings"
 	"testing"
+
+	"github.com/dujiao-next/internal/constants"
 )
 
 func TestJSONTextExprByDialectSQLite(t *testing.T) {
@@ -32,8 +34,8 @@ func TestJSONArrayLengthExprByDialect(t *testing.T) {
 
 func TestBuildLocalizedLikeCondition(t *testing.T) {
 	condition, argCount := BuildLocalizedLikeCondition(nil, []string{"slug"}, []string{"title_json", "description_json"})
-	if argCount != 7 {
-		t.Fatalf("arg count want 7 got %d", argCount)
+	if want := 1 + 2*len(constants.SupportedLocales); argCount != want {
+		t.Fatalf("arg count want %d got %d", want, argCount)
 	}
 	if !strings.Contains(condition, "slug LIKE ?") {
 		t.Fatalf("condition should contain slug LIKE, got %s", condition)
@@ -48,8 +50,8 @@ func TestBuildLocalizedLikeCondition(t *testing.T) {
 
 func TestBuildLocalizedLikeConditionByDialectPostgres(t *testing.T) {
 	condition, argCount := BuildLocalizedLikeConditionByDialect("postgres", []string{"slug"}, []string{"title_json"})
-	if argCount != 4 {
-		t.Fatalf("arg count want 4 got %d", argCount)
+	if want := 1 + len(constants.SupportedLocales); argCount != want {
+		t.Fatalf("arg count want %d got %d", want, argCount)
 	}
 	if !strings.Contains(condition, "slug ILIKE ?") {
 		t.Fatalf("condition should contain slug ILIKE, got %s", condition)

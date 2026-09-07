@@ -21,6 +21,7 @@ import { confirmAction } from '@/utils/confirm'
 import ProductEditModal from './components/ProductEditModal.vue'
 import { buildAdminCategoryPath, createAdminCategoryMap, createAdminCategoryChildCountMap, flattenAdminCategories, isAdminProductCategorySelectable } from '@/utils/category'
 import { formatWholesaleTierScopeLabel, wholesaleTierScopeValue } from '@/utils/wholesalePricing'
+import { disabledFeatures } from '@/utils/disabledFeatures'
 
 const { t, locale } = useI18n()
 const loading = ref(false)
@@ -202,9 +203,19 @@ const purchaseTypeBadgeClass = (product: AdminProduct) => {
 }
 
 const fulfillmentTypeBadgeClass = (product: AdminProduct) => {
-  return product?.fulfillment_type === 'auto'
-    ? 'border-violet-200 bg-violet-50 text-violet-700'
-    : 'border-amber-200 bg-amber-50 text-amber-700'
+  if (product?.fulfillment_type === 'auto') {
+    return 'border-violet-200 bg-violet-50 text-violet-700'
+  }
+  if (product?.fulfillment_type === 'content') {
+    return 'border-teal-200 bg-teal-50 text-teal-700'
+  }
+  return 'border-amber-200 bg-amber-50 text-amber-700'
+}
+
+const fulfillmentTypeLabel = (product: AdminProduct) => {
+  if (product?.fulfillment_type === 'auto') return t('admin.products.fulfillmentType.auto')
+  if (product?.fulfillment_type === 'content') return t('admin.products.fulfillmentType.content')
+  return t('admin.products.fulfillmentType.manual')
 }
 
 const manualStockBadgeClass = (product: AdminProduct) => {
@@ -531,7 +542,7 @@ watch(
             </SelectContent>
           </Select>
         </div>
-        <div class="w-full md:w-48">
+        <div v-if="!disabledFeatures.wholesale" class="w-full md:w-48">
           <Select v-model="wholesaleStatus" @update:modelValue="handleWholesaleStatusChange">
             <SelectTrigger class="h-9 w-full">
               <SelectValue :placeholder="t('admin.products.filters.wholesalePlaceholder')" />
@@ -623,7 +634,7 @@ watch(
                       {{ product.purchase_type === 'guest' ? t('admin.products.purchaseType.guest') : t('admin.products.purchaseType.member') }}
                     </span>
                     <span class="rounded-full border px-2 py-0.5 text-[11px]" :class="fulfillmentTypeBadgeClass(product)">
-                      {{ product.fulfillment_type === 'auto' ? t('admin.products.fulfillmentType.auto') : t('admin.products.fulfillmentType.manual') }}
+                      {{ fulfillmentTypeLabel(product) }}
                     </span>
                     <span
                       v-if="product.is_mapped"
@@ -757,7 +768,7 @@ watch(
       :product-id="editingProductId"
       :categories="orderedCategories"
       :site-currency="siteCurrency"
-      :supported-locales="['zh-CN', 'zh-TW', 'en-US']"
+      :supported-locales="['zh-CN', 'zh-TW', 'en-US', 'id-ID']"
       @success="handleModalSuccess"
     />
   </div>

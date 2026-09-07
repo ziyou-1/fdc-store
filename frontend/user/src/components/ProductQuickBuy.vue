@@ -141,6 +141,9 @@
                     <span class="text-lg md:text-xl font-bold text-primary">
                       {{ formatPrice(selectedSku.price_amount, siteCurrency) }}
                     </span>
+                    <div v-if="canShowPointsRedeem" class="mt-0.5 text-xs font-medium text-muted-foreground">
+                      {{ t('products.pointsPrice', { n: selectedPointsPrice }) }}
+                    </div>
                   </template>
                   <template v-else-if="hasPromotionPrice(product)">
                     <span class="text-lg md:text-xl font-bold text-rose-600 dark:text-rose-400">
@@ -154,6 +157,9 @@
                     <span class="text-lg md:text-xl font-bold text-primary">
                       {{ formatPrice(product.price_amount, siteCurrency) }}
                     </span>
+                    <div v-if="canShowPointsRedeem" class="mt-0.5 text-xs font-medium text-muted-foreground">
+                      {{ t('products.pointsPrice', { n: selectedPointsPrice }) }}
+                    </div>
                   </template>
                 </div>
               </div>
@@ -312,13 +318,22 @@
                 {{ t('quickBuy.addToCart') }}
               </Button>
               <Button
-                :disabled="!canPurchase"
+                :disabled="!canPurchase || redeeming"
                 class="flex-1 py-3 h-auto min-h-[44px] rounded-xl text-sm font-semibold"
                 @click="handleBuyNow"
               >
                 {{ t('quickBuy.buyNow') }}
               </Button>
             </div>
+            <Button
+              v-if="canShowPointsRedeem && !requiresLogin && !isSoldOut(product)"
+              variant="outline"
+              class="mt-3 w-full py-3 h-auto min-h-[44px] rounded-xl text-sm font-semibold"
+              :disabled="!canPurchase || redeeming"
+              @click="handleRedeemWithPoints"
+            >
+              {{ redeeming ? t('quickBuy.redeeming') : t('quickBuy.redeemWithPoints') }}
+            </Button>
           </div>
         </div>
       </div>
@@ -341,6 +356,10 @@ import { normalizeSkuId, buildSkuDisplayText } from '../utils/sku'
 import { resolveSkuAvailableStock, resolveSkuStockDisplay, type PublicStockDisplay } from '../utils/publicStock'
 import { useLocalized, useProductLabels } from '../composables/useProduct'
 import { toast } from '../composables/useToast'
+import { isSkipPaymentEnabled, requiresCheckoutTimeManualForm } from '../utils/skipPayment'
+import { createSkipPaymentOrder } from '../utils/skipPaymentOrder'
+import { createPointsRedeemOrder } from '../utils/pointsRedeemOrder'
+import { canRedeemWithPoints, redeemPointsCost } from '../utils/productPoints'
 import { X, Image as ImageIcon, Tag, Minus, Plus, ShoppingCart } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -427,6 +446,11 @@ const selectedSku = computed(() => {
 const userMemberLevelId = computed(() => Number(userAuthStore.user?.member_level_id || 0))
 
 const currentMemberDiscountRate = computed(() => {
+  const profile = userProfileStore.profile || userAuthStore.user
+  if (profile?.membership_expires_at && Date.parse(profile.membership_expires_at) > Date.now()) {
+    const purchased = Number(profile.membership_discount_rate)
+    if (Number.isFinite(purchased) && purchased > 0 && purchased < 100) return purchased
+  }
   if (!userMemberLevelId.value) return 0
   const level = userProfileStore.memberLevels.find((item: any) => Number(item?.id || 0) === userMemberLevelId.value)
   return Number(level?.discount_rate || 0)
@@ -439,7 +463,9 @@ const ensureMemberLevels = () => {
 }
 
 const getMemberPriceForSku = (skuId: number, basePrice: any): number | null => {
-  const price = resolveMemberPriceAmount(props.product, skuId, basePrice, userMemberLevelId.value, currentMemberDiscountRate.value)
+  const profile = userProfileStore.profile || userAuthStore.user
+  const purchased = !!(profile?.membership_expires_at && Date.parse(profile.membership_expires_at) > Date.now())
+  const price = resolveMemberPriceAmount(props.product, skuId, basePrice, purchased ? 0 : userMemberLevelId.value, currentMemberDiscountRate.value)
   return price === null ? null : Number(price)
 }
 
@@ -758,6 +784,7 @@ const handleAddToCart = () => {
     maxPurchaseQuantity: normalizeOptionalLimitNumber(props.product.max_purchase_quantity) ?? undefined,
     purchaseType: props.product.purchase_type,
     fulfillmentType: props.product.fulfillment_type,
+    manualFormTiming: props.product.manual_form_timing,
     manualFormSchema: props.product.manual_form_schema || {},
     paymentChannelIds: Array.isArray(props.product.payment_channel_ids) && props.product.payment_channel_ids.length > 0 ? props.product.payment_channel_ids : undefined,
     quantity: 1,
@@ -766,8 +793,42 @@ const handleAddToCart = () => {
   close()
 }
 
-const handleBuyNow = () => {
+const buyNowSubmitting = ref(false)
+const redeeming = ref(false)
+const selectedPointsPrice = computed(() => redeemPointsCost(props.product, selectedSku.value, quantity.value))
+const canShowPointsRedeem = computed(() => canRedeemWithPoints(props.product, selectedSku.value))
+
+const handleRedeemWithPoints = async () => {
   purchaseWarning.value = ''
+  if (redeeming.value || buyNowSubmitting.value) return
+  if (!canPurchase.value) return
+  if (!props.product) return
+  if (!canShowPointsRedeem.value) return
+  if (requiresLogin.value) {
+    goLogin()
+    return
+  }
+
+  redeeming.value = true
+  try {
+    const created = await createPointsRedeemOrder({
+      productId: Number(props.product.id),
+      skuId: normalizeSkuId(selectedSku.value?.id),
+      quantity: quantity.value,
+      fulfillmentType: props.product.fulfillment_type,
+    })
+    close()
+    router.push(`/orders/${encodeURIComponent(created.order_no)}`)
+  } catch (err: any) {
+    purchaseWarning.value = err.message || t('checkout.errors.submitFailed')
+  } finally {
+    redeeming.value = false
+  }
+}
+
+const handleBuyNow = async () => {
+  purchaseWarning.value = ''
+  if (buyNowSubmitting.value) return
   if (!canPurchase.value) return
   if (!props.product) return
 
@@ -782,6 +843,28 @@ const handleBuyNow = () => {
     purchaseWarning.value = available !== null && limit === available && (productLimit === null || available <= productLimit)
       ? (available > 0 ? t('productDetail.addCartStockExceeded', { count: available }) : t('productDetail.stockUnavailable'))
       : t('productDetail.addCartLimitExceeded', { count: limit })
+    return
+  }
+
+  if (isSkipPaymentEnabled(appStore.config) && !requiresCheckoutTimeManualForm({
+    manualFormTiming: props.product.manual_form_timing,
+    manualFormSchema: props.product.manual_form_schema,
+  })) {
+    buyNowSubmitting.value = true
+    try {
+      const created = await createSkipPaymentOrder({
+        productId: Number(props.product.id),
+        skuId: normalizeSkuId(sku?.id),
+        quantity: quantity.value,
+        fulfillmentType: props.product.fulfillment_type,
+      })
+      close()
+      router.push(`/orders/${encodeURIComponent(created.order_no)}`)
+    } catch (err: any) {
+      purchaseWarning.value = err.message || t('checkout.errors.submitFailed')
+    } finally {
+      buyNowSubmitting.value = false
+    }
     return
   }
 
@@ -812,6 +895,7 @@ const handleBuyNow = () => {
     maxPurchaseQuantity: normalizeOptionalLimitNumber(props.product.max_purchase_quantity) ?? undefined,
     purchaseType: props.product.purchase_type,
     fulfillmentType: props.product.fulfillment_type,
+    manualFormTiming: props.product.manual_form_timing,
     manualFormSchema: props.product.manual_form_schema || {},
     paymentChannelIds: Array.isArray(props.product.payment_channel_ids) && props.product.payment_channel_ids.length > 0 ? props.product.payment_channel_ids : undefined,
     quantity: quantity.value,

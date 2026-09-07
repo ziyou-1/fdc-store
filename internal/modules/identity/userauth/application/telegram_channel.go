@@ -129,7 +129,7 @@ func (s *Service) provisionTelegramChannelIdentity(verified *telegramauthapp.Ide
 	}
 	created := placeholderUser == nil
 
-	user, err = s.findOrCreateTelegramUser(verified)
+	user, err = s.findOrCreateTelegramUser(verified, "")
 	if err != nil {
 		return nil, nil, false, err
 	}

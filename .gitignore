@@ -22,3 +22,25 @@ internal/web/dist/
 # Agents 配置
 .agents/
 skills-lock.json
+
+# 编译产物：本地 go build 出来的二进制不进仓库
+# （server.exe 有 75MB，误提交会把仓库撑爆且毫无意义）
+*.exe
+*.dll
+*.so
+*.dylib
+/out/
+/bin/
+dujiao-next
+
+# 覆盖率与性能剖析产物
+*.test
+coverage.out
+*.prof
+
+# 编辑器与 AI 助手的本地配置
+.claude/
+*.swp
+*.bak
+*.tmp
+Thumbs.db

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dujiao-next/internal/constants"
 	fulfillmentdomain "github.com/dujiao-next/internal/modules/fulfillment/domain"
 	orderdomain "github.com/dujiao-next/internal/modules/order/domain"
 
@@ -22,6 +23,7 @@ type OrderSummary struct {
 	PromotionDiscountAmount money.Amount    `json:"promotion_discount_amount"`
 	WholesaleDiscountAmount money.Amount    `json:"wholesale_discount_amount"`
 	TotalAmount             money.Amount    `json:"total_amount"`
+	PointsAmount            int64           `json:"points_amount"`
 	CreatedAt               time.Time       `json:"created_at"`
 	Items                   []OrderItemResp `json:"items,omitempty"`
 	Children                []OrderSummary  `json:"children,omitempty"`
@@ -38,6 +40,7 @@ func NewOrderSummary(o *orderdomain.Order) OrderSummary {
 		PromotionDiscountAmount: o.PromotionDiscountAmount,
 		WholesaleDiscountAmount: o.WholesaleDiscountAmount,
 		TotalAmount:             o.TotalAmount,
+		PointsAmount:            o.PointsAmount,
 		CreatedAt:               o.CreatedAt,
 	}
 	for _, item := range o.Items {
@@ -86,6 +89,22 @@ type OrderDetail struct {
 	Items                    []OrderItemResp   `json:"items,omitempty"`
 	Fulfillment              *FulfillmentResp  `json:"fulfillment,omitempty"`
 	Children                 []OrderDetail     `json:"children,omitempty"`
+	// ManualFormDeadline 人工交付的承诺处理截止时间（支付时间 + SLA 小时数），未支付时为空。
+	ManualFormDeadline *time.Time `json:"manual_form_deadline,omitempty"`
+	// PointsAmount 应付积分；PointsPaidAmount 积分已抵扣的法币额；PointsRefunded 已退还积分。
+	PointsAmount        int64        `json:"points_amount"`
+	PointsPaidAmount    money.Amount `json:"points_paid_amount"`
+	PointsRefunded      int64        `json:"points_refunded"`
+	FreeClaimPaidAmount money.Amount `json:"free_claim_paid_amount"`
+}
+
+// manualFormDeadline 计算人工交付的承诺处理截止时间。
+func manualFormDeadline(paidAt *time.Time) *time.Time {
+	if paidAt == nil {
+		return nil
+	}
+	deadline := paidAt.Add(time.Duration(constants.ManualFormSLAHours) * time.Hour)
+	return &deadline
 }
 
 // OrderRefundResp 用户侧订单退款记录响应
@@ -119,12 +138,18 @@ func NewOrderDetail(o *orderdomain.Order) OrderDetail {
 		PaidAt:                  o.PaidAt,
 		CanceledAt:              o.CanceledAt,
 		CreatedAt:               o.CreatedAt,
+		ManualFormDeadline:      manualFormDeadline(o.PaidAt),
+		PointsAmount:            o.PointsAmount,
+		PointsPaidAmount:        o.PointsPaidAmount,
+		PointsRefunded:          o.PointsRefunded,
+		FreeClaimPaidAmount:     o.FreeClaimPaidAmount,
 	}
 	paid := o.PaidAt != nil
 	for _, item := range o.Items {
 		resp := newOrderItemResp(&item)
 		if !paid {
 			resp.Instructions = nil
+			resp.ManualFormRequired = false
 		}
 		d.Items = append(d.Items, resp)
 	}
@@ -171,6 +196,10 @@ type OrderItemResp struct {
 	FulfillmentType          string            `json:"fulfillment_type"`
 	ManualFormSchemaSnapshot jsonmap.JSON      `json:"manual_form_schema_snapshot"`
 	ManualFormSubmission     jsonmap.JSON      `json:"manual_form_submission"`
+	// ManualFormRequired 为 true 表示该条目仍需买家补填交付表单（支付后采集）。
+	ManualFormRequired bool  `json:"manual_form_required"`
+	PointsUnitPrice    int64 `json:"points_unit_price"`
+	PointsTotal        int64 `json:"points_total"`
 	// Instructions 交付使用说明（多语言 raw JSON，与 Title 字段契约一致，由前端按 locale 解析）。
 	// 仅在订单已付款时填充，未付款订单会在 NewOrderDetail 中置 nil；列表场景（NewOrderSummary）永远为 nil。
 	// 注意：渠道 API（channel_order.go）为服务端消费者（如 Telegram Bot），那里返回已按 locale 解析的字符串而非 raw JSON。
@@ -198,7 +227,11 @@ func newOrderItemResp(item *orderdomain.OrderItem) OrderItemResp {
 		FulfillmentType:          ft,
 		ManualFormSchemaSnapshot: item.ManualFormSchemaSnapshotJSON,
 		ManualFormSubmission:     item.ManualFormSubmissionJSON,
-		Instructions:             item.InstructionsJSON,
+		ManualFormRequired: len(item.ManualFormSchemaSnapshotJSON) > 0 &&
+			len(item.ManualFormSubmissionJSON) == 0,
+		PointsUnitPrice: item.PointsUnitPrice,
+		PointsTotal:     item.PointsTotal,
+		Instructions:    item.InstructionsJSON,
 	}
 	// 注意：CostPrice 不在 DTO 中，白名单模式天然排除
 }

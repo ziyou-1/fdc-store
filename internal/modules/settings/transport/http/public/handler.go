@@ -30,6 +30,7 @@ type Settings interface {
 	GetConfig(defaults map[string]interface{}) (map[string]interface{}, error)
 	GetWalletRechargeChannelIDs() []uint
 	GetWalletOnlyPayment() bool
+	GetSkipPayment() bool
 	GetAffiliateSettingMap() (map[string]interface{}, error)
 	GetSMTPEnabled() bool
 	GetRegistrationEnabled(defaultValue bool) (bool, error)
@@ -129,9 +130,11 @@ func (h *Handler) GetConfig(c *gin.Context) {
 		"languages":                              append([]string(nil), constants.SupportedLocales...),
 		constants.SettingFieldSiteCurrency:       constants.SiteCurrencyDefault,
 		constants.SettingFieldStorefrontTemplate: constants.StorefrontTemplateDefault,
+		// 联系方式默认留空：前台页脚是 v-if 有值才渲染，留空即自然隐藏。
+		// 早先这里硬编码了上游演示项目的账号，未配置时会把买家导到别人那里。
 		"contact": map[string]interface{}{
-			"telegram": "https://telegram.me/dujiaoka",
-			"whatsapp": "https://wa.me/1234567890",
+			"telegram": "",
+			"whatsapp": "",
 		},
 		"scripts": make([]interface{}, 0),
 	}
@@ -166,6 +169,10 @@ func (h *Handler) GetConfig(c *gin.Context) {
 	}
 	if h.settings.GetWalletOnlyPayment() {
 		data["wallet_only_payment"] = true
+	}
+	if h.settings.GetSkipPayment() {
+		data["skip_payment"] = true
+		data["payment_channels"] = []map[string]interface{}{}
 	}
 
 	if h.captcha != nil {
@@ -217,7 +224,7 @@ func (h *Handler) GetConfig(c *gin.Context) {
 		data["nav_config"] = navConfigVal
 	} else {
 		data["nav_config"] = map[string]interface{}{
-			"builtin":      map[string]interface{}{"blog": true, "notice": true, "about": true},
+			"builtin":      map[string]interface{}{"blog": true, "notice": true, "faq": true, "about": true},
 			"custom_items": make([]interface{}, 0),
 		}
 	}

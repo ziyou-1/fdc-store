@@ -5,7 +5,7 @@ import { useCartStore, type CartItem } from '../stores/cart'
 import { useBuyNowStore } from '../stores/buyNow'
 import { useAppStore } from '../stores/app'
 import { useUserAuthStore } from '../stores/userAuth'
-import { guestOrderAPI, userOrderAPI, walletAPI, type CaptchaPayload } from '../api'
+import { pointsAPI, userOrderAPI, walletAPI } from '../api'
 import { debounceAsync } from '../utils/debounce'
 import { type PageAlert } from '../utils/alerts'
 import { amountToCents, basisPointsToPercent, centsToAmount, parseInteger, rateToBasisPoints } from '../utils/money'
@@ -13,31 +13,17 @@ import { buildSkuDisplayText, normalizeSkuId } from '../utils/sku'
 import { refreshCartStockSnapshots, cartItemPurchaseLimit as itemPurchaseLimit, cartItemPurchaseMin as itemPurchaseMin } from '../utils/cartStock'
 import { getImageUrl } from '../utils/image'
 import { getAffiliateCode, getAffiliateVisitorKey } from '../utils/affiliate'
-import { saveGuestOrderAuth } from '../utils/guestOrderAuth'
-import ImageCaptcha from '../components/captcha/ImageCaptcha.vue'
-import TurnstileCaptcha from '../components/captcha/TurnstileCaptcha.vue'
+import { disabledFeatures } from '../utils/disabledFeatures'
+import { isSkipPaymentEnabled } from '../utils/skipPayment'
 import { useLocalized, useProductLabels } from './useProduct'
-
-interface ManualFormField {
-  key: string
-  type: string
-  required: boolean
-  label?: Record<string, string>
-  placeholder?: Record<string, string>
-  regex?: string
-  min?: number
-  max?: number
-  max_len?: number
-  options: string[]
-}
-
-interface ManualFormProduct {
-  itemKey: string
-  productId: number
-  title: any
-  fields: ManualFormField[]
-  skuCount: number
-}
+import {
+  buildManualFormSubmissions,
+  emptyManualFormData,
+  normalizeManualFormSchema,
+  validateManualForm,
+  type ManualFormField,
+  type ManualFormProduct,
+} from '../utils/manualForm'
 
 /**
  * 结算页共享逻辑（classic + vault 双模板共用）。
@@ -79,8 +65,12 @@ export function useCheckout() {
   // Payment state
   const selectedChannelId = ref<number | null>(null)
   const useBalance = ref(false)
+  const usePoints = ref(false)
   const walletLoading = ref(false)
   const walletBalance = ref('0')
+  const pointsLoading = ref(false)
+  const pointsBalance = ref(0)
+  const exchangeEnabled = ref(false)
 
   // Payment channels
   const paymentChannels = computed(() => {
@@ -120,19 +110,34 @@ export function useCheckout() {
     return filtered
   })
 
-  const walletOnlyPayment = computed(() => !!appStore.config?.wallet_only_payment)
+  const skipPayment = computed(() => isSkipPaymentEnabled(appStore.config))
+  const walletOnlyPayment = computed(() => !skipPayment.value && !disabledFeatures.buyerWallet && !!appStore.config?.wallet_only_payment)
   // 分销白标店内后端会清零优惠券/促销/会员/批发等所有折扣（reseller 定价为固定加价），
   // 据此在结算页隐藏优惠券输入与恒为 0 的折扣预览行，避免买家填了无效优惠码。
   const isResellerTenant = computed(() => appStore.isResellerTenant)
-  const showBalanceOption = computed(() => userAuthStore.isAuthenticated)
+  const showBalanceOption = computed(() => !disabledFeatures.buyerWallet && userAuthStore.isAuthenticated)
+  const previewPointsAmount = computed(() => {
+    const n = Math.trunc(Number(preview.value?.points_amount || 0))
+    return Number.isFinite(n) && n > 0 ? n : 0
+  })
+  const showPointsOption = computed(() =>
+    userAuthStore.isAuthenticated &&
+    exchangeEnabled.value &&
+    previewPointsAmount.value > 0 &&
+    !walletOnlyPayment.value,
+  )
+  const pointsInsufficient = computed(() =>
+    usePoints.value && pointsBalance.value < previewPointsAmount.value,
+  )
   const expectedWalletPaidCents = computed(() => {
-    if (!showBalanceOption.value || !useBalance.value) return 0
+    if (!showBalanceOption.value || !useBalance.value || usePoints.value) return 0
     const balance = amountToCents(walletBalance.value)
     const total = amountToCents(previewTotal.value)
     if (balance === null || total === null) return 0
     return Math.min(balance, total)
   })
   const expectedOnlinePayCents = computed(() => {
+    if (usePoints.value) return 0
     const total = amountToCents(previewTotal.value)
     if (total === null) return 0
     return Math.max(total - expectedWalletPaidCents.value, 0)
@@ -140,7 +145,9 @@ export function useCheckout() {
   const expectedWalletPaidDisplay = computed(() => formatPrice(centsToAmount(expectedWalletPaidCents.value), previewCurrency.value))
   const expectedOnlinePayDisplay = computed(() => formatPrice(centsToAmount(expectedOnlinePayCents.value), previewCurrency.value))
   const requiresOnlineChannel = computed(() => {
+    if (skipPayment.value) return false
     if (!userAuthStore.isAuthenticated) return true
+    if (usePoints.value) return false
     if (!useBalance.value) return true
     return expectedOnlinePayCents.value > 0
   })
@@ -270,99 +277,36 @@ export function useCheckout() {
     return hasPositiveAmount(amount) ? `-${formatPrice(amount, currency)}` : formatPrice(amount, currency)
   }
 
-  const checkoutMode = ref<'guest' | 'member'>('guest')
-  const guestEmail = ref('')
-  const guestPassword = ref('')
-  const guestCaptchaPayload = ref<CaptchaPayload>({})
-  const guestTurnstileToken = ref('')
-  const guestImageCaptchaRef = ref<InstanceType<typeof ImageCaptcha> | null>(null)
-  const guestTurnstileRef = ref<InstanceType<typeof TurnstileCaptcha> | null>(null)
-
-  const manualFieldTypes = new Set(['text', 'textarea', 'phone', 'email', 'number', 'select', 'radio', 'checkbox'])
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  const phonePattern = /^\+?[0-9\-()\s]{6,20}$/
-  const findLastUnescapedSlash = (value: string) => {
-    for (let index = value.length - 1; index > 0; index -= 1) {
-      if (value[index] !== '/') {
-        continue
-      }
-      let backslashes = 0
-      for (let cursor = index - 1; cursor >= 0 && value[cursor] === '\\'; cursor -= 1) {
-        backslashes += 1
-      }
-      if (backslashes % 2 === 0) {
-        return index
-      }
-    }
-    return -1
-  }
-
-  const compileManualRegex = (rawRegex?: string) => {
-    const text = String(rawRegex || '').trim()
-    if (!text) {
-      return null
-    }
-
-    if (text.startsWith('/')) {
-      const lastSlashIndex = findLastUnescapedSlash(text)
-      if (lastSlashIndex > 0) {
-        const pattern = text.slice(1, lastSlashIndex)
-        const flags = text.slice(lastSlashIndex + 1)
-        if (/^[gimsuy]*$/.test(flags)) {
-          try {
-            return new RegExp(pattern, flags)
-          } catch {
-            return null
-          }
-        }
-      }
-    }
-
-    try {
-      return new RegExp(text)
-    } catch {
-      return null
-    }
-  }
 
   const manualFormData = ref<Record<string, Record<string, any>>>({})
   const submitAttempted = ref(false)
 
-  const normalizeManualFormSchema = (rawSchema: any): ManualFormField[] => {
-    const rawFields = Array.isArray(rawSchema?.fields) ? rawSchema.fields : []
-    return rawFields
-      .map((rawField: any) => {
-        const key = String(rawField?.key || '').trim()
-        const type = String(rawField?.type || '').trim()
-        if (!key || !manualFieldTypes.has(type)) {
-          return null
-        }
-        const options = Array.isArray(rawField?.options)
-          ? rawField.options.map((item: any) => String(item || '').trim()).filter(Boolean)
-          : []
-        const minValue = Number(rawField?.min)
-        const maxValue = Number(rawField?.max)
-        const maxLenValue = Number(rawField?.max_len)
-        return {
-          key,
-          type,
-          required: Boolean(rawField?.required),
-          label: rawField?.label || undefined,
-          placeholder: rawField?.placeholder || undefined,
-          regex: String(rawField?.regex || '').trim() || undefined,
-          min: Number.isFinite(minValue) ? minValue : undefined,
-          max: Number.isFinite(maxValue) ? maxValue : undefined,
-          max_len: Number.isFinite(maxLenValue) ? maxLenValue : undefined,
-          options: Array.from(new Set(options)),
-        } as ManualFormField
-      })
-      .filter(Boolean) as ManualFormField[]
+  const isAfterPaymentManual = (item: CartItem) => {
+    return userAuthStore.isAuthenticated && String(item.manualFormTiming || '').trim() === 'after_payment'
   }
+
+  const afterPaymentNotice = computed(() => {
+    if (!userAuthStore.isAuthenticated) {
+      return false
+    }
+    return cartItems.value.some((item) => {
+      if (item.fulfillmentType !== 'manual' && item.fulfillmentType !== 'upstream') {
+        return false
+      }
+      if (String(item.manualFormTiming || '').trim() !== 'after_payment') {
+        return false
+      }
+      return normalizeManualFormSchema(item.manualFormSchema).length > 0
+    })
+  })
 
   const manualFormProducts = computed<ManualFormProduct[]>(() => {
     const grouped = new Map<number, ManualFormProduct>()
     cartItems.value.forEach((item) => {
       if (item.fulfillmentType !== 'manual' && item.fulfillmentType !== 'upstream') {
+        return
+      }
+      if (isAfterPaymentManual(item)) {
         return
       }
       const fields = normalizeManualFormSchema(item.manualFormSchema)
@@ -391,24 +335,7 @@ export function useCheckout() {
   })
 
   watch(manualFormProducts, (products) => {
-    const nextData: Record<string, Record<string, any>> = {}
-    products.forEach((product) => {
-      const key = product.itemKey
-      const current = manualFormData.value[key] || {}
-      const formValues: Record<string, any> = {}
-      product.fields.forEach((field) => {
-        const currentValue = current[field.key]
-        if (field.type === 'checkbox') {
-          formValues[field.key] = Array.isArray(currentValue)
-            ? currentValue.map((item: any) => String(item)).filter(Boolean)
-            : []
-        } else {
-          formValues[field.key] = currentValue == null ? '' : String(currentValue)
-        }
-      })
-      nextData[key] = formValues
-    })
-    manualFormData.value = nextData
+    manualFormData.value = emptyManualFormData(products, manualFormData.value)
   }, { immediate: true, deep: true })
 
   const resolveLocalizedText = (jsonData?: Record<string, string>, fallback = '') => {
@@ -425,156 +352,19 @@ export function useCheckout() {
     return resolveLocalizedText(field.placeholder, '')
   }
 
-  const manualFieldErrorKey = (itemKey: string, fieldKey: string) => `${itemKey}:${fieldKey}`
-
   const manualFormValidation = computed(() => {
-    const errors: Record<string, string> = {}
-    let firstError = ''
-
-    const setError = (itemKey: string, field: ManualFormField, message: string) => {
-      const errorKey = manualFieldErrorKey(itemKey, field.key)
-      if (!errors[errorKey]) {
-        errors[errorKey] = message
-        if (!firstError) {
-          firstError = message
-        }
-      }
-    }
-
-    manualFormProducts.value.forEach((product) => {
-      const values = manualFormData.value[product.itemKey] || {}
-      product.fields.forEach((field) => {
-        const fieldLabel = getManualFieldLabel(field)
-        const rawValue = values[field.key]
-        if (field.type === 'checkbox') {
-          const list = Array.isArray(rawValue)
-            ? rawValue.map((item: any) => String(item).trim()).filter(Boolean)
-            : []
-          if (field.required && list.length === 0) {
-            setError(product.itemKey, field, t('checkout.manualFormFieldRequired', { name: fieldLabel }))
-            return
-          }
-          if (list.length > 0 && field.options.length > 0 && list.some((item) => !field.options.includes(item))) {
-            setError(product.itemKey, field, t('checkout.manualFormFieldOptionInvalid', { name: fieldLabel }))
-          }
-          return
-        }
-
-        const text = rawValue == null ? '' : String(rawValue).trim()
-        if (field.required && !text) {
-          setError(product.itemKey, field, t('checkout.manualFormFieldRequired', { name: fieldLabel }))
-          return
-        }
-        if (!text) {
-          return
-        }
-
-        if ((field.type === 'text' || field.type === 'textarea' || field.type === 'phone' || field.type === 'email') && field.max_len && text.length > field.max_len) {
-          setError(product.itemKey, field, t('checkout.manualFormFieldMaxLength', { name: fieldLabel, max: field.max_len }))
-          return
-        }
-        if ((field.type === 'phone' && !phonePattern.test(text)) || (field.type === 'email' && !emailPattern.test(text))) {
-          setError(product.itemKey, field, t('checkout.manualFormFieldInvalid', { name: fieldLabel }))
-          return
-        }
-        if (field.type === 'number') {
-          const numberValue = Number(text)
-          if (!Number.isFinite(numberValue)) {
-            setError(product.itemKey, field, t('checkout.manualFormFieldNumberInvalid', { name: fieldLabel }))
-            return
-          }
-          if ((field.min !== undefined && numberValue < field.min) || (field.max !== undefined && numberValue > field.max)) {
-            setError(product.itemKey, field, t('checkout.manualFormFieldNumberRange', { name: fieldLabel }))
-            return
-          }
-        }
-        if ((field.type === 'select' || field.type === 'radio') && field.options.length > 0 && !field.options.includes(text)) {
-          setError(product.itemKey, field, t('checkout.manualFormFieldOptionInvalid', { name: fieldLabel }))
-          return
-        }
-        if (field.regex) {
-          const regex = compileManualRegex(field.regex)
-          if (!regex || !regex.test(text)) {
-            setError(product.itemKey, field, t('checkout.manualFormFieldInvalid', { name: fieldLabel }))
-          }
-        }
-      })
-    })
-
-    return {
-      valid: Object.keys(errors).length === 0,
-      errors,
-      firstError,
-    }
+    return validateManualForm(manualFormProducts.value, manualFormData.value, t, getManualFieldLabel)
   })
 
   const manualFieldError = (itemKey: string, fieldKey: string) => {
-    return manualFormValidation.value.errors[manualFieldErrorKey(itemKey, fieldKey)] || ''
+    return manualFormValidation.value.errors[`${itemKey}:${fieldKey}`] || ''
   }
 
   const buildManualFormDataPayload = () => {
-    const payload: Record<string, any> = {}
-    manualFormProducts.value.forEach((product) => {
-      const values = manualFormData.value[product.itemKey] || {}
-      const row: Record<string, any> = {}
-      product.fields.forEach((field) => {
-        const rawValue = values[field.key]
-        if (field.type === 'checkbox') {
-          const list = Array.isArray(rawValue)
-            ? rawValue.map((item: any) => String(item).trim()).filter(Boolean)
-            : []
-          if (list.length > 0) {
-            row[field.key] = list
-          }
-          return
-        }
-        const text = rawValue == null ? '' : String(rawValue).trim()
-        if (text) {
-          row[field.key] = text
-        }
-      })
-      payload[product.itemKey] = row
-    })
-    return payload
+    return buildManualFormSubmissions(manualFormProducts.value, manualFormData.value)
   }
 
   const manualFormFingerprint = computed(() => JSON.stringify(manualFormData.value))
-
-  const isGuestCheckout = computed(() => !userAuthStore.isAuthenticated && checkoutMode.value === 'guest')
-  const guestEmailValid = computed(() => {
-    if (!isGuestCheckout.value) return true
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.value.trim())
-  })
-
-  const captchaConfig = computed(() => appStore.config?.captcha || null)
-  const captchaProvider = computed(() => String(captchaConfig.value?.provider || 'none'))
-  const guestCaptchaEnabled = computed(() => {
-    if (!isGuestCheckout.value) return false
-    return !!captchaConfig.value?.scenes?.guest_create_order && captchaProvider.value !== 'none'
-  })
-  const guestTurnstileSiteKey = computed(() => String(captchaConfig.value?.turnstile?.site_key || ''))
-
-  const getGuestCaptchaPayload = (): CaptchaPayload | undefined => {
-    if (!guestCaptchaEnabled.value) return undefined
-    if (captchaProvider.value === 'image') {
-      return {
-        captcha_id: guestCaptchaPayload.value.captcha_id || '',
-        captcha_code: guestCaptchaPayload.value.captcha_code || '',
-      }
-    }
-    if (captchaProvider.value === 'turnstile') {
-      return {
-        turnstile_token: guestTurnstileToken.value,
-      }
-    }
-    return undefined
-  }
-
-  const handleGuestCaptchaConfigStale = async () => {
-    await appStore.loadConfig(true)
-    guestCaptchaPayload.value = {}
-    guestTurnstileToken.value = ''
-  }
 
   const canSubmit = computed(() => {
     if (syncingStock.value) return false
@@ -583,20 +373,12 @@ export function useCheckout() {
     if (!manualFormValidation.value.valid) return false
     if (cartItems.value.some((item) => itemStockExceeded(item))) return false
     if (cartItems.value.some((item) => itemMinNotMet(item))) return false
+    if (usePoints.value && (previewPointsAmount.value <= 0 || pointsInsufficient.value)) return false
     if (walletOnlyPayment.value && expectedOnlinePayCents.value > 0) return false
     if (!walletOnlyPayment.value && requiresOnlineChannel.value && !selectedChannelId.value) return false
     if (requiresOnlineChannel.value && selectedChannelAmountHint.value) return false
-    if (userAuthStore.isAuthenticated) return true
-    if (checkoutMode.value !== 'guest') return false
-    if (!guestEmail.value.trim() || !guestPassword.value.trim() || !guestEmailValid.value) return false
-    if (!guestCaptchaEnabled.value) return true
-    if (captchaProvider.value === 'image') {
-      return Boolean(guestCaptchaPayload.value.captcha_id && guestCaptchaPayload.value.captcha_code)
-    }
-    if (captchaProvider.value === 'turnstile') {
-      return Boolean(guestTurnstileToken.value)
-    }
-    return false
+    // 免登录下单已下线：未登录一律拦在提交前，由结算页引导去登录。
+    return userAuthStore.isAuthenticated
   })
 
   const submitBlockedReason = computed(() => {
@@ -613,22 +395,12 @@ export function useCheckout() {
     if (minBlockedItem) {
       return t('cart.minPurchaseNotMet', { count: itemPurchaseMin(minBlockedItem) })
     }
+    if (usePoints.value && (previewPointsAmount.value <= 0 || pointsInsufficient.value)) return t('payment.pointsInsufficientHint')
     if (walletOnlyPayment.value && expectedOnlinePayCents.value > 0) return t('payment.walletInsufficientHint')
     if (!walletOnlyPayment.value && requiresOnlineChannel.value && !selectedChannelId.value) return t('checkout.errors.selectPayment')
     if (requiresOnlineChannel.value && selectedChannelAmountHint.value) return selectedChannelAmountHint.value
     if (userAuthStore.isAuthenticated) return ''
-    if (checkoutMode.value !== 'guest') return t('checkout.errors.loginOrGuest')
-    if (!guestEmail.value.trim() || !guestPassword.value.trim()) return t('checkout.errors.missingGuest')
-    if (!guestEmailValid.value) return t('error.email_invalid')
-    if (guestCaptchaEnabled.value) {
-      if (captchaProvider.value === 'image' && (!guestCaptchaPayload.value.captcha_id || !guestCaptchaPayload.value.captcha_code)) {
-        return t('auth.common.captchaRequired')
-      }
-      if (captchaProvider.value === 'turnstile' && !guestTurnstileToken.value) {
-        return t('auth.common.captchaRequired')
-      }
-    }
-    return ''
+    return t('checkout.errors.loginRequired')
   })
 
   const previewStatusText = computed(() => couponRefreshing.value
@@ -656,7 +428,7 @@ export function useCheckout() {
   }))
 
   const buildOrderPayload = () => ({
-    coupon_code: normalizedCouponCode.value || undefined,
+    coupon_code: disabledFeatures.coupons ? undefined : (normalizedCouponCode.value || undefined),
     affiliate_code: getAffiliateCode() || undefined,
     affiliate_visitor_key: getAffiliateVisitorKey() || undefined,
     items: buildItemsPayload(),
@@ -720,7 +492,8 @@ export function useCheckout() {
       couponRefreshing.value = false
       return
     }
-    if (isGuestCheckout.value && (!guestEmail.value.trim() || !guestPassword.value.trim() || !guestEmailValid.value)) {
+    // 未登录不再请求预览：免登录下单已下线，价格预览也无从谈起。
+    if (!userAuthStore.isAuthenticated) {
       preview.value = null
       orderPaymentChannels.value = []
       previewError.value = ''
@@ -750,24 +523,11 @@ export function useCheckout() {
     try {
       const payload: any = buildOrderPayload()
 
-      let response
-      if (userAuthStore.isAuthenticated) {
-        response = await userOrderAPI.preview(payload)
-      } else {
-        response = await guestOrderAPI.preview({
-          ...payload,
-          email: guestEmail.value.trim(),
-          order_password: guestPassword.value,
-        })
-      }
+      const response = await userOrderAPI.preview(payload)
 
       if (requestId !== previewRequestId.value) return
       preview.value = response.data.data
-      if (userAuthStore.isAuthenticated) {
-        debouncedLoadOrderPaymentChannels()
-      } else {
-        orderPaymentChannels.value = []
-      }
+      debouncedLoadOrderPaymentChannels()
     } catch (err: any) {
       if (requestId !== previewRequestId.value) return
       preview.value = null
@@ -818,26 +578,11 @@ export function useCheckout() {
         ...buildOrderPayload(),
         channel_id: requiresOnlineChannel.value ? (selectedChannelId.value || undefined) : undefined,
         use_balance: useBalance.value,
+        use_points: usePoints.value,
       }
 
-      let responseData: any
-
-      if (userAuthStore.isAuthenticated) {
-        const response = await userOrderAPI.createAndPay(payload)
-        responseData = response.data.data
-      } else {
-        const response = await guestOrderAPI.createAndPay({
-          ...payload,
-          email: guestEmail.value.trim(),
-          order_password: guestPassword.value,
-          captcha_payload: getGuestCaptchaPayload(),
-        })
-        saveGuestOrderAuth({
-          email: guestEmail.value.trim(),
-          order_password: guestPassword.value,
-        })
-        responseData = response.data.data
-      }
+      const response = await userOrderAPI.createAndPay(payload)
+      const responseData: any = response.data.data
 
       if (!responseData?.order_no) {
         throw new Error(t('checkout.errors.submitFailed'))
@@ -845,27 +590,22 @@ export function useCheckout() {
 
       clearSourceStore()
 
+      if (responseData.order_paid) {
+        router.push(`/orders/${encodeURIComponent(responseData.order_no)}`)
+        return
+      }
+
       // Redirect to the existing Payment page which handles all payment display
-      const query = userAuthStore.isAuthenticated
-        ? `order_no=${encodeURIComponent(responseData.order_no)}`
-        : `guest=1&order_no=${encodeURIComponent(responseData.order_no)}`
-      router.push(`/pay?${query}`)
+      router.push(`/pay?order_no=${encodeURIComponent(responseData.order_no)}`)
     } catch (err: any) {
       error.value = err.message || t('checkout.errors.submitFailed')
-      if (guestCaptchaEnabled.value && captchaProvider.value === 'image') {
-        guestImageCaptchaRef.value?.refresh()
-      }
-      if (guestCaptchaEnabled.value && captchaProvider.value === 'turnstile') {
-        guestTurnstileRef.value?.reset()
-        guestTurnstileToken.value = ''
-      }
     } finally {
       submitting.value = false
     }
   }
 
   watch(
-    () => [cartItems.value, manualFormFingerprint.value, normalizedCouponCode.value, checkoutMode.value, guestEmail.value, guestPassword.value, userAuthStore.isAuthenticated],
+    () => [cartItems.value, manualFormFingerprint.value, normalizedCouponCode.value, userAuthStore.isAuthenticated],
     () => {
       debouncedLoadPreview()
     },
@@ -873,8 +613,25 @@ export function useCheckout() {
   )
 
   watch(walletOnlyPayment, (v) => {
-    if (v) useBalance.value = true
+    if (v) {
+      useBalance.value = true
+      usePoints.value = false
+    }
   }, { immediate: true })
+
+  watch(usePoints, (v) => {
+    if (!v) return
+    useBalance.value = false
+    selectedChannelId.value = null
+  })
+
+  watch(useBalance, (v) => {
+    if (v) usePoints.value = false
+  })
+
+  watch(selectedChannelId, (id) => {
+    if (id) usePoints.value = false
+  })
 
   watch(normalizedCouponCode, (value, previous) => {
     if (value === previous) return
@@ -915,6 +672,26 @@ export function useCheckout() {
     }
   }
 
+  const loadPoints = async () => {
+    if (!userAuthStore.isAuthenticated) {
+      exchangeEnabled.value = false
+      pointsBalance.value = 0
+      return
+    }
+    pointsLoading.value = true
+    try {
+      const [configRes, accountRes] = await Promise.all([pointsAPI.config(), pointsAPI.account()])
+      exchangeEnabled.value = configRes.data.data?.exchange_enabled === true
+      const balance = Math.trunc(Number(accountRes.data.data?.balance || 0))
+      pointsBalance.value = Number.isFinite(balance) && balance > 0 ? balance : 0
+    } catch {
+      exchangeEnabled.value = false
+      pointsBalance.value = 0
+    } finally {
+      pointsLoading.value = false
+    }
+  }
+
   onMounted(async () => {
     if (!appStore.config) {
       await appStore.loadConfig()
@@ -922,6 +699,7 @@ export function useCheckout() {
     await syncCartStockSnapshots()
     debouncedLoadPreview()
     loadWalletBalance()
+    void loadPoints()
   })
 
   onUnmounted(() => {
@@ -1121,6 +899,7 @@ export function useCheckout() {
     checkoutItemOriginalPriceParts,
     checkoutItemHasPriceDiscount,
     // manual form
+    afterPaymentNotice,
     manualFormProducts,
     manualFormData,
     submitAttempted,
@@ -1130,19 +909,6 @@ export function useCheckout() {
     // coupon
     couponCode,
     isResellerTenant,
-    // mode select / guest
-    checkoutMode,
-    guestEmail,
-    guestPassword,
-    guestEmailValid,
-    guestCaptchaEnabled,
-    captchaProvider,
-    guestCaptchaPayload,
-    guestTurnstileToken,
-    guestTurnstileSiteKey,
-    guestImageCaptchaRef,
-    guestTurnstileRef,
-    handleGuestCaptchaConfigStale,
     // preview amounts
     previewCurrency,
     previewOriginal,
@@ -1159,9 +925,16 @@ export function useCheckout() {
     checkoutAlert,
     // wallet / balance
     showBalanceOption,
+    showPointsOption,
     walletLoading,
     walletBalance,
     useBalance,
+    usePoints,
+    pointsLoading,
+    pointsBalance,
+    previewPointsAmount,
+    pointsInsufficient,
+    skipPayment,
     walletOnlyPayment,
     expectedWalletPaidDisplay,
     expectedOnlinePayDisplay,

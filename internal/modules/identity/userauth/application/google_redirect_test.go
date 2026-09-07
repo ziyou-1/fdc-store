@@ -247,6 +247,7 @@ func TestGoogleRedirectTenantMismatchConsumesHandoff(t *testing.T) {
 		context.Background(),
 		handle,
 		GoogleRedirectTenant{Host: "other.example.com", IsMain: true},
+		"",
 	)
 	if !errors.Is(err, ErrGoogleRedirectTenantMismatch) {
 		t.Fatalf("first error = %v, want tenant mismatch", err)
@@ -255,6 +256,7 @@ func TestGoogleRedirectTenantMismatchConsumesHandoff(t *testing.T) {
 		context.Background(),
 		handle,
 		GoogleRedirectTenant{Host: "shop.example.com", IsMain: true},
+		"",
 	)
 	if !errors.Is(err, ErrGoogleRedirectSessionExpired) {
 		t.Fatalf("second error = %v, want expired", err)
@@ -298,6 +300,7 @@ func TestGoogleRedirectExchangeConsumesHandoffWhenProviderWasDisabled(t *testing
 		context.Background(),
 		handle,
 		GoogleRedirectTenant{Host: "shop.example.com", IsMain: true},
+		"",
 	)
 	if !errors.Is(err, googleauthapp.ErrGoogleAuthDisabled) {
 		t.Fatalf("first error = %v, want Google auth disabled", err)
@@ -306,6 +309,7 @@ func TestGoogleRedirectExchangeConsumesHandoffWhenProviderWasDisabled(t *testing
 		context.Background(),
 		handle,
 		GoogleRedirectTenant{Host: "shop.example.com", IsMain: true},
+		"",
 	)
 	if !errors.Is(err, ErrGoogleRedirectSessionExpired) {
 		t.Fatalf("second error = %v, want expired", err)
@@ -323,6 +327,7 @@ func TestGoogleRedirectExchangeRejectsHandoffFromPreviousClientID(t *testing.T) 
 		context.Background(),
 		handle,
 		GoogleRedirectTenant{Host: "shop.example.com", IsMain: true},
+		"",
 	)
 	if !errors.Is(err, ErrGoogleRedirectSessionExpired) {
 		t.Fatalf("error = %v, want expired after client ID rotation", err)

@@ -118,7 +118,6 @@ func (s *Service) collectURLs(ctx context.Context, baseURL string) ([]domain.URL
 	}{
 		{"/", "daily", "1.0"},
 		{"/products", "daily", "0.9"},
-		{"/blog", "weekly", "0.6"},
 		{"/notice", "weekly", "0.5"},
 		{"/about", "monthly", "0.3"},
 		{"/terms", "yearly", "0.2"},
@@ -171,9 +170,9 @@ func (s *Service) collectURLs(ctx context.Context, baseURL string) ([]domain.URL
 		if post.PublishedAt != nil {
 			lastmod = *post.PublishedAt
 		}
-		// blog 与 notice 共用 /blog/:slug 详情页（user 前台 Notice.vue 跳转到 /blog/{slug}）
+		// 公告与常见问题共用 /posts/:slug 详情页
 		entries = append(entries, domain.URL{
-			Location:        baseURL + "/blog/" + url.PathEscape(post.Slug),
+			Location:        baseURL + "/posts/" + url.PathEscape(post.Slug),
 			LastModified:    lastmod.UTC().Format("2006-01-02"),
 			ChangeFrequency: "monthly",
 			Priority:        "0.5",

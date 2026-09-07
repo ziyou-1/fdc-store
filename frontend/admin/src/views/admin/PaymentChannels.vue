@@ -120,6 +120,7 @@ const providerTypeLabel = (value?: string) => {
     okpay: t('admin.paymentChannels.providerTypes.okpay'),
     dujiaopay: t('admin.paymentChannels.providerTypes.dujiaopay'),
     tokenpay: t('admin.paymentChannels.providerTypes.tokenpay'),
+    payssion: t('admin.paymentChannels.providerTypes.payssion'),
   }
   return map[value || ''] || value || '-'
 }
@@ -157,7 +158,11 @@ const channelTypeLabel = (value?: string) => {
     'aptos-usdc': t('admin.paymentChannels.channelTypes.aptosUsdc'),
     'aptos-usdt': t('admin.paymentChannels.channelTypes.aptosUsdt'),
   }
-  return map[value || ''] || value || '-'
+  if (!value) return '-'
+  const key = `admin.paymentChannels.channelTypes.${value}`
+  const translated = t(key)
+  if (translated !== key) return translated
+  return map[value] || value
 }
 
 const resolveChannelTypeDisplay = (channel: AdminPaymentChannel) => {
@@ -339,6 +344,7 @@ watch(
               <SelectItem value="bepusdt">{{ t('admin.paymentChannels.providerTypes.bepusdt') }}</SelectItem>
               <SelectItem value="epusdt">{{ t('admin.paymentChannels.providerTypes.epusdt') }}</SelectItem>
               <SelectItem value="okpay">{{ t('admin.paymentChannels.providerTypes.okpay') }}</SelectItem>
+              <SelectItem value="payssion">{{ t('admin.paymentChannels.providerTypes.payssion') }}</SelectItem>
               <SelectItem value="tokenpay">{{ t('admin.paymentChannels.providerTypes.tokenpay') }}</SelectItem>
             </SelectContent>
           </Select>

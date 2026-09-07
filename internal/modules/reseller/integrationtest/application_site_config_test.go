@@ -150,7 +150,7 @@ func TestResellerSiteConfigServiceApplyPublicConfigOverlay(t *testing.T) {
 	base := map[string]interface{}{
 		"brand": map[string]interface{}{
 			"site_name": "Main Store",
-			"site_icon": "/dj.svg",
+			"site_icon": "/keyvo.svg",
 			"site_url":  "https://main.example.test",
 		},
 		"currency": "CNY",

@@ -12,6 +12,7 @@ import (
 
 	orderapp "github.com/dujiao-next/internal/modules/order/application"
 	orderdomain "github.com/dujiao-next/internal/modules/order/domain"
+	pointscontract "github.com/dujiao-next/internal/modules/points/contract"
 
 	paymenttransport "github.com/dujiao-next/internal/modules/payment/transport/http"
 	reseller "github.com/dujiao-next/internal/modules/reseller/contract"
@@ -63,6 +64,7 @@ func (a writerAdapter) CreatePayment(input paymenttransport.CreatePaymentInput) 
 		OrderID:       input.OrderID,
 		ChannelID:     input.ChannelID,
 		UseBalance:    input.UseBalance,
+		UsePoints:     input.UsePoints,
 		ClientIP:      input.ClientIP,
 		Context:       input.Context,
 		RequestScheme: input.RequestScheme,
@@ -121,6 +123,14 @@ func mapTransportError(err error) error {
 		{walletcontract.ErrOnlyPaymentRequired, paymenttransport.ErrWalletOnlyPaymentRequired},
 		{paymentapp.ErrPaymentStatusInvalid, paymenttransport.ErrPaymentStatusInvalid},
 		{paymentapp.ErrPaymentAmountMismatch, paymenttransport.ErrPaymentAmountMismatch},
+		{orderapp.ErrPointsTenderExclusive, paymenttransport.ErrPointsTenderExclusive},
+		{pointscontract.ErrExchangeDisabled, paymenttransport.ErrPointsExchangeDisabled},
+		{pointscontract.ErrExchangeNotSupported, paymenttransport.ErrPointsExchangeNotSupported},
+		{pointscontract.ErrExchangeGuestForbidden, paymenttransport.ErrPointsExchangeNotSupported},
+		{pointscontract.ErrInsufficientPoints, paymenttransport.ErrPointsInsufficient},
+		{pointscontract.ErrExchangeCouponNotAllowed, paymenttransport.ErrPointsCouponNotAllowed},
+		{pointscontract.ErrDailyLimitExceeded, paymenttransport.ErrPointsDailyLimitExceeded},
+		{pointscontract.ErrSKUDailyLimitExceeded, paymenttransport.ErrPointsSKUDailyLimitExceeded},
 	} {
 		if errors.Is(err, mapping.source) {
 			return fmt.Errorf("%w: %v", mapping.target, err)

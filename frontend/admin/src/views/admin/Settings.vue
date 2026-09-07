@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { notifyError, notifySuccess } from '@/utils/notify'
+import { isDisabledSettingsTab } from '@/utils/disabledFeatures'
 import { applySiteIcon } from '@/utils/favicon'
 import { getImageUrl } from '@/utils/image'
 import { orderEmailSceneKeys } from '@/utils/orderEmailTemplates'
@@ -33,7 +34,7 @@ const homeAnnouncementTabRef = ref<InstanceType<typeof SettingsHomeAnnouncementT
 const upstreamSyncTabRef = ref<InstanceType<typeof SettingsUpstreamSyncTab>>()
 const siteIconPickerRef = ref<InstanceType<typeof MediaPicker> | null>(null)
 const siteLogoPickerRef = ref<InstanceType<typeof MediaPicker> | null>(null)
-const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US'] as const
+const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const
 type SupportedLanguage = (typeof supportedLanguages)[number]
 type SiteScriptPosition = 'head' | 'body_end'
 type SiteScriptItem = {
@@ -68,6 +69,7 @@ const languages = computed(() => [
   { code: 'zh-CN' as SupportedLanguage, name: t('admin.common.lang.zhCN') },
   { code: 'zh-TW' as SupportedLanguage, name: t('admin.common.lang.zhTW') },
   { code: 'en-US' as SupportedLanguage, name: t('admin.common.lang.enUS') },
+  { code: 'id-ID' as SupportedLanguage, name: t('admin.common.lang.idID') },
 ])
 
 const tabs = computed(() => [
@@ -84,7 +86,7 @@ const tabs = computed(() => [
   { label: t('admin.settings.tabs.google'), value: 'google' },
   { label: t('admin.settings.tabs.dashboard'), value: 'dashboard' },
   { label: t('admin.settings.tabs.upstreamSync'), value: 'upstream_sync' },
-])
+].filter((tab) => !isDisabledSettingsTab(tab.value)))
 
 const fallbackCurrencyOptions = [
   'CNY', 'USD', 'EUR', 'GBP', 'JPY', 'KRW', 'HKD', 'TWD', 'SGD', 'AUD',
@@ -106,7 +108,7 @@ const currencyOptions = computed(() => {
   return ['CNY', ...filtered]
 })
 
-const createLocalizedField = () => ({ 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as Record<SupportedLanguage, string>)
+const createLocalizedField = () => ({ 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as Record<SupportedLanguage, string>)
 const createSiteScriptItem = (): SiteScriptItem => ({
   name: '',
   enabled: true,
@@ -188,10 +190,6 @@ const form = reactive({
   },
   currency: 'CNY',
   order_max_refund_days: 30,
-  contact: {
-    telegram: '',
-    whatsapp: '',
-  },
   seo: {
     title: createLocalizedField(),
     keywords: createLocalizedField(),
@@ -293,6 +291,7 @@ const createOrderEmailSceneTemplate = () => ({
   'zh-CN': createOrderEmailLocalizedTemplate(),
   'zh-TW': createOrderEmailLocalizedTemplate(),
   'en-US': createOrderEmailLocalizedTemplate(),
+  'id-ID': createOrderEmailLocalizedTemplate(),
 })
 const orderEmailTemplateData = reactive({
   templates: {
@@ -303,7 +302,7 @@ const orderEmailTemplateData = reactive({
     refunded: createOrderEmailSceneTemplate(),
     partially_refunded: createOrderEmailSceneTemplate(),
   },
-  guest_tip: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as Record<typeof supportedLanguages[number], string>,
+  guest_tip: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as Record<typeof supportedLanguages[number], string>,
 })
 
 const dashboardForm = reactive({
@@ -396,9 +395,6 @@ const fetchSettings = async () => {
       {
         const rawCurrency = String(data.currency || 'CNY').trim().toUpperCase()
         form.currency = /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : 'CNY'
-      }
-      if (data.contact) {
-        Object.assign(form.contact, data.contact)
       }
       const seo = data.seo as Record<string, unknown> | undefined
       if (seo) {
@@ -610,7 +606,6 @@ const saveSiteSettings = async () => {
     value: {
       brand: form.brand,
       currency: String(form.currency || 'CNY').trim().toUpperCase(),
-      contact: form.contact,
       seo: form.seo,
       about: form.about,
       legal: form.legal,
@@ -1015,23 +1010,6 @@ onMounted(() => {
           <div class="space-y-2">
             <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.seo.description') }}</label>
             <Textarea v-model="form.seo.description[currentLang]" rows="3" :placeholder="t('admin.settings.seo.descriptionPlaceholder')" />
-          </div>
-        </div>
-      </div>
-
-      <div class="rounded-xl border border-border bg-card">
-        <div class="border-b border-border bg-muted/40 px-6 py-4">
-          <h2 class="text-lg font-semibold">{{ t('admin.settings.contact.title') }}</h2>
-          <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.contact.subtitle') }}</p>
-        </div>
-        <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
-          <div class="space-y-2">
-            <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.contact.telegram') }}</label>
-            <Input v-model="form.contact.telegram" :placeholder="t('admin.settings.contact.telegramPlaceholder')" />
-          </div>
-          <div class="space-y-2">
-            <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.contact.whatsapp') }}</label>
-            <Input v-model="form.contact.whatsapp" :placeholder="t('admin.settings.contact.whatsappPlaceholder')" />
           </div>
         </div>
       </div>

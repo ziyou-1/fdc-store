@@ -105,6 +105,7 @@ func (c *Container) initIntegrationServices() {
 		ExternalIdentityStore:   c.ExternalIdentityStore,
 		Queue:                   paymentqueue.New(c.QueueClient),
 		WalletService:           c.WalletService,
+		PointsService:           c.PointsService,
 		SettingService:          c.SettingService,
 		DefaultEmailConfig:      c.Config.Email,
 		ExpireMinutes:           c.Config.Order.PaymentExpireMinutes,
@@ -112,6 +113,8 @@ func (c *Container) initIntegrationServices() {
 		NotificationService:     c.NotificationService,
 		PaymentProviderRegistry: c.PaymentProviderRegistry,
 		ResellerAccounting:      c.ResellerAccountingLedger,
+		AutoFulfill:             autoFulfiller{fulfillments: c.FulfillmentService},
+		SkipPayment:             c.Config != nil && c.Config.App.SkipPayment,
 	})
 	c.ProcurementOrderService = procurementapp.NewService(procurementapp.Options{
 		Repository:         c.ProcurementOrderRepo,

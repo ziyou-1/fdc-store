@@ -20,4 +20,5 @@ export const categoryAPI = {
 
 export const memberLevelAPI = {
     list: () => api.get('/public/member-levels'),
+    plans: () => api.get('/public/membership-plans'),
 }

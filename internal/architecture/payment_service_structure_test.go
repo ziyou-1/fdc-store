@@ -14,10 +14,11 @@ func TestPaymentServiceImplementationIsSplitByResponsibility(t *testing.T) {
 	expected := map[string][]string{
 		"payment_service.go": {
 			"SetProcurementService", "SetDownstreamCallbackService", "SetMemberLevelService",
+			"SetContentFulfillService",
 			"NewPaymentService", "ListPayments", "GetPayment", "ListChannels", "GetChannel",
 			"paymentLogger",
 		},
-		"payment_service_create.go": {"hasProviderResult", "CreatePayment"},
+		"payment_service_create.go": {"hasProviderResult", "skipPaymentApplies", "CreatePayment"},
 		"payment_service_recharge.go": {
 			"CreateWalletRechargePayment", "generateWalletRechargeNo",
 			"ExpireWalletRechargePayment", "canExpireWalletRechargePayment",
@@ -34,6 +35,7 @@ func TestPaymentServiceImplementationIsSplitByResponsibility(t *testing.T) {
 			"shouldMarkFulfilling", "shouldUseCNYPaymentCurrency", "validatePaymentAmountForChannel",
 			"validatePaymentCurrencyForChannel", "resolveExpireMinutes", "normalizePaymentStatus",
 			"isPaymentStatusValid", "shouldAutoFulfill", "isOrderFullyAutoFulfill",
+			"shouldContentFulfill", "deliversImmediately",
 			"buildOrderSubject", "pickOrderItemTitle",
 		},
 		"payment_service_channel_rules.go": {

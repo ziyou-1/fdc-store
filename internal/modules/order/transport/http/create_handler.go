@@ -39,6 +39,7 @@ type CreatePaymentInput struct {
 	OrderID       uint
 	ChannelID     uint
 	UseBalance    bool
+	UsePoints     bool
 	ClientIP      string
 	Context       context.Context
 	RequestScheme string
@@ -66,6 +67,7 @@ type CreateOrderAndPayRequest struct {
 	ManualFormData      map[string]jsonmap.JSON `json:"manual_form_data"`
 	ChannelID           uint                    `json:"channel_id"`
 	UseBalance          bool                    `json:"use_balance"`
+	UsePoints           bool                    `json:"use_points"`
 }
 
 // CreateGuestOrderAndPayRequest 游客创建订单并发起支付请求
@@ -83,17 +85,18 @@ type CreateGuestOrderAndPayRequest struct {
 
 // CreateHandler 处理前台订单创建与 create-and-pay HTTP。
 type CreateHandler struct {
-	orders   OrderCreateService
-	payments PaymentChannelPolicy
-	captcha  GuestCreateCaptcha
-	pay      OrderPaymentCreator
+	orders      OrderCreateService
+	payments    PaymentChannelPolicy
+	captcha     GuestCreateCaptcha
+	pay         OrderPaymentCreator
+	skipPayment bool
 }
 
-func NewCreateHandler(orders OrderCreateService, payments PaymentChannelPolicy, captcha GuestCreateCaptcha, pay OrderPaymentCreator) *CreateHandler {
+func NewCreateHandler(orders OrderCreateService, payments PaymentChannelPolicy, captcha GuestCreateCaptcha, pay OrderPaymentCreator, skipPayment bool) *CreateHandler {
 	if orders == nil {
 		panic("order create handler: orders is nil")
 	}
-	return &CreateHandler{orders: orders, payments: payments, captcha: captcha, pay: pay}
+	return &CreateHandler{orders: orders, payments: payments, captcha: captcha, pay: pay, skipPayment: skipPayment}
 }
 
 // CreateOrder 创建订单
@@ -192,7 +195,7 @@ func (h *CreateHandler) CreateOrderAndPay(c *gin.Context) {
 	orderResp := orderpresenter.NewOrderDetail(order)
 	enrichOrderWithAllowedChannels(h.payments, order, &orderResp)
 
-	if req.ChannelID == 0 && !req.UseBalance {
+	if req.ChannelID == 0 && !req.UseBalance && !req.UsePoints && !h.skipPayment {
 		response.Success(c, gin.H{
 			"order":    orderResp,
 			"order_no": order.OrderNo,
@@ -200,7 +203,7 @@ func (h *CreateHandler) CreateOrderAndPay(c *gin.Context) {
 		return
 	}
 
-	h.respondCreateAndPay(c, order, orderResp, req.ChannelID, req.UseBalance)
+	h.respondCreateAndPay(c, order, orderResp, req.ChannelID, req.UseBalance, req.UsePoints)
 }
 
 // CreateGuestOrderAndPay 游客创建订单并发起支付（合并接口）
@@ -233,7 +236,7 @@ func (h *CreateHandler) CreateGuestOrderAndPay(c *gin.Context) {
 	orderResp := orderpresenter.NewOrderDetail(order)
 	enrichOrderWithAllowedChannels(h.payments, order, &orderResp)
 
-	if req.ChannelID == 0 {
+	if req.ChannelID == 0 && !h.skipPayment {
 		response.Success(c, gin.H{
 			"order":    orderResp,
 			"order_no": order.OrderNo,
@@ -241,7 +244,7 @@ func (h *CreateHandler) CreateGuestOrderAndPay(c *gin.Context) {
 		return
 	}
 
-	h.respondCreateAndPay(c, order, orderResp, req.ChannelID, false)
+	h.respondCreateAndPay(c, order, orderResp, req.ChannelID, false, false)
 }
 
 func (h *CreateHandler) verifyGuestCreateCaptcha(c *gin.Context, payload captchahttp.CaptchaPayloadRequest) bool {
@@ -264,7 +267,7 @@ func (h *CreateHandler) verifyGuestCreateCaptcha(c *gin.Context, payload captcha
 	return true
 }
 
-func (h *CreateHandler) respondCreateAndPay(c *gin.Context, order *orderdomain.Order, orderResp orderpresenter.OrderDetail, channelID uint, useBalance bool) {
+func (h *CreateHandler) respondCreateAndPay(c *gin.Context, order *orderdomain.Order, orderResp orderpresenter.OrderDetail, channelID uint, useBalance bool, usePoints bool) {
 	if h.pay == nil {
 		response.Success(c, gin.H{
 			"order":         orderResp,
@@ -277,6 +280,7 @@ func (h *CreateHandler) respondCreateAndPay(c *gin.Context, order *orderdomain.O
 		OrderID:       order.ID,
 		ChannelID:     channelID,
 		UseBalance:    useBalance,
+		UsePoints:     usePoints,
 		ClientIP:      c.ClientIP(),
 		Context:       c.Request.Context(),
 		RequestScheme: requestSchemeFromContext(c),

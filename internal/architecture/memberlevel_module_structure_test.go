@@ -18,8 +18,9 @@ func TestMemberLevelImplementationLivesInBoundedContextDirectories(t *testing.T)
 
 	assertFileDeclaresTypes(t, filepath.Join(domainRoot, "level.go"), []string{"MemberLevel"})
 	assertFileDeclaresTypes(t, filepath.Join(domainRoot, "price.go"), []string{"MemberLevelPrice"})
+	assertFileDeclaresTypes(t, filepath.Join(domainRoot, "plan.go"), []string{"Plan", "PeriodSpec"})
 	assertFileDeclaresTypes(t, filepath.Join(contractRoot, "repository.go"), []string{
-		"ListFilter", "LevelRepository", "PriceRepository", "UserRepository",
+		"ListFilter", "LevelRepository", "PriceRepository", "UserRepository", "PlanRepository",
 	})
 	assertFileDeclaresFunctions(t, filepath.Join(applicationRoot, "service.go"), []string{
 		"NewService", "CreateLevel", "UpdateLevel", "DeleteLevel", "ResolveMemberPrice",
@@ -29,8 +30,9 @@ func TestMemberLevelImplementationLivesInBoundedContextDirectories(t *testing.T)
 	assertFileDeclaresTypes(t, filepath.Join(storeRoot, "level_store.go"), []string{"LevelStore"})
 	assertFileDeclaresTypes(t, filepath.Join(storeRoot, "price_store.go"), []string{"PriceStore"})
 	assertFileDeclaresTypes(t, filepath.Join(storeRoot, "user_store.go"), []string{"UserStore"})
+	assertFileDeclaresTypes(t, filepath.Join(storeRoot, "plan_store.go"), []string{"PlanStore"})
 	assertFileDeclaresFunctions(t, filepath.Join(transportRoot, "routes.go"), []string{
-		"RegisterAdminRoutes", "RegisterPublicRoutes", "RegisterChannelRoutes",
+		"RegisterAdminRoutes", "RegisterPublicRoutes", "RegisterChannelRoutes", "RegisterUserRoutes",
 	})
 	assertFileDeclaresFunctions(t, filepath.Join(transportRoot, "list_handler.go"), []string{
 		"NewPublicHandler", "NewChannelHandler",

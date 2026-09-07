@@ -18,6 +18,7 @@ var notificationSupportedLocales = map[string]struct{}{
 	constants.LocaleZhCN: {},
 	constants.LocaleZhTW: {},
 	constants.LocaleEnUS: {},
+	constants.LocaleIdID: {},
 }
 
 var telegramChatIDPattern = regexp.MustCompile(`^-?\d{5,20}$`)

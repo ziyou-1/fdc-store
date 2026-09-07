@@ -25,6 +25,9 @@ interface RequestOptions {
     blob?: boolean
     silentBusinessError?: boolean
     credentials?: RequestCredentials
+    // timeout 覆盖默认超时（毫秒）。大文件上传必须显式放宽，
+    // 否则默认 10s 会把上传中断成 networkError，看起来像网络故障。
+    timeout?: number
     [key: string]: any
 }
 
@@ -59,7 +62,7 @@ function getHttpErrorMessage(status: number): string {
 
 function createClient(injectAuth: boolean) {
     const baseURL = `${API_BASE_URL}${API_PREFIX}`
-    const timeout = 10000
+    const DEFAULT_TIMEOUT = 10000
 
     async function request(method: string, path: string, bodyOrOptions?: any, options?: RequestOptions): Promise<{ data: any }> {
         let body: any = undefined
@@ -92,7 +95,10 @@ function createClient(injectAuth: boolean) {
         }
 
         const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), timeout)
+        const effectiveTimeout = typeof opts.timeout === 'number' && opts.timeout > 0
+            ? opts.timeout
+            : DEFAULT_TIMEOUT
+        const timer = setTimeout(() => controller.abort(), effectiveTimeout)
 
         let response: Response
         try {

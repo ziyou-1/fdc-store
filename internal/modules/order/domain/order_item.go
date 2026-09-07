@@ -23,6 +23,8 @@ type OrderItem struct {
 	Quantity                     int               `gorm:"not null" json:"quantity"`                                               // 数量
 	OriginalTotalPrice           money.Amount      `gorm:"type:decimal(20,2);not null;default:0" json:"original_total_price"`      // 原始小计快照
 	TotalPrice                   money.Amount      `gorm:"type:decimal(20,2);not null;default:0" json:"total_price"`               // 小计
+	PointsUnitPrice              int64             `gorm:"not null;default:0" json:"points_unit_price"`                            // 下单时的 SKU 积分价快照
+	PointsTotal                  int64             `gorm:"not null;default:0" json:"points_total"`                                 // 本行应付积分快照
 	CouponDiscount               money.Amount      `gorm:"type:decimal(20,2);not null;default:0" json:"coupon_discount_amount"`    // 优惠券分摊金额
 	MemberDiscount               money.Amount      `gorm:"type:decimal(20,2);not null;default:0" json:"member_discount_amount"`    // 会员优惠分摊金额
 	PromotionDiscount            money.Amount      `gorm:"type:decimal(20,2);not null;default:0" json:"promotion_discount_amount"` // 活动价分摊金额

@@ -71,6 +71,11 @@ export const getAffiliateCode = () => {
     return attribution?.code || ''
 }
 
+export const inviteCodeFields = (): { invite_code?: string } => {
+    const invite_code = getAffiliateCode()
+    return invite_code ? { invite_code } : {}
+}
+
 export const getAffiliateVisitorKey = () => {
     if (typeof window === 'undefined') return ''
     const existing = String(localStorage.getItem(AFFILIATE_VISITOR_KEY) || '').trim()

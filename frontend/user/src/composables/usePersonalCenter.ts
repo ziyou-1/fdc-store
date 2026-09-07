@@ -1,14 +1,16 @@
 import { computed, onMounted, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Banknote, Home, ShoppingBag, Wallet, Gift, ShieldCheck, UserCircle, Megaphone, Key } from 'lucide-vue-next'
+import { Banknote, Coins, Crown, Home, ShoppingBag, Wallet, Gift, ShieldCheck, UserCircle, Megaphone, Key } from 'lucide-vue-next'
 import { orderStatusLabel, orderStatusVariant } from '../utils/status'
 import type { PageAlert } from '../utils/alerts'
 import { useAppStore } from '../stores/app'
 import { useUserProfileStore } from '../stores/userProfile'
 import type { PublicMemberLevel } from '../api'
+import { discountOffN, isMembershipActive } from '../utils/membership'
+import { isDisabledPersonalSection } from '../utils/disabledFeatures'
 
-export type PersonalSection = 'overview' | 'profile' | 'security' | 'orders' | 'wallet' | 'giftCard' | 'affiliate' | 'reseller' | 'api'
+export type PersonalSection = 'overview' | 'profile' | 'security' | 'orders' | 'wallet' | 'points' | 'membership' | 'giftCard' | 'affiliate' | 'reseller' | 'api'
 
 export interface PersonalSectionItem {
   key: PersonalSection
@@ -29,6 +31,8 @@ export function usePersonalCenter(sectionGetter: () => PersonalSection) {
     { key: 'overview', label: 'personalCenter.tabs.overview', icon: Home },
     { key: 'orders', label: 'personalCenter.tabs.orders', icon: ShoppingBag },
     { key: 'wallet', label: 'personalCenter.tabs.wallet', icon: Wallet },
+    { key: 'points', label: 'personalCenter.tabs.points', icon: Coins },
+    { key: 'membership', label: 'personalCenter.tabs.membership', icon: Crown },
     { key: 'affiliate', label: 'personalCenter.tabs.affiliate', icon: Megaphone },
     { key: 'reseller', label: 'personalCenter.tabs.reseller', icon: Banknote },
     { key: 'giftCard', label: 'personalCenter.tabs.giftCard', icon: Gift },
@@ -43,6 +47,8 @@ export function usePersonalCenter(sectionGetter: () => PersonalSection) {
     security: '/me/security',
     orders: '/me/orders',
     wallet: '/me/wallet',
+    points: '/me/points',
+    membership: '/me/membership',
     affiliate: '/me/affiliate',
     reseller: '/me/reseller',
     giftCard: '/me/gift-cards',
@@ -51,13 +57,18 @@ export function usePersonalCenter(sectionGetter: () => PersonalSection) {
 
   const canAccessResellerConsole = computed(() => appStore.canAccessResellerConsole)
   const visibleSectionItems = computed(() => {
-    return sectionItems.filter((item) => item.key !== 'reseller' || canAccessResellerConsole.value)
+    return sectionItems.filter((item) => {
+      if (isDisabledPersonalSection(item.key)) return false
+      return item.key !== 'reseller' || canAccessResellerConsole.value
+    })
   })
   const currentSection = computed<PersonalSection>(() => {
-    if (sectionGetter() === 'reseller' && !canAccessResellerConsole.value) {
+    const section = sectionGetter()
+    if (isDisabledPersonalSection(section)) return 'overview'
+    if (section === 'reseller' && !canAccessResellerConsole.value) {
       return 'overview'
     }
-    return sectionGetter()
+    return section
   })
   const globalAlert = ref<PageAlert | null>(null)
 
@@ -112,10 +123,18 @@ export function usePersonalCenter(sectionGetter: () => PersonalSection) {
     return userProfileStore.profile?.email_verified_at ? 'success' : 'warning'
   })
 
+  const formatDiscountOff = (rate: number) => (
+    t('personalCenter.memberLevel.discountOff', { n: discountOffN(rate, locale.value) })
+  )
+
   const discountText = computed(() => {
+    const profile = userProfileStore.profile
+    if (isMembershipActive(profile)) {
+      return formatDiscountOff(Number(profile?.membership_discount_rate))
+    }
     const lvl = userProfileStore.currentLevel
     if (lvl && lvl.discount_rate < 100) {
-      return t('personalCenter.memberLevel.discountOff', { n: lvl.discount_rate / 10 })
+      return formatDiscountOff(lvl.discount_rate)
     }
     return t('personalCenter.memberLevel.noDiscount')
   })
@@ -163,6 +182,7 @@ export function usePersonalCenter(sectionGetter: () => PersonalSection) {
     emailVerifiedLabel,
     emailVerifiedVariant,
     discountText,
+    formatDiscountOff,
     isImagePath,
     levelName,
   }

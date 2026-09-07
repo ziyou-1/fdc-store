@@ -23,7 +23,9 @@ func (s *PaymentService) enqueueOrderPaidAsync(order *orderdomain.Order, payment
 	if order == nil {
 		return
 	}
-	if s.affiliateSvc != nil {
+	// 积分兑换单不产生分销佣金：佣金基数取自商品条目金额（calculateCommissionBaseAmount），
+	// 而积分单的条目金额是名义现金价，不门控就是真金白银的佣金流出。
+	if s.affiliateSvc != nil && order.PointsPaidAmount.Decimal.IsZero() {
 		if err := s.affiliateSvc.HandleOrderPaid(order.ID); err != nil {
 			log.Warnw("affiliate_handle_order_paid_failed",
 				"order_id", order.ID,
@@ -47,7 +49,8 @@ func (s *PaymentService) enqueueOrderPaidAsync(order *orderdomain.Order, payment
 	s.enqueueOrderPaidBotNotifyAsync(order, log)
 
 	// 订单支付成功后触发会员等级升级检查
-	if s.memberLevelSvc != nil && order.UserID > 0 {
+	// 积分兑换单不累加会员成长值，否则可以用积分免费刷会员等级。
+	if s.memberLevelSvc != nil && order.UserID > 0 && order.PointsPaidAmount.Decimal.IsZero() {
 		if err := s.memberLevelSvc.OnOrderPaid(order.UserID, order.TotalAmount.Decimal); err != nil {
 			log.Warnw("member_level_order_paid_failed",
 				"order_id", order.ID,
@@ -58,6 +61,46 @@ func (s *PaymentService) enqueueOrderPaidAsync(order *orderdomain.Order, payment
 		}
 	}
 
+	// 推荐首单奖励：不判断"是不是第一单"，每次支付成功都尝试入账，
+	// 由 points 侧 referral_first_order:<被邀请人ID> 这个稳定 reference 的唯一索引
+	// 保证只有第一次真正落账。积分兑换单排除在外，防止用积分刷积分。
+	// 门控逐条对应红队指出的失败模式：
+	// 积分兑换单排除（防止用积分刷积分）、分销订单排除（分销链路刻意隔离在积分经济外）、
+	// 已有现金佣金归因的订单排除（同一单不同时发现金佣金与积分）。
+	if s.pointsSvc != nil && s.userRepo != nil && order.UserID > 0 &&
+		order.PointsPaidAmount.Decimal.IsZero() &&
+		order.ResellerID == nil &&
+		order.AffiliateProfileID == nil {
+		buyer, buyerErr := s.userRepo.GetByID(order.UserID)
+		inviterActive := false
+		if buyerErr == nil && buyer != nil && buyer.InviterUserID != nil {
+			// 推荐人被封禁即止付：用户状态与推广档案状态是两张表，
+			// 后台封号不会联动改档案，只查档案会漏。
+			// 这里内联而不是抽 helper —— 本文件的函数名清单被架构守卫钉死。
+			if inviter, inviterErr := s.userRepo.GetByID(*buyer.InviterUserID); inviterErr == nil &&
+				inviter != nil && inviter.Status == constants.UserStatusActive {
+				inviterActive = true
+			}
+		}
+		if inviterActive {
+			if err := s.pointsSvc.AwardReferralFirstOrder(*buyer.InviterUserID, buyer.ID, order.TotalAmount.Decimal); err != nil {
+				log.Warnw("points_referral_first_order_failed",
+					"order_id", order.ID,
+					"user_id", order.UserID,
+					"inviter_user_id", *buyer.InviterUserID,
+					"error", err,
+				)
+			}
+		}
+	}
+
+	// 纯内容交付同步完成：不入队、不依赖 Redis，支付成功即交付教程内容。
+	s.fulfillContentOrders(order, log)
+	// skip_payment 时 API 进程通常不跑 worker，自动发卡也必须同步完成。
+	if s.skipPayment {
+		s.fulfillAutoOrders(order, log)
+	}
+
 	if s.queue == nil || !s.queue.Enabled() {
 		return
 	}
@@ -66,7 +109,7 @@ func (s *PaymentService) enqueueOrderPaidAsync(order *orderdomain.Order, payment
 			if child.Status == constants.OrderStatusFulfilling && hasManualFulfillmentItems(&child) {
 				s.enqueueManualFulfillmentPendingAsync(&child, order, log)
 			}
-			if shouldAutoFulfill(&child) {
+			if !s.skipPayment && shouldAutoFulfill(&child) {
 				if err := s.queue.EnqueueOrderAutoFulfill(child.ID); err != nil {
 					log.Warnw("payment_enqueue_auto_fulfill_failed",
 						"order_id", order.ID,
@@ -86,7 +129,7 @@ func (s *PaymentService) enqueueOrderPaidAsync(order *orderdomain.Order, payment
 	if order.Status == constants.OrderStatusFulfilling && hasManualFulfillmentItems(order) {
 		s.enqueueManualFulfillmentPendingAsync(order, nil, log)
 	}
-	if shouldAutoFulfill(order) {
+	if !s.skipPayment && shouldAutoFulfill(order) {
 		if err := s.queue.EnqueueOrderAutoFulfill(order.ID); err != nil {
 			log.Warnw("payment_enqueue_auto_fulfill_failed",
 				"order_id", order.ID,
@@ -99,6 +142,61 @@ func (s *PaymentService) enqueueOrderPaidAsync(order *orderdomain.Order, payment
 	s.enqueueProcurementAsync(order, log)
 	// B 侧：订单支付成功后检查是否需要回调下游
 	s.enqueueDownstreamCallbackAsync(order, log)
+}
+
+// fulfillAutoOrders 对自动发卡订单（含子订单）同步执行交付。
+func (s *PaymentService) fulfillAutoOrders(order *orderdomain.Order, log *zap.SugaredLogger) {
+	if s.autoFulfillSvc == nil || order == nil {
+		return
+	}
+	targets := make([]*orderdomain.Order, 0, len(order.Children)+1)
+	if len(order.Children) > 0 {
+		for i := range order.Children {
+			targets = append(targets, &order.Children[i])
+		}
+	} else {
+		targets = append(targets, order)
+	}
+	for _, target := range targets {
+		if !shouldAutoFulfill(target) {
+			continue
+		}
+		if err := s.autoFulfillSvc.CreateAuto(target.ID); err != nil {
+			log.Warnw("payment_auto_fulfill_failed",
+				"order_id", target.ID,
+				"order_no", order.OrderNo,
+				"error", err,
+			)
+		}
+	}
+}
+
+// fulfillContentOrders 对纯内容交付的订单（含子订单）同步执行交付。
+// 重复投递的支付回调会命中交付记录唯一约束，由交付用例返回"已存在"并被忽略。
+func (s *PaymentService) fulfillContentOrders(order *orderdomain.Order, log *zap.SugaredLogger) {
+	if s.contentFulfillSvc == nil || order == nil {
+		return
+	}
+	targets := make([]*orderdomain.Order, 0, len(order.Children)+1)
+	if len(order.Children) > 0 {
+		for i := range order.Children {
+			targets = append(targets, &order.Children[i])
+		}
+	} else {
+		targets = append(targets, order)
+	}
+	for _, target := range targets {
+		if !shouldContentFulfill(target) {
+			continue
+		}
+		if err := s.contentFulfillSvc.CreateContent(target.ID); err != nil {
+			log.Warnw("payment_content_fulfill_failed",
+				"order_id", target.ID,
+				"order_no", order.OrderNo,
+				"error", err,
+			)
+		}
+	}
 }
 
 // enqueueProcurementAsync 如果订单包含上游交付类型商品，创建采购单

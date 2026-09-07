@@ -24,8 +24,8 @@
         <component :is="product.fulfillment_type === 'auto' ? Zap : Pencil" class="h-3 w-3" />
         {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
       </span>
-      <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="product.purchase_type === 'guest' ? 'bg-[color:var(--gold-soft)] text-[color:var(--gold-strong)]' : 'bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]'">
-        <component :is="product.purchase_type === 'guest' ? UserPlus : Lock" class="h-3 w-3" />
+      <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]">
+        <Lock class="h-3 w-3" />
         {{ getPurchaseTypeLabel(product.purchase_type) }}
       </span>
       <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="stockPill.tone">
@@ -37,11 +37,11 @@
     <div class="mt-auto flex items-end justify-between gap-2 px-1">
       <div class="flex min-w-0 flex-col gap-1">
         <div class="flex flex-wrap items-baseline gap-x-1.5">
-          <template v-if="promo">
-            <span class="text-xl font-extrabold tabular-nums text-primary">{{ formatPrice(getPromotionPriceAmount(product), siteCurrency) }}</span>
-            <span class="text-sm font-semibold text-muted-foreground line-through">{{ formatPrice(product.price_amount, siteCurrency) }}</span>
+          <template v-if="hasPromo || isMemberPrice">
+            <span class="text-xl font-extrabold tabular-nums" :class="hasPromo && !isMemberPrice ? 'text-primary' : 'text-foreground'">{{ formatPrice(displayAmount, siteCurrency) }}</span>
+            <span class="text-sm font-semibold text-muted-foreground line-through">{{ formatPrice(listAmount, siteCurrency) }}</span>
           </template>
-          <span v-else class="text-xl font-extrabold tabular-nums text-foreground">{{ formatPrice(product.price_amount, siteCurrency) }}</span>
+          <span v-else class="text-xl font-extrabold tabular-nums text-foreground">{{ formatPrice(displayAmount, siteCurrency) }}</span>
         </div>
         <span v-if="priceSignal" class="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="priceSignal.tone">{{ priceSignal.label }}</span>
       </div>
@@ -63,9 +63,9 @@
 <script setup lang="ts">
 import { computed, ref, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { AlarmClock, Lock, Package, Pencil, UserPlus, XCircle, Zap } from 'lucide-vue-next'
+import { AlarmClock, Lock, Package, Pencil, XCircle, Zap } from 'lucide-vue-next'
 import { getFirstImageUrl, getImageUrl } from '../../../utils/image'
-import { useLocalized, useProductLabels } from '../../../composables/useProduct'
+import { useListingDisplayPrice, useLocalized, useProductLabels } from '../../../composables/useProduct'
 
 const props = withDefaults(defineProps<{ product: any; index?: number }>(), { index: 0 })
 
@@ -75,8 +75,9 @@ const { t } = useI18n()
 const { getLocalizedText, siteCurrency, formatPrice } = useLocalized()
 const {
   getStockStatusLabel, getPurchaseTypeLabel, getFulfillmentTypeLabel,
-  isSoldOut, hasPromotionPrice, getPromotionPriceAmount, hasWholesalePrices, hasPromotionRules,
+  isSoldOut, hasWholesalePrices, hasPromotionRules,
 } = useProductLabels()
+const { displayAmount, listAmount, isMemberPrice, hasPromo } = useListingDisplayPrice(() => props.product)
 
 // 封面渐变（对应原 cover-red/teal/plum/gold/ink）
 const covers = [
@@ -91,7 +92,6 @@ const coverClass = computed(() => covers[(props.index ?? 0) % covers.length])
 const title = computed(() => getLocalizedText(props.product?.title))
 const categoryName = computed(() => getLocalizedText(props.product?.category?.name))
 const soldOut = computed(() => isSoldOut(props.product))
-const promo = computed(() => hasPromotionPrice(props.product))
 
 const imageErrored = ref(false)
 const coverImage = computed(() => {
@@ -114,7 +114,8 @@ const stockPill = computed<{ tone: string; icon: Component; label: string }>(() 
 
 // 价签徽章：促销 / 批发 / 活动（择一，对齐 classic 优先级）
 const priceSignal = computed<{ tone: string; label: string } | null>(() => {
-  if (promo.value) return { tone: 'bg-primary/10 text-primary', label: t('products.promotionTag') }
+  if (isMemberPrice.value) return { tone: 'bg-primary/10 text-primary', label: t('products.memberPriceTag') }
+  if (hasPromo.value) return { tone: 'bg-primary/10 text-primary', label: t('products.promotionTag') }
   if (hasWholesalePrices(props.product)) return { tone: 'bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]', label: t('products.wholesaleTag') }
   if (hasPromotionRules(props.product)) return { tone: 'bg-[color:var(--gold-soft)] text-[color:var(--gold-strong)]', label: t('products.promotionBadge') }
   return null

@@ -34,12 +34,6 @@
                 {{ t('nav.notice') }}
               </RouterLink>
             </Button>
-            <Button variant="secondary" size="sm" as-child>
-              <RouterLink to="/blog">
-                <BookOpen class="opacity-70" />
-                {{ t('nav.blog') }}
-              </RouterLink>
-            </Button>
           </div>
         </div>
 
@@ -62,7 +56,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Bell, BookOpen, Frown, Home, Info, ShoppingBag } from 'lucide-vue-next'
+import { ArrowLeft, Bell, Frown, Home, Info, ShoppingBag } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'

@@ -98,7 +98,7 @@ func TestRegisterRejectsEmailDomainNotAllowed(t *testing.T) {
 		t.Fatalf("update registration config failed: %v", err)
 	}
 
-	user, token, _, err := svc.Register("buyer@example.com", "secret123", "", true, false)
+	user, token, _, err := svc.Register("buyer@example.com", "secret123", "", "", true, false)
 	if !errors.Is(err, settingsapp.ErrEmailDomainNotAllowed) {
 		t.Fatalf("expected ErrEmailDomainNotAllowed, got user=%+v token=%q err=%v", user, token, err)
 	}
@@ -113,7 +113,7 @@ func TestRegisterAllowsExactEmailDomain(t *testing.T) {
 		t.Fatalf("update registration config failed: %v", err)
 	}
 
-	user, token, _, err := svc.Register("buyer@qq.com", "secret123", "", true, false)
+	user, token, _, err := svc.Register("buyer@qq.com", "secret123", "", "", true, false)
 	if err != nil {
 		t.Fatalf("register should allow qq.com: %v", err)
 	}

@@ -3,6 +3,7 @@ import { useUserAuthStore } from '../stores/userAuth'
 import { useAppStore } from '../stores/app'
 import { useTelegramMiniAppStore } from '../stores/telegramMiniApp'
 import { captureAffiliateFromRoute } from '../utils/affiliate'
+import { isDisabledFeaturePath } from '../utils/disabledFeatures'
 import { templateView } from '../templates/registry'
 import { GOOGLE_REDIRECT_FRONTEND_CALLBACK_PATH } from '../utils/googleRedirect'
 
@@ -14,8 +15,8 @@ const productDetailViewLoader: RouteComponentLoader = () => import('../views/Pro
 const cartViewLoader: RouteComponentLoader = () => import('../views/Cart.vue')
 const checkoutViewLoader: RouteComponentLoader = () => import('../views/Checkout.vue')
 const paymentViewLoader: RouteComponentLoader = () => import('../views/Payment.vue')
-const blogViewLoader: RouteComponentLoader = () => import('../views/Blog.vue')
 const noticeViewLoader: RouteComponentLoader = () => import('../views/Notice.vue')
+const faqViewLoader: RouteComponentLoader = () => import('../views/Faq.vue')
 const loginViewLoader: RouteComponentLoader = () => import('../views/auth/Login.vue')
 const resellerLayoutLoader: RouteComponentLoader = () => import('../views/reseller/ResellerConsoleLayout.vue')
 
@@ -25,8 +26,8 @@ const routeWarmupLoaders: RouteComponentLoader[] = [
     cartViewLoader,
     checkoutViewLoader,
     paymentViewLoader,
-    blogViewLoader,
     noticeViewLoader,
+    faqViewLoader,
     loginViewLoader,
 ]
 
@@ -193,6 +194,20 @@ const router = createRouter({
             meta: { requiresUserAuth: true }
         },
         {
+            path: '/me/points',
+            name: 'personal-center-points',
+            component: templateView('PersonalCenter', () => import('../views/PersonalCenter.vue')),
+            props: { section: 'points' },
+            meta: { requiresUserAuth: true }
+        },
+        {
+            path: '/me/membership',
+            name: 'personal-center-membership',
+            component: templateView('PersonalCenter', () => import('../views/PersonalCenter.vue')),
+            props: { section: 'membership' },
+            meta: { requiresUserAuth: true }
+        },
+        {
             path: '/me/gift-cards',
             name: 'personal-center-gift-cards',
             component: templateView('PersonalCenter', () => import('../views/PersonalCenter.vue')),
@@ -249,29 +264,20 @@ const router = createRouter({
             meta: { requiresUserAuth: true }
         },
         {
-            path: '/guest/orders',
-            name: 'guest-orders',
-            component: templateView('GuestOrders', () => import('../views/GuestOrders.vue')),
-        },
-        {
-            path: '/guest/orders/:order_no',
-            name: 'guest-order-detail',
-            component: templateView('GuestOrderDetail', () => import('../views/GuestOrderDetail.vue')),
-        },
-        {
-            path: '/blog',
-            name: 'blog',
-            component: templateView('Blog', blogViewLoader),
-        },
-        {
-            path: '/blog/:slug',
-            name: 'blog-detail',
-            component: templateView('BlogDetail', () => import('../views/BlogDetail.vue')),
+            // 文章详情：公告与常见问题共用这一条，博客已下线
+            path: '/posts/:slug',
+            name: 'post-detail',
+            component: templateView('PostDetail', () => import('../views/PostDetail.vue')),
         },
         {
             path: '/notice',
             name: 'notice',
             component: templateView('Notice', noticeViewLoader),
+        },
+        {
+            path: '/faq',
+            name: 'faq',
+            component: templateView('Faq', faqViewLoader),
         },
         {
             path: '/about',
@@ -331,6 +337,11 @@ router.beforeEach(async (to, _from, next) => {
     const userAuthStore = useUserAuthStore()
     const appStore = useAppStore()
     void captureAffiliateFromRoute(to)
+
+    if (isDisabledFeaturePath(to.path)) {
+        next('/')
+        return
+    }
 
     // Ensure config is loaded before checking template mode
     if (!appStore.config) {

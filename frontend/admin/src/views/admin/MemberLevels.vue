@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
-import type { AdminMemberLevel } from '@/api/types'
+import type { AdminMemberLevel, AdminMembershipPlan } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import MediaPicker from '@/components/admin/MediaPicker.vue'
 import { Button } from '@/components/ui/button'
@@ -16,14 +16,19 @@ import { formatDate, getLocalizedText } from '@/utils/format'
 import { getImageUrl } from '@/utils/image'
 import { notifyError, notifySuccess } from '@/utils/notify'
 import { confirmAction } from '@/utils/confirm'
+import { disabledFeatures } from '@/utils/disabledFeatures'
 
 const isImagePath = (val: string) => !!val && val.includes('/')
 
 const { t } = useI18n()
+const levelTableColspan = computed(() => (disabledFeatures.thresholdVip ? 9 : 11))
 
 const loading = ref(true)
 const { refreshing, refreshList } = useListRefresh()
 const levels = ref<AdminMemberLevel[]>([])
+const plans = ref<AdminMembershipPlan[]>([])
+const planDrafts = ref<Record<string, { price: string; name: Record<string, string>; description: Record<string, string>; is_active: boolean }>>({})
+const savingPlan = ref('')
 const pagination = ref({
   page: 1,
   page_size: 50,
@@ -37,7 +42,7 @@ const error = ref('')
 const isEditing = ref(false)
 const editingId = ref<number | null>(null)
 
-const supportedLocales = ['zh-CN', 'zh-TW', 'en-US']
+const supportedLocales = ['zh-CN', 'zh-TW', 'en-US', 'id-ID']
 
 const iconMode = ref<'emoji' | 'image'>('emoji')
 const iconCache = reactive({ emoji: '', image: '' })
@@ -95,7 +100,9 @@ const fetchLevels = async (options: ListFetchOptions = {}) => {
 }
 
 const refresh = () => {
-  refreshList(() => fetchLevels({ preserveRows: true }))
+  refreshList(async () => {
+    await Promise.all([fetchLevels({ preserveRows: true }), fetchPlans()])
+  })
 }
 
 const openCreateModal = () => {
@@ -200,12 +207,56 @@ const handleBackfill = async () => {
 }
 
 const getLocaleLabel = (loc: string) => {
-  const labels: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en-US': 'English' }
+  const labels: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en-US': 'English', 'id-ID': 'Bahasa Indonesia' }
   return labels[loc] || loc
+}
+
+const fetchPlans = async () => {
+  const response = await adminAPI.getMembershipPlans()
+  plans.value = response.data.data || []
+  const drafts: Record<string, {
+    price: string
+    name: Record<string, string>
+    description: Record<string, string>
+    is_active: boolean
+  }> = {}
+  for (const plan of plans.value) {
+    drafts[plan.period] = {
+      price: String(plan.price ?? ''),
+      name: { ...(plan.name || {}) },
+      description: { ...(plan.description || {}) },
+      is_active: Boolean(plan.is_active),
+    }
+  }
+  planDrafts.value = drafts
+}
+
+const savePlan = async (period: string) => {
+  const draft = planDrafts.value[period]
+  if (!draft) return
+  savingPlan.value = period
+  try {
+    await adminAPI.updateMembershipPlan(period, {
+      price: Number(draft.price),
+      name: draft.name,
+      description: draft.description,
+      is_active: draft.is_active,
+    })
+    notifySuccess(t('admin.memberLevels.plans.saveSuccess'))
+    await fetchPlans()
+  } catch (err: any) {
+    notifyError(err.message || t('admin.memberLevels.plans.saveFailed'))
+  } finally {
+    savingPlan.value = ''
+  }
 }
 
 onMounted(() => {
   fetchLevels()
+  fetchPlans().catch((err: any) => {
+    plans.value = []
+    notifyError(err.message || t('admin.memberLevels.plans.loadFailed'))
+  })
 })
 </script>
 
@@ -233,6 +284,44 @@ onMounted(() => {
       </div>
     </div>
 
+    <div class="rounded-xl border border-border bg-card p-5 space-y-4">
+      <div>
+        <h2 class="text-lg font-semibold">{{ t('admin.memberLevels.plans.title') }}</h2>
+        <p class="mt-1 text-sm text-muted-foreground">{{ t('admin.memberLevels.plans.subtitle') }}</p>
+      </div>
+      <p v-if="plans.length === 0" class="text-sm text-muted-foreground">{{ t('admin.memberLevels.plans.empty') }}</p>
+      <div v-else class="grid gap-4 lg:grid-cols-3">
+        <div v-for="plan in plans" :key="plan.period" class="rounded-lg border p-4 space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <p class="font-semibold">{{ t(`admin.memberLevels.plans.period.${plan.period}`) }}</p>
+              <p class="text-xs text-muted-foreground">{{ plan.discount_rate / 10 }} / {{ plan.duration_days }}d</p>
+            </div>
+            <Switch
+              v-if="planDrafts[plan.period]"
+              :aria-label="t('admin.memberLevels.form.isActive')"
+              v-model="planDrafts[plan.period]!.is_active"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-xs text-muted-foreground" :for="`plan-price-${plan.period}`">{{ t('admin.memberLevels.plans.price') }}</label>
+            <Input v-if="planDrafts[plan.period]" :id="`plan-price-${plan.period}`" v-model="planDrafts[plan.period]!.price" type="number" min="0" step="0.01" />
+          </div>
+          <div v-for="loc in ['zh-CN', 'zh-TW', 'en-US', 'id-ID']" :key="`name-${loc}`" class="space-y-1">
+            <label class="text-xs text-muted-foreground" :for="`plan-name-${plan.period}-${loc}`">{{ t('admin.memberLevels.plans.name') }} · {{ getLocaleLabel(loc) }}</label>
+            <Input v-if="planDrafts[plan.period]" :id="`plan-name-${plan.period}-${loc}`" v-model="planDrafts[plan.period]!.name[loc]" />
+          </div>
+          <div v-for="loc in ['zh-CN', 'zh-TW', 'en-US', 'id-ID']" :key="`desc-${loc}`" class="space-y-1">
+            <label class="text-xs text-muted-foreground" :for="`plan-desc-${plan.period}-${loc}`">{{ t('admin.memberLevels.plans.description') }} · {{ getLocaleLabel(loc) }}</label>
+            <Input v-if="planDrafts[plan.period]" :id="`plan-desc-${plan.period}-${loc}`" v-model="planDrafts[plan.period]!.description[loc]" />
+          </div>
+          <Button size="sm" :disabled="savingPlan === plan.period" @click="savePlan(plan.period)">
+            {{ t('admin.common.save') }}
+          </Button>
+        </div>
+      </div>
+    </div>
+
     <div class="rounded-xl border border-border bg-card overflow-x-auto">
       <Table class="min-w-[940px]">
         <TableHeader class="border-b border-border bg-muted/40 text-xs uppercase text-muted-foreground">
@@ -242,8 +331,8 @@ onMounted(() => {
             <TableHead class="min-w-[90px] px-6 py-3">{{ t('admin.memberLevels.table.name') }}</TableHead>
             <TableHead class="min-w-[80px] px-6 py-3">{{ t('admin.memberLevels.table.slug') }}</TableHead>
             <TableHead class="min-w-[80px] px-6 py-3">{{ t('admin.memberLevels.table.discountRate') }}</TableHead>
-            <TableHead class="min-w-[90px] px-6 py-3">{{ t('admin.memberLevels.table.rechargeThreshold') }}</TableHead>
-            <TableHead class="min-w-[90px] px-6 py-3">{{ t('admin.memberLevels.table.spendThreshold') }}</TableHead>
+            <TableHead v-if="!disabledFeatures.thresholdVip" class="min-w-[90px] px-6 py-3">{{ t('admin.memberLevels.table.rechargeThreshold') }}</TableHead>
+            <TableHead v-if="!disabledFeatures.thresholdVip" class="min-w-[90px] px-6 py-3">{{ t('admin.memberLevels.table.spendThreshold') }}</TableHead>
             <TableHead class="min-w-[90px] px-6 py-3">{{ t('admin.memberLevels.table.sortOrder') }}</TableHead>
             <TableHead class="min-w-[90px] px-6 py-3">{{ t('admin.memberLevels.table.isActive') }}</TableHead>
             <TableHead class="min-w-[80px] px-6 py-3">{{ t('admin.memberLevels.table.createdAt') }}</TableHead>
@@ -252,12 +341,12 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell :colspan="11" class="p-0">
-              <TableSkeleton :columns="11" :rows="5" />
+            <TableCell :colspan="levelTableColspan" class="p-0">
+              <TableSkeleton :columns="levelTableColspan" :rows="5" />
             </TableCell>
           </TableRow>
           <TableRow v-else-if="levels.length === 0">
-            <TableCell colspan="11" class="px-6 py-8 text-center text-muted-foreground">
+            <TableCell :colspan="levelTableColspan" class="px-6 py-8 text-center text-muted-foreground">
               {{ t('admin.memberLevels.empty') }}
             </TableCell>
           </TableRow>
@@ -287,10 +376,10 @@ onMounted(() => {
             <TableCell class="min-w-[80px] px-6 py-4 text-foreground font-mono">
               {{ level.discount_rate }}%
             </TableCell>
-            <TableCell class="min-w-[90px] px-6 py-4 text-xs text-muted-foreground font-mono">
+            <TableCell v-if="!disabledFeatures.thresholdVip" class="min-w-[90px] px-6 py-4 text-xs text-muted-foreground font-mono">
               {{ Number(level.recharge_threshold) || '-' }}
             </TableCell>
-            <TableCell class="min-w-[90px] px-6 py-4 text-xs text-muted-foreground font-mono">
+            <TableCell v-if="!disabledFeatures.thresholdVip" class="min-w-[90px] px-6 py-4 text-xs text-muted-foreground font-mono">
               {{ Number(level.spend_threshold) || '-' }}
             </TableCell>
             <TableCell class="min-w-[90px] px-6 py-4 text-xs text-muted-foreground">
@@ -389,7 +478,7 @@ onMounted(() => {
               </p>
             </div>
 
-            <div>
+            <div v-if="!disabledFeatures.thresholdVip">
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">
                 {{ t('admin.memberLevels.form.rechargeThreshold') }}
               </label>
@@ -399,7 +488,7 @@ onMounted(() => {
               </p>
             </div>
 
-            <div>
+            <div v-if="!disabledFeatures.thresholdVip">
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">
                 {{ t('admin.memberLevels.form.spendThreshold') }}
               </label>

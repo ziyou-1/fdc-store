@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -24,6 +24,11 @@ import { formatSkuDisplayLabel } from '@/utils/sku'
 import OrderDetailDialog from './components/OrderDetailDialog.vue'
 import OrderFulfillmentModal from './components/OrderFulfillmentModal.vue'
 import { adminUrl } from '@/utils/adminBase'
+import {
+  countManualFulfillmentPrompts,
+  firstAwaitingManualFulfillmentOrder,
+  orderNeedsManualFulfillmentPrompt,
+} from '@/utils/manualFulfillmentPrompt'
 
 const loading = ref(true)
 const { refreshing, refreshList } = useListRefresh()
@@ -181,6 +186,27 @@ const canCreateFulfillment = (order: AdminOrder | null) => {
   return order.status === 'paid' || order.status === 'fulfilling'
 }
 
+const awaitingManualCount = computed(() => countManualFulfillmentPrompts(orders.value))
+
+const fulfillmentTarget = (order: AdminOrder) => firstAwaitingManualFulfillmentOrder(order)
+
+const canOpenFulfillment = (order: AdminOrder) =>
+  canCreateFulfillment(order) || fulfillmentTarget(order) != null
+
+const handleOpenFulfillmentFromList = (order: AdminOrder) => {
+  const target = fulfillmentTarget(order)
+  if (target) {
+    openFulfillment(target, order.id !== target.id ? order.id : undefined)
+    return
+  }
+  openFulfillment(order)
+}
+
+const showOnlyAwaitingManual = () => {
+  filters.status = 'fulfilling'
+  fetchOrders(1)
+}
+
 const openDetail = (order: AdminOrder) => {
   showFulfillmentModal.value = false
   selectedOrder.value = order
@@ -273,6 +299,16 @@ watch(
       <div>
         <h1 class="text-2xl font-semibold">{{ t('admin.orders.title') }}</h1>
       </div>
+    </div>
+
+    <div
+      v-if="awaitingManualCount > 0"
+      class="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+    >
+      <div>{{ t('admin.orders.manualAwaitingBanner', { count: awaitingManualCount }) }}</div>
+      <Button v-if="filters.status !== 'fulfilling'" size="sm" variant="outline" class="w-full sm:w-auto" @click="showOnlyAwaitingManual">
+        {{ t('admin.orders.manualAwaitingFilter') }}
+      </Button>
     </div>
 
     <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -375,7 +411,7 @@ watch(
           <TableRow v-else-if="orders.length === 0">
             <TableCell colspan="10" class="px-4 py-8 text-center text-muted-foreground">{{ t('admin.orders.empty') }}</TableCell>
           </TableRow>
-          <TableRow v-for="order in orders" :key="order.id" class="hover:bg-muted/30">
+          <TableRow v-for="order in orders" :key="order.id" class="hover:bg-muted/30" :class="orderNeedsManualFulfillmentPrompt(order) ? 'bg-amber-50/70 dark:bg-amber-500/5' : ''">
             <TableCell class="px-4 py-3">
               <IdCell :value="order.id" />
             </TableCell>
@@ -414,9 +450,17 @@ watch(
             <TableCell class="px-4 py-3 text-xs text-muted-foreground hidden xl:table-cell">{{ order.client_ip || '-' }}</TableCell>
             <TableCell class="px-4 py-3 font-mono text-xs text-foreground">{{ formatMoney(order.total_amount, order.currency) }}</TableCell>
             <TableCell class="px-4 py-3">
-              <span class="inline-flex rounded-full border px-2 py-0.5 text-xs" :class="statusClass(order.status)">
-                {{ statusLabel(order.status) }}
-              </span>
+              <div class="flex flex-col items-start gap-1">
+                <span class="inline-flex rounded-full border px-2 py-0.5 text-xs" :class="statusClass(order.status)">
+                  {{ statusLabel(order.status) }}
+                </span>
+                <span
+                  v-if="orderNeedsManualFulfillmentPrompt(order)"
+                  class="inline-flex rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100"
+                >
+                  {{ t('admin.orders.manualAwaitingBadge') }}
+                </span>
+              </div>
             </TableCell>
             <TableCell class="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{{ formatDate(order.created_at) }}</TableCell>
             <TableCell class="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{{ formatDate(order.updated_at) }}</TableCell>
@@ -441,7 +485,7 @@ watch(
                 <Button v-if="canUpdateStatus(order)" size="xs" variant="outline" @click="updateStatus(order)">
                   {{ t('admin.orders.update') }}
                 </Button>
-                <Button v-if="canCreateFulfillment(order)" size="xs" variant="secondary" @click="openFulfillment(order)">
+                <Button v-if="canOpenFulfillment(order)" size="xs" variant="secondary" @click="handleOpenFulfillmentFromList(order)">
                   {{ t('admin.orders.fulfillmentCreate') }}
                 </Button>
                 <Button v-if="order.status === 'delivered'" size="xs" variant="outline" @click="markCompleted(order)">

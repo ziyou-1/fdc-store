@@ -1,8 +1,10 @@
 package paymentcallbackhttp
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -177,4 +179,89 @@ func (h *Handler) findAlipayCallbackPayment(form map[string][]string) (*paymentd
 		}
 	}
 	return nil, nil, errAlipayCallbackPaymentNotFound
+}
+
+// handlePayssionCallback 识别并处理 Payssion 的异步通知。
+//
+// Payssion 既可能发 form POST 也可能发 JSON body（官方示例按 Content-Type 分支），
+// 两种都要接住：只解析 form 会让 JSON 通知全部落到"无法识别"分支并返回 404，
+// 网关会当成失败反复重投。
+func (h *Handler) handlePayssionCallback(c *gin.Context) bool {
+	log := ginutil.RequestLog(c)
+
+	form, err := parseCallbackForm(c)
+	if err != nil {
+		log.Warnw("payssion_callback_form_parse_failed", "error", err)
+		form = map[string][]string{}
+	}
+	var body []byte
+	if strings.Contains(strings.ToLower(c.GetHeader("Content-Type")), "json") && c.Request.Body != nil {
+		body, _ = io.ReadAll(c.Request.Body)
+	}
+
+	notifySig := strings.TrimSpace(getFirstValue(form, "notify_sig"))
+	pmID := strings.TrimSpace(getFirstValue(form, "pm_id"))
+	businessNo := strings.TrimSpace(getFirstValue(form, "order_id"))
+	if businessNo == "" {
+		businessNo = strings.TrimSpace(getFirstValue(form, "track_id"))
+	}
+	// JSON 投递时上面几个字段都在 body 里，这里补一次识别。
+	if len(body) > 0 && (notifySig == "" || pmID == "" || businessNo == "") {
+		decoded := map[string]interface{}{}
+		if json.Unmarshal(body, &decoded) == nil {
+			if notifySig == "" {
+				notifySig = strings.TrimSpace(fmt.Sprintf("%v", decoded["notify_sig"]))
+			}
+			if pmID == "" {
+				pmID = strings.TrimSpace(fmt.Sprintf("%v", decoded["pm_id"]))
+			}
+			if businessNo == "" {
+				if value, ok := decoded["order_id"]; ok {
+					businessNo = strings.TrimSpace(fmt.Sprintf("%v", value))
+				} else if value, ok := decoded["track_id"]; ok {
+					businessNo = strings.TrimSpace(fmt.Sprintf("%v", value))
+				}
+			}
+		}
+	}
+
+	// 识别条件：notify_sig + pm_id 是 Payssion 独有的组合。
+	if notifySig == "" || notifySig == "<nil>" || pmID == "" || pmID == "<nil>" || businessNo == "" {
+		log.Debugw("payssion_callback_not_matched", "reason", "missing_notify_sig_or_pm_id_or_order_id")
+		return false
+	}
+	log.Infow("payssion_callback_received", "client_ip", c.ClientIP(), "order_no", businessNo, "pm_id", pmID)
+
+	payment, err := h.payments.GetByGatewayOrderNo(businessNo)
+	if err != nil || payment == nil {
+		log.Warnw("payssion_callback_payment_not_found", "order_no", businessNo, "error", err)
+		c.AbortWithStatus(http.StatusNotFound)
+		return true
+	}
+	channel, err := h.channels.GetByID(payment.ChannelID)
+	if err != nil || channel == nil {
+		log.Warnw("payssion_callback_channel_not_found", "payment_id", payment.ID, "channel_id", payment.ChannelID, "error", err)
+		c.AbortWithStatus(http.StatusNotFound)
+		return true
+	}
+	if strings.ToLower(strings.TrimSpace(channel.ProviderType)) != constants.PaymentProviderPayssion {
+		log.Warnw("payssion_callback_provider_invalid", "payment_id", payment.ID, "provider_type", channel.ProviderType)
+		return false
+	}
+
+	if _, err := h.service.HandleSyncCallback(channel, form, body); err != nil {
+		log.Warnw("payssion_callback_handle_failed", "payment_id", payment.ID, "order_no", businessNo, "error", err)
+		h.enqueuePaymentExceptionAlert(c, jsonmap.JSON{
+			"alert_type": "payssion_callback_handle_failed", "alert_level": "error",
+			"payment_id": fmt.Sprintf("%d", payment.ID), "out_trade_no": businessNo,
+			"message": strings.TrimSpace(err.Error()), "provider": constants.PaymentProviderPayssion,
+		})
+		// 验签失败按官方 WHMCS 插件的做法回 406，网关据此判定"我方拒绝"，
+		// 与"处理失败请重投"区分开。
+		c.String(http.StatusNotAcceptable, "invalid notify_sig")
+		return true
+	}
+	// Payssion 只要求返回 HTTP 200 表示已收妥。
+	c.String(http.StatusOK, "OK")
+	return true
 }

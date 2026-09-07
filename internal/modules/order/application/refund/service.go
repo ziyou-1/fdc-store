@@ -306,6 +306,16 @@ func (s *Service) AdminManualRefund(input AdminManualRefundInput) (*orderdomain.
 		if order.TotalAmount.Decimal.LessThanOrEqual(decimal.Zero) {
 			return ErrOrderStatusInvalid
 		}
+		// 积分兑换单禁止走现金退款：订单的 TotalAmount 是名义现金价，
+		// 买家实际付的是积分。父单与每个子单都写了 points_paid_amount，
+		// 因此这一句同时封死"对子单发起退款"这条套现路径。
+		if order.PointsPaidAmount.Decimal.GreaterThan(decimal.Zero) {
+			return orderapp.ErrPointsOrderCashRefundForbidden
+		}
+		// 免费领取的订单同样禁止现金退款：TotalAmount 是名义价，买家一分钱没付。
+		if order.FreeClaimPaidAmount.Decimal.GreaterThan(decimal.Zero) {
+			return orderapp.ErrFreeClaimOrderRefundForbidden
+		}
 		refundedBefore := order.RefundedAmount.Decimal.Round(2)
 		refundable := order.TotalAmount.Decimal.Sub(refundedBefore).Round(2)
 		if amount.GreaterThan(refundable) {

@@ -114,6 +114,44 @@ func (service *Service) Update(id string, input UpsertInput) (*categorydomain.Ca
 	return category, nil
 }
 
+// DefaultStorefrontCategories 是店面预置一级分类：游戏 / 软件 / AI。
+// slug 已存在（含软删）则跳过，不覆盖站长改过的名称。
+func DefaultStorefrontCategories() []UpsertInput {
+	return []UpsertInput{
+		{
+			Slug:      "games",
+			SortOrder: 30,
+			NameJSON:  map[string]interface{}{"zh-CN": "游戏", "zh-TW": "遊戲", "en-US": "Games"},
+		},
+		{
+			Slug:      "software",
+			SortOrder: 20,
+			NameJSON:  map[string]interface{}{"zh-CN": "软件", "zh-TW": "軟體", "en-US": "Software"},
+		},
+		{
+			Slug:      "ai",
+			SortOrder: 10,
+			NameJSON:  map[string]interface{}{"zh-CN": "AI", "zh-TW": "AI", "en-US": "AI"},
+		},
+	}
+}
+
+func (service *Service) EnsureDefaultCategories() error {
+	for _, seed := range DefaultStorefrontCategories() {
+		existing, err := service.repository.GetBySlugUnscoped(seed.Slug)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			continue
+		}
+		if _, err := service.Create(seed); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (service *Service) Delete(id string) error {
 	category, err := service.repository.GetByID(id)
 	if err != nil {

@@ -97,10 +97,11 @@
               <div class="flex flex-wrap items-center gap-2">
                 <span class="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-[12.5px] font-semibold text-primary">
                   {{ t('personalCenter.memberLevel.discountRate') }}
-                  {{ userProfileStore.currentLevel && userProfileStore.currentLevel.discount_rate < 100
-                    ? t('personalCenter.memberLevel.discountOff', { n: userProfileStore.currentLevel.discount_rate / 10 })
-                    : t('personalCenter.memberLevel.noDiscount') }}
+                  {{ discountText }}
                 </span>
+                <Button as-child variant="outline" size="sm" class="rounded-full">
+                  <RouterLink to="/me/membership">{{ t('personalCenter.memberLevel.buy') }}</RouterLink>
+                </Button>
                 <span v-if="!userProfileStore.nextLevel && userProfileStore.currentLevel" class="inline-flex items-center rounded-full bg-[color:var(--teal-soft)] px-2.5 py-1 text-[12.5px] font-semibold text-[color:var(--teal-strong)]">{{ t('personalCenter.memberLevel.highestLevel') }}</span>
               </div>
             </div>
@@ -115,7 +116,7 @@
                   <p class="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{{ t('personalCenter.memberLevel.nextLevel') }}</p>
                   <div class="flex items-center gap-2">
                     <span class="text-sm font-bold text-muted-foreground">{{ levelName(userProfileStore.nextLevel) }}</span>
-                    <span v-if="userProfileStore.nextLevel.discount_rate < 100" class="text-xs font-semibold text-primary">{{ t('personalCenter.memberLevel.discountOff', { n: userProfileStore.nextLevel.discount_rate / 10 }) }}</span>
+                    <span v-if="userProfileStore.nextLevel.discount_rate < 100" class="text-xs font-semibold text-primary">{{ formatDiscountOff(userProfileStore.nextLevel.discount_rate) }}</span>
                   </div>
                 </div>
               </div>
@@ -172,6 +173,8 @@
           <SecurityPanel v-else-if="currentSection === 'security'" />
           <OrdersPanel v-else-if="currentSection === 'orders'" />
           <WalletPanel v-else-if="currentSection === 'wallet'" />
+          <PointsPanel v-else-if="currentSection === 'points'" />
+          <MembershipPanel v-else-if="currentSection === 'membership'" />
           <AffiliatePanel v-else-if="currentSection === 'affiliate'" />
           <div v-else-if="currentSection === 'reseller' && canAccessResellerConsole" class="rounded-xl border bg-card p-[22px]">
             <h2 class="text-lg font-bold">{{ t('resellerConsole.title') }}</h2>
@@ -197,6 +200,8 @@ import ProfilePanel from '../../views/personal/ProfilePanel.vue'
 import SecurityPanel from '../../views/personal/SecurityPanel.vue'
 import OrdersPanel from '../../views/personal/OrdersPanel.vue'
 import WalletPanel from '../../views/personal/WalletPanel.vue'
+import PointsPanel from '../../views/personal/PointsPanel.vue'
+import MembershipPanel from '../../views/personal/MembershipPanel.vue'
 import GiftCardPanel from '../../views/personal/GiftCardPanel.vue'
 import AffiliatePanel from '../../views/personal/AffiliatePanel.vue'
 import ApiPanel from '../../views/personal/ApiPanel.vue'
@@ -211,6 +216,6 @@ const props = withDefaults(defineProps<{ section?: PersonalSection }>(), {
 const {
   userProfileStore, canAccessResellerConsole, visibleSectionItems, currentSection, globalAlert,
   displayInitial, switchSection, statusLabel, statusVariant, formatMoney, formatDate,
-  emailVerifiedLabel, emailVerifiedVariant, discountText, isImagePath, levelName,
+  emailVerifiedLabel, emailVerifiedVariant, discountText, formatDiscountOff, isImagePath, levelName,
 } = usePersonalCenter(() => props.section)
 </script>

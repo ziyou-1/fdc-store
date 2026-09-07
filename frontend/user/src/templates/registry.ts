@@ -1,4 +1,5 @@
 import { useAppStore } from '../stores/app'
+import { disabledFeatures } from '../utils/disabledFeatures'
 
 /**
  * 店面模板系统（站长全局切换 · 渐进并行迁移）
@@ -48,6 +49,7 @@ export const initTemplateOverride = (): void => {
 
 /** 当前激活的店面模板。 */
 export const getActiveTemplate = (): StorefrontTemplate => {
+    if (disabledFeatures.vaultTemplate) return DEFAULT_TEMPLATE
     const override = readOverride()
     if (override) return override
     try {

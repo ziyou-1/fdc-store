@@ -23,10 +23,12 @@ import (
 )
 
 var (
-	ErrOrderNotFound         = errors.New("order not found")
-	ErrOrderStatusInvalid    = errors.New("order status invalid")
-	ErrGuestOrderNotFound    = errors.New("guest order not found")
-	ErrOrderCancelNotAllowed = errors.New("order cancel not allowed")
+	ErrOrderNotFound                  = errors.New("order not found")
+	ErrOrderStatusInvalid             = errors.New("order status invalid")
+	ErrPointsOrderCashRefundForbidden = errors.New("points order cash refund forbidden")
+	ErrFreeClaimOrderRefundForbidden  = errors.New("free claim order refund forbidden")
+	ErrGuestOrderNotFound             = errors.New("guest order not found")
+	ErrOrderCancelNotAllowed          = errors.New("order cancel not allowed")
 )
 
 // OrderListFilter 管理端订单列表过滤。

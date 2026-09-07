@@ -76,7 +76,7 @@ func (h *UserVerifyHandler) SendUserVerifyCode(c *gin.Context) {
 		ginutil.RespondError(c, response.CodeInternal, "error.send_verify_code_failed", err)
 		return
 	}
-	if !emailVerificationEnabled {
+	if !allowSendVerifyCode(purpose, emailVerificationEnabled) {
 		ginutil.RespondError(c, response.CodeForbidden, "error.email_verification_disabled", nil)
 		return
 	}
@@ -147,4 +147,11 @@ func respondCaptchaError(c *gin.Context, err error) {
 	default:
 		ginutil.RespondError(c, response.CodeInternal, "error.captcha_verify_failed", err)
 	}
+}
+
+func allowSendVerifyCode(purpose string, emailVerificationEnabled bool) bool {
+	if purpose == constants.VerifyPurposeReset {
+		return true
+	}
+	return emailVerificationEnabled
 }

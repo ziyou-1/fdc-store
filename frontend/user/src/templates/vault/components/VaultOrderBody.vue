@@ -25,6 +25,14 @@
             <div class="text-xs text-muted-foreground">{{ t('orderDetail.amountOnlinePaid') }}</div>
             <div class="mt-1.5 font-bold tabular-nums">{{ formatMoney(order.online_paid_amount, order.currency) }}</div>
           </div>
+          <div v-if="hasAmount(order.points_paid_amount)" class="rounded-md border bg-secondary px-3.5 py-3">
+            <div class="text-xs text-muted-foreground">{{ t('orderDetail.amountPointsPaid') }}</div>
+            <div class="mt-1.5 font-bold tabular-nums">{{ formatMoney(order.points_paid_amount, order.currency) }}</div>
+          </div>
+          <div v-if="hasAmount(order.free_claim_paid_amount)" class="rounded-md border bg-secondary px-3.5 py-3">
+            <div class="text-xs text-muted-foreground">{{ t('orderDetail.amountFreeClaimPaid') }}</div>
+            <div class="mt-1.5 font-bold tabular-nums">{{ formatMoney(order.free_claim_paid_amount, order.currency) }}</div>
+          </div>
           <div v-if="hasAmount(order.refunded_amount)" class="rounded-md border bg-secondary px-3.5 py-3">
             <div class="text-xs text-muted-foreground">{{ t('orderDetail.amountRefunded') }}</div>
             <div class="mt-1.5 font-bold tabular-nums">{{ formatMoney(order.refunded_amount, order.currency) }}</div>

@@ -1,13 +1,16 @@
-import { computed, ref, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import DOMPurify from 'dompurify'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '../stores/app'
+import { processHtmlForDisplay } from '../utils/content'
+import { collectContentTutorialBlocks, toTutorialHtml } from '../utils/contentTutorial'
 import { orderStatusVariant, orderStatusLabel } from '../utils/status'
 import { fulfillmentStatusLabel, fulfillmentTypeLabel } from '../utils/fulfillment'
 import { amountToCents, centsToAmount } from '../utils/money'
 import { buildSkuDisplayTextFromSnapshot } from '../utils/sku'
 import { getImageUrl } from '../utils/image'
 import { copyText } from '../utils/clipboard'
+import { parseFulfillmentCredentials } from '../utils/fulfillmentCredentials'
 
 interface ManualFormSnapshotField {
   key: string
@@ -92,9 +95,9 @@ export function useOrderDisplayHelpers(order: Ref<any>) {
     return jsonData[locale] || jsonData['zh-CN'] || jsonData['en-US'] || ''
   }
 
-  const sanitizeInstructionsHtml = (raw: string) => DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div', 'img', 'hr'],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'title'],
+  const sanitizeInstructionsHtml = (raw: string) => DOMPurify.sanitize(processHtmlForDisplay(raw), {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div', 'img', 'hr', 'video', 'source'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'title', 'controls', 'preload', 'playsinline', 'poster', 'width', 'height', 'type'],
     FORBID_ATTR: ['style', 'class', 'id'],
     ALLOW_DATA_ATTR: false,
     ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|#|\/(?!\/))/i,
@@ -109,10 +112,24 @@ export function useOrderDisplayHelpers(order: Ref<any>) {
       if (!html) continue
       if (seen.has(html)) continue
       seen.add(html)
-      blocks.push({ title: getLocalizedText(item?.title), html: sanitizeInstructionsHtml(html) })
+      blocks.push({ title: getLocalizedText(item?.title), html: sanitizeInstructionsHtml(toTutorialHtml(html)) })
     }
     return blocks
   }
+
+  const contentTutorialBlocks = computed(() =>
+    collectContentTutorialBlocks(order.value, getLocalizedText).map((block) => ({
+      ...block,
+      html: sanitizeInstructionsHtml(block.html),
+    })),
+  )
+  const contentTutorialOpen = ref(false)
+  watch(
+    () => contentTutorialBlocks.value.map((block) => block.html).join('\0'),
+    (signature) => {
+      if (signature) contentTutorialOpen.value = true
+    },
+  )
 
   const refundReasonText = (remark?: string) => {
     const value = String(remark || '').trim()
@@ -283,8 +300,14 @@ export function useOrderDisplayHelpers(order: Ref<any>) {
     return lines
   }
 
+  const fulfillmentCredentialView = (fulfillment: any) => parseFulfillmentCredentials(fulfillment)
+
   const handleCopyFulfillment = async (fulfillment: any) => {
-    const lines = fulfillmentDeliveryLines(fulfillment)
+    const parsed = parseFulfillmentCredentials(fulfillment)
+    const credentialLines = parsed.credentials.map((row) => `${row.account}----${row.password}`)
+    const lines = credentialLines.length > 0
+      ? [...credentialLines, ...parsed.extraLines]
+      : fulfillmentDeliveryLines(fulfillment)
     const text = lines.length > 0 ? lines.join('\n') : (fulfillment?.payload || '')
     if (!text) return
     try {
@@ -323,7 +346,10 @@ export function useOrderDisplayHelpers(order: Ref<any>) {
     formatItemPaidAmount,
     manualSubmissionRows,
     fulfillmentDeliveryLines,
+    fulfillmentCredentialView,
     instructionBlocks,
+    contentTutorialBlocks,
+    contentTutorialOpen,
     // 发货复制态
     fulfillmentCopied,
     handleCopyFulfillment,

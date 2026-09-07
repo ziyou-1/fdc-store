@@ -317,98 +317,107 @@ func AdminRBACMiddleware(authzService *authz.Service) gin.HandlerFunc {
 	}
 }
 
+// userTokenOutcome 描述用户凭证的解析结果。
+type userTokenOutcome int
+
+const (
+	// userTokenAbsent 未携带凭证。
+	userTokenAbsent userTokenOutcome = iota
+	// userTokenInvalid 携带了凭证但不可用：格式错误、过期、被吊销或账号停用。
+	userTokenInvalid
+	// userTokenValid 凭证有效。
+	userTokenValid
+)
+
+// resolveUserToken 解析并校验用户 JWT，不写入 context 也不终止请求。
+// 强制鉴权与可选鉴权共用这一份校验逻辑，避免两处安全代码随时间漂移。
+// 返回的 msgKey 仅在 outcome 为 absent/invalid 时有意义。
+func resolveUserToken(
+	c *gin.Context,
+	secretKey string,
+	userRepo usercontract.Store,
+) (userID uint, email string, outcome userTokenOutcome, msgKey string) {
+	if secretKey == "" {
+		return 0, "", userTokenInvalid, "error.jwt_secret_missing"
+	}
+	if userRepo == nil {
+		return 0, "", userTokenInvalid, "error.token_invalid"
+	}
+	authHeader := c.GetHeader(authHeaderKey)
+	if authHeader == "" {
+		return 0, "", userTokenAbsent, "error.auth_header_missing"
+	}
+
+	parts := strings.SplitN(authHeader, " ", 2)
+	if !(len(parts) == 2 && parts[0] == authSchemeBearer) {
+		return 0, "", userTokenInvalid, "error.auth_header_invalid"
+	}
+
+	tokenString := parts[1]
+	parser := newHS256JWTParser()
+	claims := &userauthapp.UserJWTClaims{}
+	token, err := parser.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(secretKey), nil
+	})
+	if err != nil || !token.Valid || claims.UserID == 0 {
+		return 0, "", userTokenInvalid, "error.token_invalid"
+	}
+	if !jwttoken.IsAccessType(claims.Typ) {
+		return 0, "", userTokenInvalid, "error.token_invalid"
+	}
+
+	if cached, hit, cacheErr := cache.GetUserAuthState(c.Request.Context(), claims.UserID); cacheErr == nil && hit && cached != nil {
+		if !isActiveUserStatus(cached.Status) {
+			return 0, "", userTokenInvalid, "error.user_disabled"
+		}
+		if claims.TokenVersion != cached.TokenVersion || !isIssuedAfterInvalidBeforeUnix(claims.IssuedAt, cached.TokenInvalidBefore) {
+			return 0, "", userTokenInvalid, "error.token_revoked"
+		}
+		return claims.UserID, claims.Email, userTokenValid, ""
+	}
+
+	user, err := userRepo.GetByID(claims.UserID)
+	if err != nil || user == nil {
+		return 0, "", userTokenInvalid, "error.token_invalid"
+	}
+	if !isActiveUserStatus(user.Status) {
+		return 0, "", userTokenInvalid, "error.user_disabled"
+	}
+	if claims.TokenVersion != user.TokenVersion || !isIssuedAfterInvalidBefore(claims.IssuedAt, user.TokenInvalidBefore) {
+		return 0, "", userTokenInvalid, "error.token_revoked"
+	}
+	_ = cache.SetUserAuthState(c.Request.Context(), cache.BuildUserAuthState(user))
+
+	return claims.UserID, claims.Email, userTokenValid, ""
+}
+
 // UserJWTAuthMiddleware 用户 JWT 鉴权中间件
 func UserJWTAuthMiddleware(secretKey string, userRepo usercontract.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if secretKey == "" {
-			msg := i18n.T(i18n.ResolveLocale(c), "error.jwt_secret_missing")
-			response.Unauthorized(c, msg)
+		userID, email, outcome, msgKey := resolveUserToken(c, secretKey, userRepo)
+		if outcome != userTokenValid {
+			response.Unauthorized(c, i18n.T(i18n.ResolveLocale(c), msgKey))
 			c.Abort()
 			return
 		}
-		if userRepo == nil {
-			msg := i18n.T(i18n.ResolveLocale(c), "error.token_invalid")
-			response.Unauthorized(c, msg)
-			c.Abort()
-			return
-		}
-		authHeader := c.GetHeader(authHeaderKey)
-		if authHeader == "" {
-			msg := i18n.T(i18n.ResolveLocale(c), "error.auth_header_missing")
-			response.Unauthorized(c, msg)
-			c.Abort()
-			return
-		}
+		c.Set("user_id", userID)
+		c.Set("user_email", email)
+		c.Next()
+	}
+}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if !(len(parts) == 2 && parts[0] == authSchemeBearer) {
-			msg := i18n.T(i18n.ResolveLocale(c), "error.auth_header_invalid")
-			response.Unauthorized(c, msg)
-			c.Abort()
-			return
+// OptionalUserJWTMiddleware 可选鉴权：带了有效凭证就写入身份，否则以匿名身份继续。
+//
+// 用于既要对游客开放、又需要在登录时给出个性化字段的公开端点
+// （例如首页"今日免费领取"要根据登录态返回 claimed）。
+// 凭证无效时同样按匿名放行而不是 401：公开页面不该因为一个过期 token 就打不开。
+func OptionalUserJWTMiddleware(secretKey string, userRepo usercontract.Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, email, outcome, _ := resolveUserToken(c, secretKey, userRepo)
+		if outcome == userTokenValid {
+			c.Set("user_id", userID)
+			c.Set("user_email", email)
 		}
-
-		tokenString := parts[1]
-		parser := newHS256JWTParser()
-		claims := &userauthapp.UserJWTClaims{}
-		token, err := parser.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(secretKey), nil
-		})
-		if err != nil || !token.Valid || claims.UserID == 0 {
-			msg := i18n.T(i18n.ResolveLocale(c), "error.token_invalid")
-			response.Unauthorized(c, msg)
-			c.Abort()
-			return
-		}
-		if !jwttoken.IsAccessType(claims.Typ) {
-			msg := i18n.T(i18n.ResolveLocale(c), "error.token_invalid")
-			response.Unauthorized(c, msg)
-			c.Abort()
-			return
-		}
-
-		if cached, hit, cacheErr := cache.GetUserAuthState(c.Request.Context(), claims.UserID); cacheErr == nil && hit && cached != nil {
-			if !isActiveUserStatus(cached.Status) {
-				msg := i18n.T(i18n.ResolveLocale(c), "error.user_disabled")
-				response.Unauthorized(c, msg)
-				c.Abort()
-				return
-			}
-			if claims.TokenVersion != cached.TokenVersion || !isIssuedAfterInvalidBeforeUnix(claims.IssuedAt, cached.TokenInvalidBefore) {
-				msg := i18n.T(i18n.ResolveLocale(c), "error.token_revoked")
-				response.Unauthorized(c, msg)
-				c.Abort()
-				return
-			}
-			c.Set("user_id", claims.UserID)
-			c.Set("user_email", claims.Email)
-			c.Next()
-			return
-		}
-
-		user, err := userRepo.GetByID(claims.UserID)
-		if err != nil || user == nil {
-			msg := i18n.T(i18n.ResolveLocale(c), "error.token_invalid")
-			response.Unauthorized(c, msg)
-			c.Abort()
-			return
-		}
-		if !isActiveUserStatus(user.Status) {
-			msg := i18n.T(i18n.ResolveLocale(c), "error.user_disabled")
-			response.Unauthorized(c, msg)
-			c.Abort()
-			return
-		}
-		if claims.TokenVersion != user.TokenVersion || !isIssuedAfterInvalidBefore(claims.IssuedAt, user.TokenInvalidBefore) {
-			msg := i18n.T(i18n.ResolveLocale(c), "error.token_revoked")
-			response.Unauthorized(c, msg)
-			c.Abort()
-			return
-		}
-		_ = cache.SetUserAuthState(c.Request.Context(), cache.BuildUserAuthState(user))
-
-		c.Set("user_id", claims.UserID)
-		c.Set("user_email", claims.Email)
 		c.Next()
 	}
 }

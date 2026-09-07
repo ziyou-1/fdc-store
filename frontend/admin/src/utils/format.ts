@@ -65,5 +65,5 @@ export const getLocalizedText = (jsonData: any) => {
     }
   }
 
-  return String(source['zh-CN'] || source['zh-TW'] || source['en-US'] || Object.values(source)[0] || '')
+  return String(source['zh-CN'] || source['zh-TW'] || source['en-US'] || source['id-ID'] || Object.values(source)[0] || '')
 }

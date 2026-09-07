@@ -37,25 +37,6 @@
         </div>
       </div>
 
-      <div v-else-if="showGuestAuthForm"
-        class="border bg-card text-card-foreground shadow-sm rounded-2xl p-6">
-        <h2 class="text-lg font-bold mb-2">{{ t('payment.guestAuthTitle') }}</h2>
-        <p class="text-xs text-muted-foreground mb-4">{{ t('payment.guestAuthHint') }}</p>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input v-model="guestAuth.email" type="email"
-            class="h-11"
-            :placeholder="t('guestOrders.emailPlaceholder')" />
-          <Input v-model="guestAuth.order_password" type="password"
-            class="h-11"
-            :placeholder="t('guestOrders.passwordPlaceholder')" />
-        </div>
-        <Alert v-if="guestAuthError" variant="destructive" class="mt-4">
-          <AlertDescription>{{ guestAuthError }}</AlertDescription>
-        </Alert>
-        <Button variant="secondary" class="mt-4 font-semibold" @click="handleGuestAuthSubmit">
-          {{ t('payment.guestAuthSubmit') }}
-        </Button>
-      </div>
 
       <EmptyState
         v-else-if="!order"
@@ -328,7 +309,7 @@
                     </div>
                   </div>
                   <label class="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                    <input v-model="useBalance" type="checkbox" class="h-4 w-4 accent-primary" :disabled="walletOnlyPayment" />
+                    <input v-model="useBalance" type="checkbox" class="h-4 w-4 accent-primary" :disabled="walletOnlyPayment || usePoints" />
                     <span>{{ t('payment.useBalance') }}</span>
                   </label>
                 </div>
@@ -341,6 +322,27 @@
                   <div v-if="walletOnlyPayment && expectedOnlinePayCents > 0" class="text-warning">
                     {{ t('payment.walletInsufficientHint') }}
                   </div>
+                </div>
+              </div>
+              <div
+                v-if="showPointsOption"
+                class="mb-4 rounded-xl border p-4 bg-secondary"
+              >
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div class="text-xs text-muted-foreground">{{ t('payment.pointsBalanceLabel') }}</div>
+                    <div class="mt-1 text-sm font-semibold text-foreground">
+                      {{ pointsLoading ? t('common.loading') : pointsBalance }}
+                    </div>
+                  </div>
+                  <label class="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                    <input v-model="usePoints" type="checkbox" class="h-4 w-4 accent-primary" :disabled="walletOnlyPayment || useBalance" />
+                    <span>{{ t('payment.usePoints') }}</span>
+                  </label>
+                </div>
+                <div v-if="usePoints" class="mt-3 space-y-1 text-xs text-muted-foreground">
+                  <div>{{ t('payment.pointsDeductLabel') }}：{{ orderPointsAmount }}</div>
+                  <div v-if="pointsInsufficient" class="text-warning">{{ t('payment.pointsInsufficientHint') }}</div>
                 </div>
               </div>
               <div v-if="cachedPayment"
@@ -361,7 +363,7 @@
                 </div>
               </div>
               <PaymentChannelSelector
-                v-if="!walletOnlyPayment"
+                v-if="!walletOnlyPayment && requiresOnlineChannel"
                 :channels="channels"
                 :model-value="selectedChannelId"
                 :show-balance-option="showBalanceOption"
@@ -458,10 +460,10 @@
             <div class="font-semibold">{{ t('payment.methodLabel') }}：{{ selectedChannelName }}</div>
           </div>
           <div
-            v-else-if="!requiresOnlineChannel && !orderExpired && !orderCanceled"
+            v-else-if="!skipPayment && !requiresOnlineChannel && !orderExpired && !orderCanceled"
             class="mb-4 rounded-lg border-success/40 bg-success/10 p-3 text-xs text-success"
           >
-            {{ t('payment.walletPayOnly') }}
+            {{ usePoints ? t('payment.pointsPayOnly') : t('payment.walletPayOnly') }}
           </div>
           <div
             v-else-if="walletOnlyPayment && expectedOnlinePayCents > 0 && !orderExpired && !orderCanceled"
@@ -496,7 +498,6 @@ import PaymentAmountBreakdown from '../components/payment/PaymentAmountBreakdown
 import PaymentChannelSelector from '../components/payment/PaymentChannelSelector.vue'
 import EmptyState from '../components/EmptyState.vue'
 import CheckoutSteps from '../components/checkout/CheckoutSteps.vue'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -506,8 +507,9 @@ const { t } = useI18n()
 
 const {
   loading, submitting, order, paymentResult, selectedChannelId, copied, walletAddressCopied,
-  openedPayWindow, cachedPayment, guestAuth, guestAuthError, walletLoading, useBalance,
-  backLink, showGuestAuthForm, walletOnlyPayment, showBalanceOption, configReady, channels,
+  openedPayWindow, cachedPayment, walletLoading, useBalance,
+  usePoints, pointsLoading, pointsBalance, orderPointsAmount, pointsInsufficient,
+  backLink, skipPayment, walletOnlyPayment, showBalanceOption, showPointsOption, configReady, channels,
   selectedChannel, selectedChannelName, cachedChannelName, resultChannelName, interactionLabel,
   paymentResultTitle, paymentGuideTitle, paymentGuideTip, showPayLink, showTelegramPayHint, payLinkOpenedTip,
   cryptoWalletAddress, cryptoPaymentDetails, hasCryptoPaymentDetails, qrUsingPayLinkFallback, showQRCode, qrImageUrl,
@@ -517,6 +519,6 @@ const {
   paymentWalletPaidDisplay, paymentOnlinePayDisplay, isChannelDisabledForAmount, channelAmountLimitHint, canSubmitPayment,
   formatDate, statusLabel, formatMoney, hasDiscountAmount, formatDiscountMoney, getLocalizedText, orderItemSkuText, fulfillmentTypeLabelText,
   handleCopyPayLink, handleCopyWalletAddress, handleOpenPayLink, restoreCachedPayment, handleChangePaymentMethod,
-  handlePayment, handleGuestAuthSubmit, handleRefresh,
+  handlePayment, handleRefresh,
 } = usePayment()
 </script>

@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import { notifyError, notifySuccess } from '@/utils/notify'
 
-const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US'] as const
+const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const
 type SupportedLanguage = (typeof supportedLanguages)[number]
 type LocalizedText = Record<SupportedLanguage, string>
 type MenuActionType = 'builtin' | 'url' | 'web_app' | 'command'
@@ -63,6 +63,7 @@ const emptyLocalized = (): LocalizedText => ({
   'zh-CN': '',
   'zh-TW': '',
   'en-US': '',
+  'id-ID': '',
 })
 
 const createMenuItem = (): MenuItem => ({
@@ -175,6 +176,7 @@ export function useTelegramBotSettings() {
     { code: 'zh-CN' as SupportedLanguage, name: t('admin.common.lang.zhCN') },
     { code: 'zh-TW' as SupportedLanguage, name: t('admin.common.lang.zhTW') },
     { code: 'en-US' as SupportedLanguage, name: t('admin.common.lang.enUS') },
+  { code: 'id-ID' as SupportedLanguage, name: t('admin.common.lang.idID') },
   ])
 
   const fetchConfig = async () => {

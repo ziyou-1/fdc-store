@@ -19,7 +19,7 @@
             :placeholder="t('products.searchBoxPlaceholder')"
             :aria-label="t('products.searchLabel')"
           />
-          <button v-if="searchQuery" type="button" class="absolute right-2.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" :aria-label="t('blog.searchClear')" @click="clearSearch"><X class="h-3.5 w-3.5" /></button>
+          <button v-if="searchQuery" type="button" class="absolute right-2.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" :aria-label="t('common.searchClear')" @click="clearSearch"><X class="h-3.5 w-3.5" /></button>
         </div>
 
         <!-- 分类：使用 VaultCategorySidebar，移动端自动变横向 chips -->

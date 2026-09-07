@@ -114,7 +114,7 @@ func TestPostCategoryServiceDeleteRejectsCategoriesInUse(t *testing.T) {
 	withPost := createCategoryThroughService(t, svc, "with-post", nil, 0)
 	post := contentdomain.Post{
 		Slug:       "category-post",
-		Type:       constants.PostTypeBlog,
+		Type:       constants.PostTypeNotice,
 		TitleJSON:  jsonmap.JSON{"zh-CN": "category-post"},
 		CategoryID: &withPost.ID,
 	}

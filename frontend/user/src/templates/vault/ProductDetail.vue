@@ -51,8 +51,8 @@
               <component :is="product.fulfillment_type === 'auto' ? Zap : Pencil" class="h-3.5 w-3.5" />
               {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
             </span>
-            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] font-semibold" :class="product.purchase_type === 'guest' ? 'bg-[color:var(--gold-soft)] text-[color:var(--gold-strong)]' : 'bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]'">
-              <component :is="product.purchase_type === 'guest' ? UserPlus : Lock" class="h-3.5 w-3.5" />
+            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] font-semibold bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]">
+              <Lock class="h-3.5 w-3.5" />
               {{ getPurchaseTypeLabel(product.purchase_type) }}
             </span>
           </div>
@@ -101,6 +101,7 @@
             <!-- 4. SKU 原价 -->
             <div v-else-if="selectedSku" class="flex flex-wrap items-baseline gap-3">
               <span class="text-[40px] font-extrabold tabular-nums text-primary">{{ formatPrice(selectedSku.price_amount, siteCurrency) }}</span>
+              <span v-if="canShowPointsRedeem" class="ml-3 text-sm font-semibold text-muted-foreground">{{ t('products.pointsPrice', { n: selectedPointsPrice }) }}</span>
             </div>
             <!-- 5. 产品级促销 -->
             <template v-else-if="hasPromotionPrice(product)">
@@ -173,8 +174,9 @@
           <div ref="purchaseActionsRef" class="mt-[18px] flex flex-wrap gap-3">
             <Button v-if="requiresLogin" class="h-12 w-full rounded-full text-[17px] font-bold" @click="goLogin">{{ t('productDetail.loginToBuy') }}</Button>
             <template v-else>
-              <Button class="h-12 flex-1 rounded-full text-[17px] font-bold" :disabled="!canPurchase" @click="buyNow"><Zap /> {{ t('productDetail.buyNow') }}</Button>
-              <Button variant="outline" class="h-12 rounded-full text-[17px] font-bold" :disabled="!canPurchase" @click="addToCart"><ShoppingCart /> {{ t('productDetail.addToCart') }}</Button>
+              <Button class="h-12 flex-1 rounded-full text-[17px] font-bold" :disabled="!canPurchase || redeeming" @click="buyNow"><Zap /> {{ t('productDetail.buyNow') }}</Button>
+              <Button variant="outline" class="h-12 rounded-full text-[17px] font-bold" :disabled="!canPurchase || redeeming" @click="addToCart"><ShoppingCart /> {{ t('productDetail.addToCart') }}</Button>
+              <Button v-if="canShowPointsRedeem" variant="outline" class="h-12 w-full rounded-full text-[17px] font-bold" :disabled="!canPurchase || redeeming" @click="redeemWithPoints">{{ redeeming ? t('productDetail.redeeming') : t('productDetail.redeemWithPoints') }}</Button>
             </template>
           </div>
 
@@ -200,11 +202,11 @@
       <section v-if="relatedPosts.length" class="py-9">
         <div class="mb-[22px]"><h2 class="text-2xl font-extrabold">{{ t('productDetail.relatedPosts') }}</h2></div>
         <div class="grid gap-4 grid-cols-[repeat(auto-fill,minmax(228px,1fr))]">
-          <RouterLink v-for="rp in relatedPosts" :key="rp.id" class="block h-full rounded-lg border bg-card p-[22px] transition hover:-translate-y-[3px] hover:border-hairline-strong hover:shadow-[var(--shadow)]" :to="`/blog/${rp.slug}`">
+          <RouterLink v-for="rp in relatedPosts" :key="rp.id" class="block h-full rounded-lg border bg-card p-[22px] transition hover:-translate-y-[3px] hover:border-hairline-strong hover:shadow-[var(--shadow)]" :to="`/posts/${rp.slug}`">
             <span class="text-[12.5px] font-semibold text-muted-foreground">{{ formatRelatedPostDate(rp.published_at) }}</span>
             <h3 class="mt-2 line-clamp-2 text-[17px] font-bold">{{ getLocalizedText(rp.title) }}</h3>
             <p v-if="rp.summary" class="mt-2 line-clamp-2 text-sm text-muted-foreground">{{ getLocalizedText(rp.summary) }}</p>
-            <span class="mt-3.5 inline-flex items-center gap-1.5 text-sm font-bold text-primary">{{ t('blog.readMore') }} <ChevronRight class="h-4 w-4" /></span>
+            <span class="mt-3.5 inline-flex items-center gap-1.5 text-sm font-bold text-primary">{{ t('post.readMore') }} <ChevronRight class="h-4 w-4" /></span>
           </RouterLink>
         </div>
       </section>
@@ -250,7 +252,7 @@ import { computed, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   AlertCircle, ArrowLeft, ChevronRight, Lock, Minus, Package, Pencil, Plus,
-  RotateCw, ShoppingCart, Tag, TicketCheck, UserPlus, Zap,
+  RotateCw, ShoppingCart, Tag, TicketCheck, Zap,
 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { processHtmlForDisplay } from '../../utils/content'
@@ -295,7 +297,8 @@ const {
   quantityEffectiveLimit, quantityEffectiveMin, handleQuantityInput,
   requiresLogin, requiresSKUSelection, canPurchase, cannotPurchaseReason,
   categoryName, images,
-  addToCart, buyNow, goLogin, loadProduct,
+  addToCart, buyNow, redeemWithPoints, goLogin, loadProduct,
+  selectedPointsPrice, canShowPointsRedeem, redeeming,
   mobileBarShowMemberPrice, mobileBarMemberPriceDisplay,
   mobileBarShowSkuPromotionPrice, mobileBarSkuPromotionPriceDisplay,
   mobileBarShowSkuPrice, mobileBarSkuPriceDisplay,

@@ -1,8 +1,10 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { NavigationFailureType, isNavigationFailure, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { guestOrderAPI, paymentAPI, userOrderAPI, walletAPI } from '../api'
+import { paymentAPI, pointsAPI, userOrderAPI, walletAPI } from '../api'
 import { useAppStore } from '../stores/app'
+import { disabledFeatures } from '../utils/disabledFeatures'
+import { isSkipPaymentEnabled } from '../utils/skipPayment'
 import { useTelegramMiniAppStore } from '../stores/telegramMiniApp'
 import { orderStatusLabel } from '../utils/status'
 import { fulfillmentTypeLabel } from '../utils/fulfillment'
@@ -23,7 +25,6 @@ import {
 } from '../utils/paymentResumePolicy'
 import QRCode from 'qrcode'
 import { type PageAlert } from '../utils/alerts'
-import { loadGuestOrderAuth, saveGuestOrderAuth } from '../utils/guestOrderAuth'
 
 /**
  * 支付页共享逻辑（classic + vault 双模板共用）。
@@ -50,11 +51,6 @@ export function usePayment() {
   const openedPayWindow = ref(false)
   const latestLoaded = ref(false)
   const cachedPayment = ref<any>(null)
-  const guestAuth = ref({
-    email: '',
-    order_password: '',
-  })
-  const guestAuthError = ref('')
   const pollTimer = ref<number | null>(null)
   const countdownTimer = ref<number | null>(null)
   const now = ref(appStore.getServerTime())
@@ -64,6 +60,10 @@ export function usePayment() {
   const walletLoading = ref(false)
   const walletBalance = ref('0')
   const useBalance = ref(false)
+  const usePoints = ref(false)
+  const pointsLoading = ref(false)
+  const pointsBalance = ref(0)
+  const exchangeEnabled = ref(false)
   const orderPaymentChannels = ref<any[]>([])
   const orderPaymentChannelsLoaded = ref(false)
   const orderPaymentChannelsRequestId = ref(0)
@@ -99,10 +99,6 @@ export function usePayment() {
     return ''
   }
 
-  const readRouteQueryFlag = (key: string): boolean => {
-    const value = readRouteQueryValue(key).toLowerCase()
-    return value === '1' || value === 'true' || value === 'yes'
-  }
 
   const paymentReturnMarkers = ['epay_return', 'alipay_return', 'wechat_return', 'epusdt_return', 'bepusdt_return', 'tokenpay_return', 'okpay_return', 'pp_return', 'stripe_return']
   const rechargeBizType = computed(() => readRouteQueryValue('biz_type').toLowerCase())
@@ -114,7 +110,6 @@ export function usePayment() {
     return ''
   })
   const isRechargeReturn = computed(() => rechargeBizType.value === 'recharge' || /^WR/i.test(rechargeNoQuery.value))
-  const isGuest = computed(() => readRouteQueryFlag('guest'))
   const orderNoQuery = computed(() => {
     const orderNo = readRouteQueryValue('order_no')
     if (orderNo !== '') return orderNo
@@ -123,11 +118,22 @@ export function usePayment() {
   const orderNoResolved = computed(() => {
     return order.value?.order_no || orderNoQuery.value || ''
   })
-  const backLink = computed(() => (isGuest.value ? '/guest/orders' : '/me/orders'))
-  const hasGuestAuth = computed(() => Boolean(guestAuth.value.email && guestAuth.value.order_password))
-  const showGuestAuthForm = computed(() => isGuest.value && (!hasGuestAuth.value || guestAuthError.value))
-  const walletOnlyPayment = computed(() => !!appStore.config?.wallet_only_payment)
-  const showBalanceOption = computed(() => !isGuest.value)
+  const backLink = computed(() => '/me/orders')
+  const skipPayment = computed(() => isSkipPaymentEnabled(appStore.config))
+  const walletOnlyPayment = computed(() => !skipPayment.value && !disabledFeatures.buyerWallet && !!appStore.config?.wallet_only_payment)
+  const showBalanceOption = computed(() => !disabledFeatures.buyerWallet)
+  const orderPointsAmount = computed(() => {
+    const n = Math.trunc(Number(order.value?.points_amount || 0))
+    return Number.isFinite(n) && n > 0 ? n : 0
+  })
+  const showPointsOption = computed(() =>
+    exchangeEnabled.value &&
+    orderPointsAmount.value > 0 &&
+    !walletOnlyPayment.value,
+  )
+  const pointsInsufficient = computed(() =>
+    usePoints.value && pointsBalance.value < orderPointsAmount.value,
+  )
 
   const filterChannelsByOrder = (list: any[]) => {
     if (!Array.isArray(list)) return []
@@ -148,9 +154,9 @@ export function usePayment() {
     return filtered
   }
 
-  const configReady = computed(() => !appStore.loading && (!!appStore.config || (!isGuest.value && orderPaymentChannelsLoaded.value)))
+  const configReady = computed(() => !appStore.loading && (!!appStore.config || orderPaymentChannelsLoaded.value))
   const channels = computed(() => {
-    if (!isGuest.value && orderPaymentChannelsLoaded.value) {
+    if (orderPaymentChannelsLoaded.value) {
       return filterChannelsByOrder(orderPaymentChannels.value)
     }
     const fallback = appStore.config?.payment_channels
@@ -325,8 +331,25 @@ export function usePayment() {
   )
 
   watch(walletOnlyPayment, (v) => {
-    if (v) useBalance.value = true
+    if (v) {
+      useBalance.value = true
+      usePoints.value = false
+    }
   }, { immediate: true })
+
+  watch(usePoints, (v) => {
+    if (!v) return
+    useBalance.value = false
+    selectedChannelId.value = null
+  })
+
+  watch(useBalance, (v) => {
+    if (v) usePoints.value = false
+  })
+
+  watch(selectedChannelId, (id) => {
+    if (id) usePoints.value = false
+  })
 
   const expiresAtMs = computed(() => {
     const raw = paymentResult.value?.expires_at || order.value?.expires_at
@@ -422,13 +445,14 @@ export function usePayment() {
   })
   const walletBalanceDisplay = computed(() => formatMoney(walletBalance.value, order.value?.currency))
   const expectedWalletPaidCents = computed(() => {
-    if (!showBalanceOption.value || !useBalance.value) return 0
+    if (!showBalanceOption.value || !useBalance.value || usePoints.value) return 0
     const balance = amountToCents(walletBalance.value)
     const total = amountToCents(order.value?.total_amount)
     if (balance === null || total === null) return 0
     return Math.min(balance, total)
   })
   const expectedOnlinePayCents = computed(() => {
+    if (usePoints.value) return 0
     const total = amountToCents(order.value?.total_amount)
     if (total === null) return 0
     return Math.max(total - expectedWalletPaidCents.value, 0)
@@ -436,7 +460,8 @@ export function usePayment() {
   const expectedWalletPaidDisplay = computed(() => formatMoney(centsToAmount(expectedWalletPaidCents.value), order.value?.currency))
   const expectedOnlinePayDisplay = computed(() => formatMoney(centsToAmount(expectedOnlinePayCents.value), order.value?.currency))
   const requiresOnlineChannel = computed(() => {
-    if (isGuest.value) return true
+    if (skipPayment.value) return false
+    if (usePoints.value) return false
     if (!useBalance.value) return true
     return expectedOnlinePayCents.value > 0
   })
@@ -493,6 +518,7 @@ export function usePayment() {
   })
   const canSubmitPayment = computed(() => {
     if (submitting.value) return false
+    if (usePoints.value && (orderPointsAmount.value <= 0 || pointsInsufficient.value)) return false
     if (walletOnlyPayment.value && expectedOnlinePayCents.value > 0) return false
     if (!walletOnlyPayment.value && requiresOnlineChannel.value && !selectedChannelId.value) return false
     if (requiresOnlineChannel.value && selectedChannelAmountHint.value) return false
@@ -513,11 +539,6 @@ export function usePayment() {
   })
 
   const loadOrderPaymentChannels = async () => {
-    if (isGuest.value) {
-      orderPaymentChannels.value = []
-      orderPaymentChannelsLoaded.value = false
-      return
-    }
     if (!orderNoResolved.value) {
       orderPaymentChannels.value = []
       orderPaymentChannelsLoaded.value = false
@@ -556,7 +577,6 @@ export function usePayment() {
   const debouncedLoadOrderPaymentChannels = debounceAsync(loadOrderPaymentChannels, 250)
 
   const loadWallet = async () => {
-    if (isGuest.value) return
     walletLoading.value = true
     try {
       const response = await walletAPI.account()
@@ -568,48 +588,41 @@ export function usePayment() {
     }
   }
 
+  const loadPoints = async () => {
+    pointsLoading.value = true
+    try {
+      const [configRes, accountRes] = await Promise.all([pointsAPI.config(), pointsAPI.account()])
+      exchangeEnabled.value = configRes.data.data?.exchange_enabled === true
+      const balance = Math.trunc(Number(accountRes.data.data?.balance || 0))
+      pointsBalance.value = Number.isFinite(balance) && balance > 0 ? balance : 0
+    } catch {
+      exchangeEnabled.value = false
+      pointsBalance.value = 0
+    } finally {
+      pointsLoading.value = false
+    }
+  }
+
   const loadOrder = async (options?: { silent?: boolean }) => {
     const silent = options?.silent && !!order.value
     if (!silent) {
       loading.value = true
     }
     try {
-      if (isGuest.value) {
-        if (!hasGuestAuth.value) {
-          order.value = null
-          guestAuthError.value = t('payment.guestAuthRequired')
-          return
-        }
-        if (!orderNoQuery.value) {
-          order.value = null
-          orderPaymentChannels.value = []
-          orderPaymentChannelsLoaded.value = false
-          return
-        }
-        const response = await guestOrderAPI.detail(orderNoQuery.value, {
-          email: guestAuth.value.email,
-          order_password: guestAuth.value.order_password,
-        }, { silentBusinessError: true })
-        order.value = response.data.data
-        guestAuthError.value = ''
-      } else {
-        if (!orderNoQuery.value) {
-          order.value = null
-          orderPaymentChannels.value = []
-          orderPaymentChannelsLoaded.value = false
-          return
-        }
-        const response = await userOrderAPI.detail(orderNoQuery.value, { silentBusinessError: true })
-        order.value = response.data.data
+      if (!orderNoQuery.value) {
+        order.value = null
+        orderPaymentChannels.value = []
+        orderPaymentChannelsLoaded.value = false
+        return
       }
+      const response = await userOrderAPI.detail(orderNoQuery.value, { silentBusinessError: true })
+      order.value = response.data.data
+      
     } catch (err) {
       if (!silent) {
         order.value = null
         orderPaymentChannels.value = []
         orderPaymentChannelsLoaded.value = false
-        if (isGuest.value) {
-          guestAuthError.value = t('payment.guestAuthInvalid')
-        }
       }
     } finally {
       try {
@@ -673,20 +686,8 @@ export function usePayment() {
     try {
       const paymentID = currentPaymentID()
       if (!paymentID) return
-      if (isGuest.value) {
-        if (!hasGuestAuth.value) {
-          if (!options?.silent) {
-            guestAuthError.value = t('payment.guestAuthRequired')
-          }
-          return
-        }
-        await guestOrderAPI.capturePayment(paymentID, {
-          email: guestAuth.value.email,
-          order_password: guestAuth.value.order_password,
-        })
-      } else {
-        await paymentAPI.capture(paymentID)
-      }
+      await paymentAPI.capture(paymentID)
+      
     } catch (err: any) {
       if (!options?.silent) {
         error.value = err?.message || t('payment.captureFailed')
@@ -773,19 +774,11 @@ export function usePayment() {
   const loadLatestPayment = async () => {
     if (!order.value || order.value.status !== 'pending_payment') return
     if (paymentResult.value) return
-    if (isGuest.value && !hasGuestAuth.value) return
     if (!orderNoResolved.value) return
     try {
       let response
-      if (isGuest.value) {
-        response = await guestOrderAPI.latestPayment({
-          order_no: orderNoResolved.value,
-          email: guestAuth.value.email,
-          order_password: guestAuth.value.order_password,
-        })
-      } else {
-        response = await paymentAPI.latest({ order_no: orderNoResolved.value })
-      }
+      response = await paymentAPI.latest({ order_no: orderNoResolved.value })
+      
       const data = response.data.data
       if (data && (data.pay_url || data.qr_code)) {
         cachedPayment.value = data
@@ -809,9 +802,6 @@ export function usePayment() {
     const resolvedOrderNo = String(order.value?.order_no || orderNoQuery.value || '').trim()
     if (resolvedOrderNo !== '') {
       query.order_no = resolvedOrderNo
-    }
-    if (isGuest.value) {
-      query.guest = '1'
     }
     return query
   }
@@ -860,18 +850,8 @@ export function usePayment() {
     capturing.value = true
     error.value = ''
     try {
-      if (isGuest.value) {
-        if (!hasGuestAuth.value) {
-          guestAuthError.value = t('payment.guestAuthRequired')
-          return
-        }
-        await guestOrderAPI.capturePayment(paymentID, {
-          email: guestAuth.value.email,
-          order_password: guestAuth.value.order_password,
-        })
-      } else {
-        await paymentAPI.capture(paymentID)
-      }
+      await paymentAPI.capture(paymentID)
+      
       await debouncedLoadOrder({ silent: true })
       await router.replace({
         path: route.path,
@@ -897,18 +877,8 @@ export function usePayment() {
     capturing.value = true
     error.value = ''
     try {
-      if (isGuest.value) {
-        if (!hasGuestAuth.value) {
-          guestAuthError.value = t('payment.guestAuthRequired')
-          return
-        }
-        await guestOrderAPI.capturePayment(paymentID, {
-          email: guestAuth.value.email,
-          order_password: guestAuth.value.order_password,
-        })
-      } else {
-        await paymentAPI.capture(paymentID)
-      }
+      await paymentAPI.capture(paymentID)
+      
       await debouncedLoadOrder({ silent: true })
       await router.replace({
         path: route.path,
@@ -972,57 +942,41 @@ export function usePayment() {
     }
     submitting.value = true
     try {
-      if (isGuest.value) {
-        if (!hasGuestAuth.value) {
-          error.value = t('payment.guestAuthRequired')
-          return
-        }
-        const response = await guestOrderAPI.createPayment({
-          email: guestAuth.value.email,
-          order_password: guestAuth.value.order_password,
-          order_no: orderNoResolved.value,
-          channel_id: selectedChannelId.value,
-        })
-        paymentResult.value = response.data.data
-        if (paymentResult.value?.pay_url || paymentResult.value?.qr_code) {
-          cachedPayment.value = paymentResult.value
-        }
-        openedPayWindow.value = false
-        startPolling()
-        void captureCurrentPayment({ silent: true })
-      } else {
-        const payload: any = {
-          order_no: orderNoResolved.value,
-          use_balance: useBalance.value,
-        }
-        if (requiresOnlineChannel.value && selectedChannelId.value) {
-          payload.channel_id = selectedChannelId.value
-        }
-        const response = await paymentAPI.create(payload)
-        const created = response.data.data || {}
-        if (created.order_paid && !created.payment_id) {
-          paymentResult.value = null
-          cachedPayment.value = null
-          selectedChannelId.value = null
-          useBalance.value = false
-          stopPolling()
-          stopCountdown()
-          await Promise.all([
-            debouncedLoadOrder({ silent: true }),
-            loadWallet(),
-          ])
-          redirectToOrderDetail()
-          return
-        }
-        paymentResult.value = created
-        if (paymentResult.value?.pay_url || paymentResult.value?.qr_code) {
-          cachedPayment.value = paymentResult.value
-        }
-        openedPayWindow.value = false
-        startPolling()
-        void captureCurrentPayment({ silent: true })
-        await loadWallet()
+      const payload: any = {
+        order_no: orderNoResolved.value,
+        use_balance: useBalance.value,
+        use_points: usePoints.value,
       }
+      if (requiresOnlineChannel.value && selectedChannelId.value) {
+        payload.channel_id = selectedChannelId.value
+      }
+      const response = await paymentAPI.create(payload)
+      const created = response.data.data || {}
+      if (created.order_paid && !created.payment_id) {
+        paymentResult.value = null
+        cachedPayment.value = null
+        selectedChannelId.value = null
+        useBalance.value = false
+        usePoints.value = false
+        stopPolling()
+        stopCountdown()
+        await Promise.all([
+          debouncedLoadOrder({ silent: true }),
+          loadWallet(),
+          loadPoints(),
+        ])
+        redirectToOrderDetail()
+        return
+      }
+      paymentResult.value = created
+      if (paymentResult.value?.pay_url || paymentResult.value?.qr_code) {
+        cachedPayment.value = paymentResult.value
+      }
+      openedPayWindow.value = false
+      startPolling()
+      void captureCurrentPayment({ silent: true })
+      await loadWallet()
+      
       window.scrollTo({ top: 0, behavior: 'smooth' })
       if (shouldAutoOpenPaymentLink(paymentResult.value)) {
         openPayLinkInCompatibleWindow(true)
@@ -1051,12 +1005,8 @@ export function usePayment() {
     const resolvedOrderNo = String(order.value?.order_no || orderNoQuery.value || '').trim()
     if (!resolvedOrderNo) return
 
-    const target = isGuest.value
-      ? { name: 'guest-order-detail', params: { order_no: resolvedOrderNo } }
-      : { name: 'order-detail', params: { order_no: resolvedOrderNo } }
-    const fallbackPath = isGuest.value
-      ? `/guest/orders/${encodeURIComponent(resolvedOrderNo)}`
-      : `/orders/${encodeURIComponent(resolvedOrderNo)}`
+    const target = { name: 'order-detail', params: { order_no: resolvedOrderNo } }
+    const fallbackPath = `/orders/${encodeURIComponent(resolvedOrderNo)}`
     const resolvedTarget = router.resolve(target)
     if (!resolvedTarget.matched.length) {
       window.location.assign(fallbackPath)
@@ -1208,14 +1158,18 @@ export function usePayment() {
   }
 
   onMounted(() => {
+    if (rechargeBizType.value === 'membership' && rechargeNoQuery.value) {
+      void router.replace({ name: 'personal-center-membership' })
+      return
+    }
     if (isRechargeReturn.value && rechargeNoQuery.value) {
       void redirectToWalletRecharge()
       return
     }
     if (!orderNoQuery.value) return
-    guestAuth.value = loadGuestOrderAuth()
     loadOrder()
     void loadWallet()
+    void loadPoints()
     if (!appStore.config || !Array.isArray(appStore.config?.payment_channels)) {
       appStore.loadConfig(true)
     }
@@ -1245,18 +1199,19 @@ export function usePayment() {
   )
 
   watch(
-    () => [isGuest.value, orderNoQuery.value],
+    () => [orderNoQuery.value],
     async ([, orderNo], [, previousOrderNo]) => {
       if (!previousOrderNo || orderNo === previousOrderNo) return
       resetPaymentRouteState()
       if (!orderNo) return
       await loadOrder()
       void loadWallet()
+      void loadPoints()
     }
   )
 
   watch(
-    () => [isGuest.value, orderNoResolved.value, requiresOnlineChannel.value, expectedOnlinePayCents.value, order.value?.status],
+    () => [orderNoResolved.value, requiresOnlineChannel.value, expectedOnlinePayCents.value, order.value?.status],
     () => {
       void debouncedLoadOrderPaymentChannels()
     },
@@ -1318,24 +1273,12 @@ export function usePayment() {
     debouncedLoadOrderPaymentChannels.cancel()
   })
 
-  const handleGuestAuthSubmit = async () => {
-    guestAuthError.value = ''
-    if (!hasGuestAuth.value) {
-      guestAuthError.value = t('payment.guestAuthRequired')
-      return
-    }
-    saveGuestOrderAuth({
-      email: guestAuth.value.email,
-      order_password: guestAuth.value.order_password,
-    })
-    await debouncedLoadOrder()
-  }
-
   const handleRefresh = async () => {
     await captureCurrentPayment()
     await Promise.all([
       debouncedLoadOrder(),
       loadWallet(),
+      loadPoints(),
       debouncedLoadOrderPaymentChannels(),
     ])
   }
@@ -1351,16 +1294,20 @@ export function usePayment() {
     walletAddressCopied,
     openedPayWindow,
     cachedPayment,
-    guestAuth,
-    guestAuthError,
     walletLoading,
     walletBalance,
     useBalance,
+    usePoints,
+    pointsLoading,
+    pointsBalance,
+    orderPointsAmount,
+    pointsInsufficient,
     // routing / flags
     backLink,
-    showGuestAuthForm,
+    skipPayment,
     walletOnlyPayment,
     showBalanceOption,
+    showPointsOption,
     configReady,
     channels,
     // channel resolution
@@ -1423,7 +1370,6 @@ export function usePayment() {
     restoreCachedPayment,
     handleChangePaymentMethod,
     handlePayment,
-    handleGuestAuthSubmit,
     handleRefresh,
   }
 }

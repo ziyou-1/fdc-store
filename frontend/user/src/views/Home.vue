@@ -74,6 +74,9 @@
 
             <!-- Right: Product List -->
             <main class="flex-1 min-w-0">
+              <FreeClaimCard class="mb-4" />
+              <TokenStationCard class="mb-4" />
+              <HomeNoticeStrip class="mb-4" />
               <!-- Search Bar -->
               <div class="relative mb-4">
                 <div class="absolute inset-y-0 left-3.5 flex items-center pointer-events-none">
@@ -262,6 +265,8 @@
 
     <section id="featured" class="relative z-10 pb-14" :class="showHeroSection ? 'pt-14' : 'pt-32 md:pt-36'">
       <div class="container mx-auto px-4">
+        <FreeClaimCard class="mb-8" />
+        <TokenStationCard class="mb-8" />
         <div class="mb-8 flex items-end justify-between gap-4">
           <div>
             <h2 class="theme-section-heading text-3xl md:text-4xl">{{ t('home.featured.title') }}</h2>
@@ -305,7 +310,6 @@
             <p class="mt-1 text-sm text-muted-foreground">{{ t('home.latest.description') }}</p>
           </div>
           <div class="flex items-center gap-3 text-sm">
-            <router-link v-if="blogEnabled" to="/blog" class="text-muted-foreground transition-colors hover:text-foreground">{{ t('nav.blog') }}</router-link>
             <router-link v-if="noticeEnabled" to="/notice" class="text-muted-foreground transition-colors hover:text-foreground">{{ t('nav.notice') }}</router-link>
           </div>
         </div>
@@ -320,11 +324,11 @@
             <div class="mb-2 text-xs text-muted-foreground">{{ formatDate(post.published_at) }}</div>
             <h3 class="line-clamp-2 text-base font-semibold">{{ getLocalizedText(post.title) }}</h3>
             <p class="mt-2 line-clamp-2 text-sm text-muted-foreground">{{ getLocalizedText(post.summary) }}</p>
-            <div class="mt-4 text-sm font-medium text-primary">{{ t('blog.readMore') }}</div>
+            <div class="mt-4 text-sm font-medium text-primary">{{ t('post.readMore') }}</div>
           </article>
         </div>
         <div v-else class="rounded-2xl border border-dashed py-12 text-center text-muted-foreground">
-          {{ t('blog.empty') }}
+          {{ t('post.empty') }}
         </div>
       </div>
     </section>
@@ -360,6 +364,9 @@ import { useProductList } from '../composables/useProductList'
 import { useProductListGroups } from '../composables/useProductListGroups'
 import { usePageSeo } from '../composables/usePageSeo'
 import { useAppStore } from '../stores/app'
+import FreeClaimCard from '../components/FreeClaimCard.vue'
+import HomeNoticeStrip from '../components/HomeNoticeStrip.vue'
+import TokenStationCard from '../components/TokenStationCard.vue'
 import ProductCard from '../components/ProductCard.vue'
 import ProductListItem from '../components/ProductListItem.vue'
 import ProductQuickBuy from '../components/ProductQuickBuy.vue'
@@ -368,6 +375,7 @@ import PaginationNav from '../components/PaginationNav.vue'
 import EmptyState from '../components/EmptyState.vue'
 import AnnouncementModal from '../components/AnnouncementModal.vue'
 import { useAnnouncement, type HomeAnnouncement } from '../composables/useAnnouncement'
+import { useNavConfig } from '../composables/useNavConfig'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -378,10 +386,8 @@ const appStore = useAppStore()
 const heroBadgeClass = 'inline-flex items-center gap-2 rounded-md border border-white/25 bg-black/55 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-white backdrop-blur-sm'
 
 const templateMode = computed(() => appStore.config?.template_mode || 'card')
-const navBuiltin = computed(() => (appStore.config?.nav_config as { builtin?: Record<string, boolean> } | undefined)?.builtin)
-const blogEnabled = computed(() => navBuiltin.value?.blog !== false)
-const noticeEnabled = computed(() => navBuiltin.value?.notice !== false)
-const latestSectionVisible = computed(() => blogEnabled.value || noticeEnabled.value)
+const { noticeEnabled } = useNavConfig()
+const latestSectionVisible = computed(() => noticeEnabled.value)
 
 // ==================== Shared State ====================
 const products = ref<any[]>([])
@@ -473,7 +479,7 @@ const goToProduct = (slug: string) => {
 }
 
 const goToPost = (slug: string) => {
-  router.push(`/blog/${slug}`)
+  router.push(`/posts/${slug}`)
 }
 
 const loadFeaturedProducts = async () => {
@@ -488,11 +494,19 @@ const loadFeaturedProducts = async () => {
 const loadLatestPosts = async () => {
   if (!latestSectionVisible.value) return
   try {
-    const params: Record<string, unknown> = { page: 1, page_size: 3 }
-    if (blogEnabled.value && !noticeEnabled.value) params.type = 'blog'
-    if (!blogEnabled.value && noticeEnabled.value) params.type = 'notice'
-    const response = await postAPI.list(params)
-    posts.value = response.data.data || []
+    // 必须显式带 type：不带会把 faq 也捞进来，而 FAQ 在 /faq 页内联展开，
+    // 混进「最新动态」点开会跳到一条语义不符的详情页。
+    const wanted: string[] = []
+    if (noticeEnabled.value) wanted.push('notice')
+    const responses = await Promise.all(
+      wanted.map((type) => postAPI.list({ page: 1, page_size: 3, type })),
+    )
+    const merged = responses.flatMap((response) => response.data.data || [])
+    merged.sort(
+      (a: any, b: any) =>
+        new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime(),
+    )
+    posts.value = merged.slice(0, 3)
   } catch (error) {
     console.error('Failed to load posts:', error)
   }

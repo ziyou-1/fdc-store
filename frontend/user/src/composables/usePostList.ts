@@ -6,12 +6,11 @@ import { debounceAsync } from '../utils/debounce'
 import { usePageSeo } from './usePageSeo'
 
 /**
- * 文章/公告列表共享逻辑（Blog/Notice，classic + vault 双模板共用）。
- * 完整保留原 views/Blog.vue 与 Notice.vue 的行为，仅抽离为 composable。
- * Blog 启用搜索；Notice 无搜索框（searchKeyword 恒为空，watch 永不触发，行为一致）。
+ * 文章列表共享逻辑（公告 / 常见问题，classic + vault 双模板共用）。
+ * 带搜索框的页面会用到 searchKeyword；不带的恒为空，watch 永不触发。
  */
 export function usePostList(
-  type: 'blog' | 'notice',
+  type: 'notice' | 'faq',
   seo: { title: () => string; canonicalPath: string },
 ) {
   const router = useRouter()
@@ -74,7 +73,7 @@ export function usePostList(
   const debouncedLoadPosts = debounceAsync(loadPosts, 300)
 
   const goToPost = (slug: string) => {
-    router.push(`/blog/${slug}`)
+    router.push(`/posts/${slug}`)
   }
 
   const changePage = (page: number) => {

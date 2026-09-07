@@ -49,7 +49,7 @@ type LoginRecorder interface {
 // UserTelegramOIDCService 是 Telegram OIDC 端点所需的最小端口。
 type UserTelegramOIDCService interface {
 	StartTelegramOIDC(ctx context.Context, intent string, userID uint) (string, error)
-	LoginWithTelegramOIDC(ctx context.Context, code, state string) (*AuthLoginResult, error)
+	LoginWithTelegramOIDC(ctx context.Context, code, state, inviteCode string) (*AuthLoginResult, error)
 	BindTelegramOIDC(ctx context.Context, userID uint, code, state string) (*externalidentitydomain.Identity, error)
 }
 
@@ -67,8 +67,9 @@ func NewUserTelegramOIDCHandler(service UserTelegramOIDCService, recorder LoginR
 }
 
 type telegramOIDCCallbackRequest struct {
-	Code  string `json:"code" binding:"required"`
-	State string `json:"state" binding:"required"`
+	Code       string `json:"code" binding:"required"`
+	State      string `json:"state" binding:"required"`
+	InviteCode string `json:"invite_code"`
 }
 
 func respondTelegramOIDCError(c *gin.Context, err error) {
@@ -133,7 +134,7 @@ func (h *UserTelegramOIDCHandler) TelegramOIDCLoginCallback(c *gin.Context) {
 		ginutil.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
 		return
 	}
-	res, err := h.service.LoginWithTelegramOIDC(c.Request.Context(), req.Code, req.State)
+	res, err := h.service.LoginWithTelegramOIDC(c.Request.Context(), req.Code, req.State, req.InviteCode)
 	if err != nil {
 		h.recordLogin(c, "", 0, constants.LoginLogStatusFailed, constants.LoginLogFailReasonTelegramInvalid, constants.LoginLogSourceTelegram)
 		respondTelegramOIDCError(c, err)

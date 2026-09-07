@@ -29,7 +29,7 @@ func (s *Service) getActiveUserByID(userID uint) (*userdomain.User, error) {
 	return user, nil
 }
 
-func (s *Service) findOrCreateTelegramUser(verified *telegramauthapp.IdentityVerified) (*userdomain.User, error) {
+func (s *Service) findOrCreateTelegramUser(verified *telegramauthapp.IdentityVerified, inviteCode string) (*userdomain.User, error) {
 	if verified == nil {
 		return nil, telegramauthapp.ErrTelegramAuthPayloadInvalid
 	}
@@ -65,12 +65,14 @@ func (s *Service) findOrCreateTelegramUser(verified *telegramauthapp.IdentityVer
 	}
 
 	now := time.Now()
+	inviterUserID := s.resolveInviterUserID(inviteCode)
 	user = &userdomain.User{
 		Email:                 email,
 		PasswordHash:          string(hashedPassword),
 		PasswordSetupRequired: true,
 		DisplayName:           telegramidentity.ResolveDisplayName(verified.ProviderUserID, verified.Username, verified.FirstName, verified.LastName),
 		Status:                constants.UserStatusActive,
+		InviterUserID:         inviterUserID,
 		LastLoginAt:           &now,
 		CreatedAt:             now,
 		UpdatedAt:             now,
@@ -84,8 +86,10 @@ func (s *Service) findOrCreateTelegramUser(verified *telegramauthapp.IdentityVer
 		// 同步内存对象的等级，避免调用方后续 Update(Save) 用零值覆盖数据库
 		if refreshed, err := s.userRepo.GetByID(user.ID); err == nil && refreshed != nil {
 			user.MemberLevelID = refreshed.MemberLevelID
+			user.InviterUserID = refreshed.InviterUserID
 		}
 	}
+	s.awardReferralOnRegister(inviterUserID, user.ID)
 	return user, nil
 }
 

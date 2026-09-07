@@ -58,6 +58,15 @@ func RegisterUserCancelRoute(user gin.IRoutes, handler *UserHandler) {
 	user.POST("/orders/:order_no/cancel", handler.CancelOrder)
 }
 
+// RegisterUserManualFormRoutes 注册"支付成功后补填人工交付表单"的用户端路由。
+func RegisterUserManualFormRoutes(user gin.IRoutes, handler *ManualFormHandler) {
+	if user == nil || handler == nil {
+		panic("order manual form routes: required dependency is nil")
+	}
+	user.GET("/orders/:order_no/manual-form", handler.GetPendingManualForms)
+	user.POST("/orders/:order_no/manual-form", handler.SubmitManualForm)
+}
+
 // RegisterGuestReadRoutes 注册前台游客订单只读路由。
 func RegisterGuestReadRoutes(guest gin.IRoutes, handler *GuestHandler) {
 	if guest == nil || handler == nil {

@@ -12,13 +12,13 @@ export const userAuthAPI = {
     telegramMiniAppLogin: (data: TelegramMiniAppAuthPayload) =>
         userApi.post('/auth/telegram/miniapp/login', data),
     telegramOidcStart: () => userApi.get('/auth/telegram/oidc/start'),
-    telegramOidcCallback: (data: { code: string; state: string }) =>
+    telegramOidcCallback: (data: { code: string; state: string; invite_code?: string }) =>
         userApi.post('/auth/telegram/oidc/callback', data),
     googleLogin: (data: GoogleCredentialPayload) => userApi.post('/auth/google/login', data),
     googleRedirectIntent: () =>
         userApi.post(GOOGLE_REDIRECT_API_PATHS.loginIntent, {}, { credentials: 'include' }),
-    googleRedirectExchange: () =>
-        userApi.post(GOOGLE_REDIRECT_API_PATHS.loginExchange, {}, { credentials: 'include' }),
+    googleRedirectExchange: (data?: { invite_code?: string }) =>
+        userApi.post(GOOGLE_REDIRECT_API_PATHS.loginExchange, data || {}, { credentials: 'include' }),
     forgotPassword: (data: any) => userApi.post('/auth/forgot-password', data),
 }
 

@@ -79,12 +79,7 @@ func (a userEmailTransportAdapter) ResolvePasswordChangeMode(user *userdomain.Us
 
 // userPasswordTransportAdapter 将用户认证/设置服务适配为密码 transport 端口。
 type userPasswordTransportAdapter struct {
-	auth     *userauthapp.Service
-	settings *settingsapp.Service
-}
-
-func (a userPasswordTransportAdapter) GetEmailVerificationEnabled(defaultValue bool) (bool, error) {
-	return a.settings.GetEmailVerificationEnabled(defaultValue)
+	auth *userauthapp.Service
 }
 
 func (a userPasswordTransportAdapter) ResetPassword(email, code, newPassword string) error {
@@ -124,9 +119,10 @@ type userGoogleTransportAdapter struct {
 	auth *userauthapp.Service
 }
 
-func (a userGoogleTransportAdapter) LoginWithGoogle(ctx context.Context, credential string) (*userauthtransport.AuthLoginResult, error) {
+func (a userGoogleTransportAdapter) LoginWithGoogle(ctx context.Context, credential, inviteCode string) (*userauthtransport.AuthLoginResult, error) {
 	result, err := a.auth.LoginWithGoogle(userauthapp.LoginWithGoogleInput{
 		Credential: credential,
+		InviteCode: inviteCode,
 		Context:    ctx,
 	})
 	if err != nil {
@@ -201,11 +197,13 @@ func (a userGoogleTransportAdapter) ExchangeGoogleRedirectLogin(
 	ctx context.Context,
 	handle string,
 	tenant userauthtransport.GoogleRedirectTenant,
+	inviteCode string,
 ) (*userauthtransport.AuthLoginResult, error) {
 	result, err := a.auth.ExchangeGoogleRedirectLogin(
 		ctx,
 		handle,
 		toGoogleRedirectApplicationTenant(tenant),
+		inviteCode,
 	)
 	if err != nil {
 		return nil, mapUserAuthTransportError(err)
@@ -294,10 +292,11 @@ func (a userTelegramTransportAdapter) toAuthLoginResult(res *userauthapp.UserLog
 	}
 }
 
-func (a userTelegramTransportAdapter) LoginWithTelegram(ctx context.Context, payload userauthtransport.TelegramAuthPayload) (*userauthtransport.AuthLoginResult, error) {
+func (a userTelegramTransportAdapter) LoginWithTelegram(ctx context.Context, payload userauthtransport.TelegramAuthPayload, inviteCode string) (*userauthtransport.AuthLoginResult, error) {
 	res, err := a.auth.LoginWithTelegram(userauthapp.LoginWithTelegramInput{
-		Payload: a.toServicePayload(payload),
-		Context: ctx,
+		Payload:    a.toServicePayload(payload),
+		InviteCode: inviteCode,
+		Context:    ctx,
 	})
 	if err != nil {
 		return nil, mapUserAuthTransportError(err)
@@ -305,10 +304,11 @@ func (a userTelegramTransportAdapter) LoginWithTelegram(ctx context.Context, pay
 	return a.toAuthLoginResult(res), nil
 }
 
-func (a userTelegramTransportAdapter) LoginWithTelegramMiniApp(ctx context.Context, initData string) (*userauthtransport.AuthLoginResult, error) {
+func (a userTelegramTransportAdapter) LoginWithTelegramMiniApp(ctx context.Context, initData, inviteCode string) (*userauthtransport.AuthLoginResult, error) {
 	res, err := a.auth.LoginWithTelegramMiniApp(userauthapp.LoginWithTelegramMiniAppInput{
-		InitData: initData,
-		Context:  ctx,
+		InitData:   initData,
+		InviteCode: inviteCode,
+		Context:    ctx,
 	})
 	if err != nil {
 		return nil, mapUserAuthTransportError(err)
@@ -366,11 +366,12 @@ func (a userTelegramOIDCTransportAdapter) StartTelegramOIDC(ctx context.Context,
 	return authURL, mapUserAuthTransportError(err)
 }
 
-func (a userTelegramOIDCTransportAdapter) LoginWithTelegramOIDC(ctx context.Context, code, state string) (*userauthtransport.AuthLoginResult, error) {
+func (a userTelegramOIDCTransportAdapter) LoginWithTelegramOIDC(ctx context.Context, code, state, inviteCode string) (*userauthtransport.AuthLoginResult, error) {
 	res, err := a.auth.LoginWithTelegramOIDC(userauthapp.LoginWithTelegramOIDCInput{
-		Code:    code,
-		State:   state,
-		Context: ctx,
+		Code:       code,
+		State:      state,
+		InviteCode: inviteCode,
+		Context:    ctx,
 	})
 	if err != nil {
 		return nil, mapUserAuthTransportError(err)
@@ -412,8 +413,8 @@ func (a userLoginTransportAdapter) GetEmailVerificationEnabled(defaultValue bool
 	return a.settings.GetEmailVerificationEnabled(defaultValue)
 }
 
-func (a userLoginTransportAdapter) Register(email, password, code string, agreementAccepted, emailVerificationEnabled bool) (*userdomain.User, string, time.Time, error) {
-	user, token, expiresAt, err := a.auth.Register(email, password, code, agreementAccepted, emailVerificationEnabled)
+func (a userLoginTransportAdapter) Register(email, password, code, inviteCode string, agreementAccepted, emailVerificationEnabled bool) (*userdomain.User, string, time.Time, error) {
+	user, token, expiresAt, err := a.auth.Register(email, password, code, inviteCode, agreementAccepted, emailVerificationEnabled)
 	return user, token, expiresAt, mapUserAuthTransportError(err)
 }
 

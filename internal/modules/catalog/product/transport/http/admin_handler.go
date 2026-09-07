@@ -191,6 +191,7 @@ type ProductSKURequest struct {
 	SpecValuesJSON   map[string]interface{} `json:"spec_values"`
 	PriceAmount      float64                `json:"price_amount" binding:"required"`
 	CostPriceAmount  float64                `json:"cost_price_amount"`
+	PointsPrice      int64                  `json:"points_price"`
 	ManualStockTotal int                    `json:"manual_stock_total"`
 	IsActive         *bool                  `json:"is_active"`
 	SortOrder        int                    `json:"sort_order"`
@@ -213,7 +214,9 @@ type CreateProductRequest struct {
 	ContentJSON         map[string]interface{}   `json:"content"`
 	InstructionsJSON    map[string]interface{}   `json:"instructions"`
 	ManualFormSchema    map[string]interface{}   `json:"manual_form_schema"`
+	ManualFormTiming    string                   `json:"manual_form_timing"`
 	PriceAmount         float64                  `json:"price_amount" binding:"required"`
+	PointsPrice         int64                    `json:"points_price"`
 	CostPriceAmount     float64                  `json:"cost_price_amount"`
 	WholesalePrices     *[]WholesalePriceRequest `json:"wholesale_prices"`
 	Images              []string                 `json:"images"`
@@ -261,6 +264,7 @@ func toProductSKUInputs(items []ProductSKURequest) []productwrite.ProductSKUInpu
 			SpecValuesJSON:   item.SpecValuesJSON,
 			PriceAmount:      decimal.NewFromFloat(item.PriceAmount),
 			CostPriceAmount:  decimal.NewFromFloat(item.CostPriceAmount),
+			PointsPrice:      item.PointsPrice,
 			ManualStockTotal: item.ManualStockTotal,
 			IsActive:         item.IsActive,
 			SortOrder:        item.SortOrder,
@@ -286,7 +290,9 @@ func (h *AdminProductHandler) CreateProduct(c *gin.Context) {
 		ContentJSON:          req.ContentJSON,
 		InstructionsJSON:     req.InstructionsJSON,
 		ManualFormSchemaJSON: req.ManualFormSchema,
+		ManualFormTiming:     req.ManualFormTiming,
 		PriceAmount:          decimal.NewFromFloat(req.PriceAmount),
+		PointsPrice:          req.PointsPrice,
 		CostPriceAmount:      decimal.NewFromFloat(req.CostPriceAmount),
 		WholesalePrices:      toWholesalePriceInputs(req.WholesalePrices),
 		Images:               req.Images,
@@ -378,7 +384,9 @@ func (h *AdminProductHandler) UpdateProduct(c *gin.Context) {
 		ContentJSON:          req.ContentJSON,
 		InstructionsJSON:     req.InstructionsJSON,
 		ManualFormSchemaJSON: req.ManualFormSchema,
+		ManualFormTiming:     req.ManualFormTiming,
 		PriceAmount:          decimal.NewFromFloat(req.PriceAmount),
+		PointsPrice:          req.PointsPrice,
 		CostPriceAmount:      decimal.NewFromFloat(req.CostPriceAmount),
 		WholesalePrices:      toWholesalePriceInputs(req.WholesalePrices),
 		Images:               req.Images,

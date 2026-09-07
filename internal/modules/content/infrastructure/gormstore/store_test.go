@@ -63,10 +63,10 @@ func TestPostStoreQueriesAndOrderedRelations(t *testing.T) {
 	}
 
 	posts := []contentdomain.Post{
-		{Slug: "older", Type: constants.PostTypeBlog, TitleJSON: jsonmap.JSON{"zh-CN": "Older guide"}, IsPublished: true, PublishedAt: &older},
-		{Slug: "newer", Type: constants.PostTypeBlog, TitleJSON: jsonmap.JSON{"zh-CN": "Newer guide"}, IsPublished: true, PublishedAt: &newer},
-		{Slug: "draft", Type: constants.PostTypeBlog, TitleJSON: jsonmap.JSON{"zh-CN": "Draft guide"}, IsPublished: false},
-		{Slug: "notice", Type: constants.PostTypeNotice, TitleJSON: jsonmap.JSON{"zh-CN": "Notice"}, IsPublished: true, PublishedAt: &newer},
+		{Slug: "older", Type: constants.PostTypeNotice, TitleJSON: jsonmap.JSON{"zh-CN": "Older guide"}, IsPublished: true, PublishedAt: &older},
+		{Slug: "newer", Type: constants.PostTypeNotice, TitleJSON: jsonmap.JSON{"zh-CN": "Newer guide"}, IsPublished: true, PublishedAt: &newer},
+		{Slug: "draft", Type: constants.PostTypeNotice, TitleJSON: jsonmap.JSON{"zh-CN": "Draft guide"}, IsPublished: false},
+		{Slug: "faq-entry", Type: constants.PostTypeFAQ, TitleJSON: jsonmap.JSON{"zh-CN": "FAQ"}, IsPublished: true, PublishedAt: &newer},
 	}
 	for index := range posts {
 		if err := store.Create(ctx, &posts[index]); err != nil {
@@ -77,7 +77,7 @@ func TestPostStoreQueriesAndOrderedRelations(t *testing.T) {
 	listed, total, err := store.List(ctx, contentcontract.PostQuery{
 		Page:          1,
 		PageSize:      20,
-		Type:          constants.PostTypeBlog,
+		Type:          constants.PostTypeNotice,
 		Search:        "guide",
 		OnlyPublished: true,
 		Order:         contentcontract.PostOrderPublishedDesc,
@@ -124,14 +124,14 @@ func TestPostStoreQueriesAndOrderedRelations(t *testing.T) {
 		t.Fatalf("relate draft post: %v", err)
 	}
 	if err := store.SetRelatedProductIDs(ctx, posts[3].ID, []uint{secondProduct.ID}); err != nil {
-		t.Fatalf("relate notice: %v", err)
+		t.Fatalf("relate faq: %v", err)
 	}
-	forProduct, err := store.ListPostsForProduct(ctx, secondProduct.ID, constants.PostTypeBlog, true, 10)
+	forProduct, err := store.ListPostsForProduct(ctx, secondProduct.ID, constants.PostTypeNotice, true, 10)
 	if err != nil {
 		t.Fatalf("list posts for product: %v", err)
 	}
 	if len(forProduct) != 2 || forProduct[0].ID != posts[0].ID || forProduct[1].ID != posts[1].ID {
-		t.Fatalf("posts for product must filter draft/notice and preserve relation order: %#v", forProduct)
+		t.Fatalf("posts for product must filter draft/faq and preserve relation order: %#v", forProduct)
 	}
 
 	if err := store.Delete(ctx, fmt.Sprintf("%d", posts[0].ID)); err != nil {
@@ -183,7 +183,7 @@ func TestPostCategoryStoreTreeFiltersAndUsageCounts(t *testing.T) {
 	if err != nil || childCount != 1 {
 		t.Fatalf("child count want 1, count=%d err=%v", childCount, err)
 	}
-	post := contentdomain.Post{Slug: "category-post", Type: constants.PostTypeBlog, TitleJSON: jsonmap.JSON{"zh-CN": "post"}, CategoryID: &child.ID}
+	post := contentdomain.Post{Slug: "category-post", Type: constants.PostTypeNotice, TitleJSON: jsonmap.JSON{"zh-CN": "post"}, CategoryID: &child.ID}
 	if err := db.Create(&post).Error; err != nil {
 		t.Fatalf("create categorized post: %v", err)
 	}
@@ -311,12 +311,15 @@ func TestStoresPropagateCancelledContext(t *testing.T) {
 }
 
 func TestLocalizedSearchDialectExpressions(t *testing.T) {
+	// 参数个数 = 1 个普通列 + 1 个 JSON 列 x 受支持语言数；跟着语言列表走，
+	// 新增语言时不该在这里假报警。
+	wantArgs := 1 + len(constants.SupportedLocales)
 	postgres, postgresArgs := buildLocalizedLikeConditionByDialect("postgres", []string{"slug"}, []string{"title_json"})
-	if postgresArgs != 4 || !strings.Contains(postgres, "ILIKE") || !strings.Contains(postgres, "title_json::jsonb ->> 'zh-CN'") {
+	if postgresArgs != wantArgs || !strings.Contains(postgres, "ILIKE") || !strings.Contains(postgres, "title_json::jsonb ->> 'zh-CN'") {
 		t.Fatalf("postgres localized search expression mismatch args=%d sql=%s", postgresArgs, postgres)
 	}
 	sqliteCondition, sqliteArgs := buildLocalizedLikeConditionByDialect("sqlite", []string{"slug"}, []string{"title_json"})
-	if sqliteArgs != 4 || !strings.Contains(sqliteCondition, " LIKE ") || !strings.Contains(sqliteCondition, `json_extract(title_json, '$."zh-CN"')`) {
+	if sqliteArgs != wantArgs || !strings.Contains(sqliteCondition, " LIKE ") || !strings.Contains(sqliteCondition, `json_extract(title_json, '$."zh-CN"')`) {
 		t.Fatalf("sqlite localized search expression mismatch args=%d sql=%s", sqliteArgs, sqliteCondition)
 	}
 }

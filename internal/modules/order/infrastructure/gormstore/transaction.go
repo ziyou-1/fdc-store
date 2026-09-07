@@ -14,9 +14,13 @@ import (
 	productgormstore "github.com/dujiao-next/internal/modules/catalog/product/store/gormstore"
 	couponcontract "github.com/dujiao-next/internal/modules/coupon/contract"
 	coupongormstore "github.com/dujiao-next/internal/modules/coupon/infrastructure/gormstore"
+	freeclaimcontract "github.com/dujiao-next/internal/modules/freeclaim/contract"
+	freeclaimgormstore "github.com/dujiao-next/internal/modules/freeclaim/infrastructure/gormstore"
 	fulfillmentcontract "github.com/dujiao-next/internal/modules/fulfillment/contract"
 	fulfillmentgormstore "github.com/dujiao-next/internal/modules/fulfillment/infrastructure/gormstore"
 	ordercontract "github.com/dujiao-next/internal/modules/order/contract"
+	pointscontract "github.com/dujiao-next/internal/modules/points/contract"
+	pointsgormstore "github.com/dujiao-next/internal/modules/points/infrastructure/gormstore"
 	resellercontract "github.com/dujiao-next/internal/modules/reseller/contract"
 	resellergormstore "github.com/dujiao-next/internal/modules/reseller/infrastructure/gormstore"
 	walletcontract "github.com/dujiao-next/internal/modules/wallet/contract"
@@ -68,6 +72,17 @@ func (tx transaction) ProductSKUs() productcontract.SKURepository {
 
 func (tx transaction) CardSecrets() cardsecretcontract.Repository {
 	return cardsecretgormstore.New(tx.db)
+}
+
+// Points 让积分扣减与订单写入落在同一个事务里。必须复用 tx.db：
+// 另起连接会让积分脱离订单事务（回滚不回退），SQLite 单连接池下还会自锁。
+func (tx transaction) Points() pointscontract.Transaction {
+	return pointsgormstore.UseTransaction(tx.db)
+}
+
+// FreeClaims 让"每天只能领一次"的唯一索引写入与订单结算落在同一事务里。
+func (tx transaction) FreeClaims() freeclaimcontract.Repository {
+	return freeclaimgormstore.New(tx.db)
 }
 
 func (tx transaction) Coupons() couponcontract.Repository {

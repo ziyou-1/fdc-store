@@ -16,9 +16,10 @@ type StartTelegramOIDCInput struct {
 
 // LoginWithTelegramOIDCInput Telegram OIDC 登录输入
 type LoginWithTelegramOIDCInput struct {
-	Code    string
-	State   string
-	Context context.Context
+	Code       string
+	State      string
+	InviteCode string
+	Context    context.Context
 }
 
 // BindTelegramOIDCInput Telegram OIDC 绑定输入
@@ -61,7 +62,7 @@ func (s *Service) LoginWithTelegramOIDC(input LoginWithTelegramOIDCInput) (*User
 	if intent != telegramauthapp.IntentLogin {
 		return nil, telegramauthapp.ErrTelegramAuthPayloadInvalid
 	}
-	return s.LoginVerifiedTelegram(verified)
+	return s.loginVerifiedTelegram(verified, input.InviteCode)
 }
 
 // BindTelegramOIDC 通过 Telegram OIDC 回调绑定当前用户

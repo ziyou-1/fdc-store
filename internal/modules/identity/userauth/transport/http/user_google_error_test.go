@@ -72,7 +72,7 @@ func (r *googleRedirectAuditRecorder) Record(
 	r.source = source
 }
 
-func (s *googleRedirectHandlerService) LoginWithGoogle(context.Context, string) (*AuthLoginResult, error) {
+func (s *googleRedirectHandlerService) LoginWithGoogle(context.Context, string, string) (*AuthLoginResult, error) {
 	s.popupCalls++
 	return s.popupResult, s.popupErr
 }
@@ -113,6 +113,7 @@ func (s *googleRedirectHandlerService) ExchangeGoogleRedirectLogin(
 	context.Context,
 	string,
 	GoogleRedirectTenant,
+	string,
 ) (*AuthLoginResult, error) {
 	s.exchangeLoginCalls++
 	return s.exchangeLoginResult, s.exchangeLoginErr
@@ -131,7 +132,7 @@ func (s *googleRedirectHandlerService) ExchangeGoogleRedirectBind(
 	return &GoogleBindingResult{}, nil
 }
 
-func (s *googleBodyLimitService) LoginWithGoogle(context.Context, string) (*AuthLoginResult, error) {
+func (s *googleBodyLimitService) LoginWithGoogle(context.Context, string, string) (*AuthLoginResult, error) {
 	s.loginCalls++
 	return nil, nil
 }
@@ -171,6 +172,7 @@ func (*googleBodyLimitService) ExchangeGoogleRedirectLogin(
 	context.Context,
 	string,
 	GoogleRedirectTenant,
+	string,
 ) (*AuthLoginResult, error) {
 	return nil, nil
 }

@@ -9,6 +9,8 @@ import (
 	paymentdomain "github.com/dujiao-next/internal/modules/payment/domain"
 
 	"github.com/dujiao-next/internal/constants"
+	memberleveldomain "github.com/dujiao-next/internal/modules/memberlevel/domain"
+	pointscontract "github.com/dujiao-next/internal/modules/points/contract"
 	walletcontract "github.com/dujiao-next/internal/modules/wallet/contract"
 )
 
@@ -83,7 +85,11 @@ func (s *PaymentService) handleWalletRechargeCallback(payment *paymentdomain.Pay
 			recharge.PaidAt = updated.PaidAt
 			recharge.UpdatedAt = updated.UpdatedAt
 		}
-		if s.memberLevelSvc != nil && recharge != nil && recharge.UserID > 0 {
+		// 积分充值不累加会员成长值：users.total_recharged 的既有语义是"钱包充值额"，
+		// 混进积分充值会让钱包报表与会员阈值同时承载两种口径。
+		if s.memberLevelSvc != nil && recharge != nil && recharge.UserID > 0 &&
+			recharge.CreditTarget != constants.RechargeCreditTargetPoints &&
+			recharge.CreditTarget != constants.RechargeCreditTargetMembership {
 			if err := s.memberLevelSvc.OnRechargeCompleted(recharge.UserID, recharge.Amount.Decimal); err != nil {
 				paymentLogger().Warnw("member_level_recharge_completed_failed",
 					"payment_id", payment.ID,
@@ -169,11 +175,43 @@ func (s *PaymentService) applyWalletRechargePaymentUpdate(payment *paymentdomain
 
 		switch status {
 		case constants.PaymentStatusSuccess:
-			if s.walletSvc == nil {
-				return walletcontract.ErrAccountNotFound
-			}
-			if _, err := s.walletSvc.ApplyRechargePayment(walletTx, recharge); err != nil {
-				return err
+			// 按到账目标分流。整条幂等链路（锁外前置短路、行锁后重判 payment.Status、
+			// 以及上方 recharge.Status == success 的早退）原样复用，
+			// 积分侧再叠一层 reference 唯一索引，共四道防线。
+			if recharge.CreditTarget == constants.RechargeCreditTargetPoints {
+				if s.pointsSvc == nil {
+					return pointscontract.ErrAccountNotFound
+				}
+				if _, err := s.pointsSvc.ApplyRechargePayment(tx.Points(), recharge); err != nil {
+					return err
+				}
+			} else if recharge.CreditTarget == constants.RechargeCreditTargetMembership {
+				user, err := tx.Users().GetByID(recharge.UserID)
+				if err != nil {
+					return err
+				}
+				if user == nil {
+					return walletcontract.ErrAccountNotFound
+				}
+				if !memberleveldomain.ApplyPurchase(
+					user,
+					recharge.MembershipPeriod,
+					recharge.MembershipDurationDays,
+					recharge.MembershipDiscountRate.Decimal,
+					now,
+				) {
+					return ErrPaymentInvalid
+				}
+				if err := tx.Users().Update(user); err != nil {
+					return err
+				}
+			} else {
+				if s.walletSvc == nil {
+					return walletcontract.ErrAccountNotFound
+				}
+				if _, err := s.walletSvc.ApplyRechargePayment(walletTx, recharge); err != nil {
+					return err
+				}
 			}
 			newlySucceeded = true
 			recharge.Status = constants.WalletRechargeStatusSuccess

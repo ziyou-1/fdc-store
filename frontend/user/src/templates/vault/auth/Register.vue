@@ -105,6 +105,21 @@
               </div>
             </div>
 
+            <!-- 邀请码 -->
+            <div>
+              <label class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                <Ticket class="h-3.5 w-3.5 opacity-70" /> {{ t('auth.register.inviteCodeLabel') }}
+              </label>
+              <Input
+                v-model="inviteCode"
+                type="text"
+                autocomplete="off"
+                class="h-11"
+                :placeholder="t('auth.register.inviteCodePlaceholder')"
+              />
+              <p class="mt-1.5 text-xs text-muted-foreground">{{ t('auth.register.inviteCodeHint') }}</p>
+            </div>
+
             <!-- 图形验证 -->
             <div v-if="emailVerificationEnabled && sendCodeCaptchaEnabled">
               <label class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
@@ -176,7 +191,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Mail, Lock, ShieldCheck, Eye, EyeOff, UserPlus } from 'lucide-vue-next'
+import { ArrowLeft, Mail, Lock, ShieldCheck, Eye, EyeOff, UserPlus, Ticket } from 'lucide-vue-next'
 import ImageCaptcha from '../../../components/captcha/ImageCaptcha.vue'
 import TurnstileCaptcha from '../../../components/captcha/TurnstileCaptcha.vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -191,7 +206,7 @@ const { t } = useI18n()
 
 const {
   userAuthStore, brandSiteName,
-  email, emailLocalPart, selectedEmailDomain, password, showPassword, code, agreed,
+  email, emailLocalPart, selectedEmailDomain, password, showPassword, code, inviteCode, agreed,
   passwordStrength, error, sending, countdown,
   captchaPayload, turnstileToken, imageCaptchaRef, turnstileRef,
   captchaProvider, sendCodeCaptchaEnabled, turnstileSiteKey,

@@ -53,12 +53,9 @@ func (s *Service) BatchUpdateAffiliateProfileStatus(profileIDs []uint, rawStatus
 	return s.repo.BatchUpdateProfileStatus(normalizedIDs, nextStatus, time.Now())
 }
 
-// OpenAffiliate 为用户开通推广返利
+// OpenAffiliate 为用户开通推广返利（现金分销）。关闭现金分销时拒绝。
 func (s *Service) OpenAffiliate(userID uint) (*affiliatedomain.Profile, error) {
-	if userID == 0 {
-		return nil, ErrUserDisabled
-	}
-	if s.repo == nil || s.userRepo == nil {
+	if s.settings == nil {
 		return nil, ErrNotFound
 	}
 	setting, err := s.settings.GetAffiliateSetting()
@@ -67,6 +64,26 @@ func (s *Service) OpenAffiliate(userID uint) (*affiliatedomain.Profile, error) {
 	}
 	if !setting.Enabled {
 		return nil, ErrDisabled
+	}
+	return s.ensureInviteProfile(userID)
+}
+
+// EnsureInviteCode 签发邀请码，不要求现金分销开关。
+// 积分推荐与现金分销共用 affiliate_code，但站长可以只要积分、不要现金。
+func (s *Service) EnsureInviteCode(userID uint) (string, error) {
+	profile, err := s.ensureInviteProfile(userID)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(profile.AffiliateCode), nil
+}
+
+func (s *Service) ensureInviteProfile(userID uint) (*affiliatedomain.Profile, error) {
+	if userID == 0 {
+		return nil, ErrUserDisabled
+	}
+	if s.repo == nil || s.userRepo == nil {
+		return nil, ErrNotFound
 	}
 
 	user, err := s.userRepo.GetByID(userID)

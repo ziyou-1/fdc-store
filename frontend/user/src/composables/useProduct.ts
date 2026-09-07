@@ -1,6 +1,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '../stores/app'
+import { useUserAuthStore } from '../stores/userAuth'
+import { useUserProfileStore } from '../stores/userProfile'
+import { purchasedMembershipAmount } from '../utils/membership'
+import { disabledFeatures } from '../utils/disabledFeatures'
 import { amountToCents, centsToAmount } from '../utils/money'
 
 export function useLocalized() {
@@ -34,12 +38,15 @@ export function useLocalized() {
 export function useProductLabels() {
   const { t } = useI18n()
 
-  const getPurchaseTypeLabel = (purchaseType: string) => {
-    return purchaseType === 'guest' ? t('productPurchase.guest') : t('productPurchase.member')
+  // 商品仅面向会员，标签恒定；保留函数签名以免调用点全改。
+  const getPurchaseTypeLabel = (_purchaseType?: string) => {
+    return t('productPurchase.member')
   }
 
   const getFulfillmentTypeLabel = (fulfillmentType: string) => {
-    return fulfillmentType === 'auto' ? t('products.fulfillmentType.auto') : t('products.fulfillmentType.manual')
+    if (fulfillmentType === 'auto') return t('products.fulfillmentType.auto')
+    if (fulfillmentType === 'content') return t('products.fulfillmentType.content')
+    return t('products.fulfillmentType.manual')
   }
 
   const getStockBadgeVariant = (status: string): 'info' | 'warning' | 'destructive' | 'success' => {
@@ -125,6 +132,7 @@ export function useProductLabels() {
   }
   const normalizeSkuCode = (value: unknown) => normalizeText(value).toLowerCase()
   const allWholesalePrices = (product: any): any[] => {
+    if (disabledFeatures.wholesale) return []
     if (Array.isArray(product?.wholesale_prices)) return product.wholesale_prices
     if (Array.isArray(product?.wholesalePrices)) return product.wholesalePrices
     return []
@@ -176,19 +184,21 @@ export function useProductLabels() {
 
   const resolveMemberPriceAmount = (product: any, skuId: any, basePrice: any, memberLevelId: any, discountRate?: any) => {
     const base = parsePriceAmount(basePrice)
+    if (base === null || base <= 0) return null
     const levelId = Number(memberLevelId || 0)
-    if (base === null || base <= 0 || !Number.isFinite(levelId) || levelId <= 0) return null
+    const rate = Number(discountRate || 0)
 
-    const prices = Array.isArray(product?.member_prices) ? product.member_prices : []
-    const normalizedSkuId = Number(skuId || 0)
-    const skuPrice = prices.find((p: any) => Number(p?.member_level_id || 0) === levelId && Number(p?.sku_id || 0) === normalizedSkuId)
-    const productPrice = prices.find((p: any) => Number(p?.member_level_id || 0) === levelId && Number(p?.sku_id || 0) === 0)
-    const overrideCents = parsePriceAmount(skuPrice?.price_amount ?? productPrice?.price_amount)
-    if (overrideCents !== null && overrideCents > 0) {
-      return overrideCents < base ? centsToAmount(overrideCents) : null
+    if (Number.isFinite(levelId) && levelId > 0) {
+      const prices = Array.isArray(product?.member_prices) ? product.member_prices : []
+      const normalizedSkuId = Number(skuId || 0)
+      const skuPrice = prices.find((p: any) => Number(p?.member_level_id || 0) === levelId && Number(p?.sku_id || 0) === normalizedSkuId)
+      const productPrice = prices.find((p: any) => Number(p?.member_level_id || 0) === levelId && Number(p?.sku_id || 0) === 0)
+      const overrideCents = parsePriceAmount(skuPrice?.price_amount ?? productPrice?.price_amount)
+      if (overrideCents !== null && overrideCents > 0) {
+        return overrideCents < base ? centsToAmount(overrideCents) : null
+      }
     }
 
-    const rate = Number(discountRate || 0)
     if (!Number.isFinite(rate) || rate <= 0 || rate >= 100) return null
     const memberCents = Math.round((base * rate) / 100)
     return memberCents < base ? centsToAmount(memberCents) : null
@@ -213,4 +223,24 @@ export function useProductLabels() {
     resolveWholesalePriceAmount,
     resolveMemberPriceAmount,
   }
+}
+
+export function useListingDisplayPrice(getProduct: () => any) {
+  const userAuthStore = useUserAuthStore()
+  const userProfileStore = useUserProfileStore()
+  const { hasPromotionPrice, getPromotionPriceAmount } = useProductLabels()
+  const listAmount = computed(() => getProduct()?.price_amount)
+  const promoAmount = computed(() => (
+    hasPromotionPrice(getProduct()) ? getPromotionPriceAmount(getProduct()) : null
+  ))
+  const baseAmount = computed(() => promoAmount.value ?? listAmount.value)
+  const memberAmount = computed(() => (
+    userAuthStore.isAuthenticated
+      ? purchasedMembershipAmount(baseAmount.value, userProfileStore.profile)
+      : null
+  ))
+  const displayAmount = computed(() => memberAmount.value ?? baseAmount.value)
+  const isMemberPrice = computed(() => memberAmount.value != null)
+  const hasPromo = computed(() => promoAmount.value != null)
+  return { displayAmount, listAmount, isMemberPrice, hasPromo }
 }

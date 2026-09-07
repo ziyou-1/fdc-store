@@ -9,7 +9,7 @@ var (
 	ErrCategoryInUse                 = errors.New("category in use")
 	ErrInvalidPostType               = errors.New("invalid post type")
 	ErrPostCategoryInvalid           = errors.New("post category invalid")
-	ErrPostNoticeCategoryUnsupported = errors.New("post notice category unsupported")
+	ErrPostCategoryTypeUnsupported = errors.New("post type does not support categories")
 	ErrInvalidBanner                 = errors.New("invalid banner")
 	ErrMediaNotFound                 = errors.New("media not found")
 	ErrMediaNameEmpty                = errors.New("media name empty")

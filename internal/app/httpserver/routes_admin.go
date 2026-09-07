@@ -6,7 +6,6 @@ import (
 	affiliatebootstrap "github.com/dujiao-next/internal/bootstrap/affiliate"
 	settingsbootstrap "github.com/dujiao-next/internal/bootstrap/settingshttp"
 	"github.com/dujiao-next/internal/config"
-	adproxytransport "github.com/dujiao-next/internal/modules/adproxy/transport/http"
 	affiliatetransport "github.com/dujiao-next/internal/modules/affiliate/transport/http"
 	apicredentialtransport "github.com/dujiao-next/internal/modules/apicredential/transport/http"
 	auditlogtransport "github.com/dujiao-next/internal/modules/auditlog/transport/http"
@@ -19,6 +18,7 @@ import (
 	contenttransport "github.com/dujiao-next/internal/modules/content/transport/http"
 	coupontransport "github.com/dujiao-next/internal/modules/coupon/transport/http"
 	dashboardtransport "github.com/dujiao-next/internal/modules/dashboard/transport/http"
+	freeclaimtransport "github.com/dujiao-next/internal/modules/freeclaim/transport/http"
 	fulfillmenttransport "github.com/dujiao-next/internal/modules/fulfillment/transport/http"
 	giftcardtransport "github.com/dujiao-next/internal/modules/giftcard/transport/http"
 	adminauthtransport "github.com/dujiao-next/internal/modules/identity/adminauth/transport/http"
@@ -28,13 +28,16 @@ import (
 	notificationtransport "github.com/dujiao-next/internal/modules/notification/transport/http"
 	ordertransport "github.com/dujiao-next/internal/modules/order/transport/http"
 	paymenttransport "github.com/dujiao-next/internal/modules/payment/transport/http"
+	pointstransport "github.com/dujiao-next/internal/modules/points/transport/http"
 	procurementtransport "github.com/dujiao-next/internal/modules/procurement/transport/http"
 	promotiontransport "github.com/dujiao-next/internal/modules/promotion/transport/http"
 	reconciliationtransport "github.com/dujiao-next/internal/modules/reconciliation/transport/http"
 	resellertransport "github.com/dujiao-next/internal/modules/reseller/transport/http/admin"
 	settingstransport "github.com/dujiao-next/internal/modules/settings/transport/http"
 	siteconnectiontransport "github.com/dujiao-next/internal/modules/siteconnection/transport/http"
+	supporttransport "github.com/dujiao-next/internal/modules/support/transport/http"
 	broadcasthttp "github.com/dujiao-next/internal/modules/telegram/broadcast/transport/http"
+	tokenstationtransport "github.com/dujiao-next/internal/modules/tokenstation/transport/http"
 	uploadtransport "github.com/dujiao-next/internal/modules/upload/transport/http"
 	wallettransport "github.com/dujiao-next/internal/modules/wallet/transport/http"
 	"github.com/dujiao-next/internal/platform/http/response"
@@ -102,9 +105,6 @@ func registerAdminRoutes(
 	// 仪表盘
 	dashboardtransport.RegisterAdminRoutes(authorized, adminDashboardHandler)
 
-	// 广告代理
-	adproxytransport.RegisterAdminRoutes(authorized, adproxytransport.NewAdminHandler(c.AdProxyService))
-
 	// 商品 / 分类管理
 	producthttp.RegisterAdminRoutes(authorized, adminCatalogProductHandler)
 	contenttransport.RegisterAdminRoutes(authorized, adminContentHandler)
@@ -126,6 +126,19 @@ func registerAdminRoutes(
 	systemtransport.RegisterAdminRoutes(authorized, systemtransport.NewAdminHandler(nil))
 
 	adminauthtransport.RegisterAdmin2FARoutes(authorized, admin2FAHandler)
+
+	// 积分与签到
+	pointstransport.RegisterAdminRoutes(authorized, pointstransport.NewAdminHandler(c.PointsService))
+
+	// 每日免费领取
+	freeclaimtransport.RegisterAdminRoutes(authorized, freeclaimtransport.NewAdminHandler(c.FreeClaimService))
+	tokenstationtransport.RegisterAdminRoutes(authorized, tokenstationtransport.NewAdminHandler(c.TokenStationService))
+
+	// 在线客服工作台
+	supporttransport.RegisterAdminRoutes(authorized, supporttransport.NewAdminHandler(
+		c.SupportService,
+		container.NewSupportAttachmentUploader(c.SupportUploadService),
+	))
 
 	// 推广返利
 	adminAffiliateHandler := affiliatebootstrap.NewAdminHandler(c)

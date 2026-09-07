@@ -16,6 +16,7 @@ import (
 	orderdomain "github.com/dujiao-next/internal/modules/order/domain"
 	orderriskdomain "github.com/dujiao-next/internal/modules/orderrisk/domain"
 	"github.com/dujiao-next/internal/persistence/gormutil"
+	"github.com/dujiao-next/internal/shared/jsonmap"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -800,6 +801,47 @@ func (r *Store) UpdateFields(id uint, updates map[string]interface{}) error {
 		return nil
 	}
 	return r.db.Model(&orderdomain.Order{}).Where("orders.deleted_at IS NULL AND id = ?", id).Updates(updates).Error
+}
+
+// UpdateOrderItemManualSubmission 写入订单条目的人工交付表单提交值,返回受影响行数。
+// "是否已提交过"由应用层基于已加载的条目判断:json 列在 SQLite 存为 BLOB、
+// 在 Postgres 为 json 类型,两者都无法用可移植的 SQL 相等式来判空。
+func (r *Store) UpdateOrderItemManualSubmission(
+	orderID, itemID uint,
+	submission jsonmap.JSON,
+	now time.Time,
+) (int64, error) {
+	if orderID == 0 || itemID == 0 {
+		return 0, nil
+	}
+	result := r.db.Model(&orderdomain.OrderItem{}).
+		Where("id = ? AND order_id = ?", itemID, orderID).
+		Updates(map[string]interface{}{
+			"manual_form_submission_json": submission,
+			"updated_at":                  now,
+		})
+	return result.RowsAffected, result.Error
+}
+
+// CountPointsExchangedQuantityBySKUSince 统计 since 之后该 SKU 被积分兑换的件数。
+// 条件挂在 orders.points_paid_amount > 0 上——父单与子单都写了该列，
+// 而商品项只挂在真正持有它的那一层，因此这条统计天然不会重复计数。
+func (r *Store) CountPointsExchangedQuantityBySKUSince(skuID uint, since time.Time) (int64, error) {
+	if skuID == 0 {
+		return 0, nil
+	}
+	var total int64
+	if err := r.db.Model(&orderdomain.OrderItem{}).
+		Joins("JOIN orders ON orders.id = order_items.order_id").
+		Where("orders.deleted_at IS NULL").
+		Where("orders.points_paid_amount > 0").
+		Where("orders.paid_at >= ?", since).
+		Where("order_items.sku_id = ?", skuID).
+		Select("COALESCE(SUM(order_items.quantity), 0)").
+		Scan(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 // UpdateChildrenStatus 把所有非目标状态的子订单批量更新为 targetStatus,返回受影响行数。

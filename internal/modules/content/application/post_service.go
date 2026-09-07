@@ -211,9 +211,10 @@ func (s *PostService) ListRelatedProducts(ctx context.Context, postID uint) ([]c
 	return s.relations.ListRelatedProducts(ctx, postID)
 }
 
-// ListPostsForProduct 获取与商品关联的已发布博客列表。
+// ListPostsForProduct 获取与商品关联的已发布公告列表。
+// 博客下线后，商品↔文章关联改挂公告；关联关系本身与类型无关。
 func (s *PostService) ListPostsForProduct(ctx context.Context, productID uint, limit int) ([]contract.RelatedPost, error) {
-	return s.relations.ListPostsForProduct(ctx, productID, constants.PostTypeBlog, true, limit)
+	return s.relations.ListPostsForProduct(ctx, productID, constants.PostTypeNotice, true, limit)
 }
 
 // Delete 删除文章。
@@ -229,13 +230,21 @@ func (s *PostService) Delete(ctx context.Context, id string) error {
 }
 
 func isAllowedPostType(postType string) bool {
-	return postType == constants.PostTypeBlog || postType == constants.PostTypeNotice
+	return postType == constants.PostTypeNotice ||
+		postType == constants.PostTypeFAQ
+}
+
+// isFlatPostType 返回该类型是否为不挂分类的扁平列表。
+// 常见问题在 /faq 页内联展开、天然是一张扁平清单；
+// 公告可以按分类归档，博客下线后由它承接分类树。
+func isFlatPostType(postType string) bool {
+	return postType == constants.PostTypeFAQ
 }
 
 func (s *PostService) validateCategoryAssignment(ctx context.Context, postType string, categoryID, currentCategoryID *uint) error {
-	if postType == constants.PostTypeNotice {
+	if isFlatPostType(postType) {
 		if categoryID != nil && *categoryID > 0 {
-			return contract.ErrPostNoticeCategoryUnsupported
+			return contract.ErrPostCategoryTypeUnsupported
 		}
 		return nil
 	}

@@ -31,13 +31,21 @@
     <Loading :loading="appStore.loading" />
     <Toast />
     <ConfirmDialog />
+    <!-- 客服浮窗：登录后全站常驻。分销控制台有自己的工作台，不挂。
+         classic 模板底部有 MobileBottomNav，移动端需要抬高避免遮挡。 -->
+    <SupportChatWidget
+      v-if="showSupportWidget"
+      :offset-bottom-mobile="!isVault"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue'
+import { computed, defineAsyncComponent, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from './stores/app'
+import { useUserAuthStore } from './stores/userAuth'
+import { useUserProfileStore } from './stores/userProfile'
 import { getActiveTemplate } from './templates/registry'
 import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
@@ -50,6 +58,8 @@ import MobileBottomNav from './components/MobileBottomNav.vue'
 
 // vault 外壳按需加载，classic 用户不会拉取其 chunk/样式
 const VaultLayout = defineAsyncComponent(() => import('./templates/vault/layout/VaultLayout.vue'))
+// 客服浮窗按需加载：未登录访客不拉取该 chunk
+const SupportChatWidget = defineAsyncComponent(() => import('./components/support/SupportChatWidget.vue'))
 
 // config 由 router.beforeEach 统一加载，无需在此重复调用
 const appStore = useAppStore()
@@ -57,6 +67,17 @@ const route = useRoute()
 const isResellerConsole = computed(() => route.meta.resellerConsole === true)
 // getActiveTemplate 读取 appStore.config（响应式），config 加载后会重新计算
 const isVault = computed(() => getActiveTemplate() === 'vault')
+const userAuthStore = useUserAuthStore()
+const userProfileStore = useUserProfileStore()
+const showSupportWidget = computed(() => userAuthStore.isAuthenticated && !isResellerConsole.value)
+
+const loadAuthedProfile = () => {
+  if (userAuthStore.isAuthenticated) {
+    void userProfileStore.loadProfile()
+  }
+}
+onMounted(loadAuthedProfile)
+watch(() => userAuthStore.isAuthenticated, loadAuthedProfile)
 </script>
 
 <style>

@@ -40,4 +40,10 @@ type Store interface {
 	UpdateTOTPEnabled(uint, string, time.Time, string) error
 	UpdateRecoveryCodes(uint, string) error
 	ClearTOTP(uint) error
+	// ExpireMemberships 把已到期的付费会员清档，返回受影响行数。
+	// 用一条 UPDATE 完成，避免把全部过期用户读进内存。
+	ExpireMemberships(now time.Time) (int64, error)
+	// ListMembershipsExpiringBetween 返回到期时间落在 [from, to) 的付费会员，
+	// 供到期前提醒使用。
+	ListMembershipsExpiringBetween(from, to time.Time, limit int) ([]userdomain.User, error)
 }

@@ -4,10 +4,12 @@ import { useUserAuthStore } from '../stores/userAuth'
 import { useI18n } from 'vue-i18n'
 import { debounceAsync } from '../utils/debounce'
 import { useAppStore } from '../stores/app'
+import { disabledFeatures } from '../utils/disabledFeatures'
 import { useTelegramMiniAppStore } from '../stores/telegramMiniApp'
 import { buildTelegramMiniAppEntryLink, isTelegramUrlEnvironment, openTelegramCompatibleLink } from '../utils/telegramMiniApp'
 import { userAuthAPI } from '../api'
 import type { CaptchaPayload, TelegramAuthPayload } from '../api'
+import { showLoginForgotPassword } from '../utils/loginForgotPassword'
 import {
   canShowGoogleIdentityButton,
   detectGoogleIdentityUXMode,
@@ -39,7 +41,7 @@ export function useLogin() {
 
   const brandSiteName = computed(() => {
     const siteName = String(appStore.config?.brand?.site_name || '').trim()
-    return siteName !== '' ? siteName : 'Dujiao-Next'
+    return siteName !== '' ? siteName : 'Keyvo'
   })
 
   const email = ref('')
@@ -93,13 +95,14 @@ export function useLogin() {
   const googleRedirectAvailable = googleIdentityUXMode === 'popup' || googleRedirectLoginURI !== ''
   const registrationEnabled = computed(() => appStore.config?.registration_enabled !== false)
   const emailVerificationEnabled = computed(() => appStore.config?.email_verification_enabled !== false)
+  const showForgotPassword = computed(() => showLoginForgotPassword(appStore.config))
   const isTelegramUrlEnv = isTelegramUrlEnvironment()
   const isTelegramMiniApp = computed(() => (telegramMiniAppStore.isMiniApp && telegramMiniAppStore.isReady) || isTelegramUrlEnv)
   const miniAppInitData = computed(() => String(telegramMiniAppStore.initData || '').trim())
-  const showTelegramWidget = computed(() => isWidgetMode.value && telegramEnabled.value && !isTelegramMiniApp.value)
-  const showTelegramOidc = computed(() => telegramLoginMode.value === 'oidc' && telegramEnabled.value && !isTelegramMiniApp.value)
-  const showMiniAppLoginHint = computed(() => isTelegramMiniApp.value)
-  const showGoogleLogin = computed(() => canShowGoogleIdentityButton(
+  const showTelegramWidget = computed(() => !disabledFeatures.socialLogin && isWidgetMode.value && telegramEnabled.value && !isTelegramMiniApp.value)
+  const showTelegramOidc = computed(() => !disabledFeatures.socialLogin && telegramLoginMode.value === 'oidc' && telegramEnabled.value && !isTelegramMiniApp.value)
+  const showMiniAppLoginHint = computed(() => !disabledFeatures.socialLogin && isTelegramMiniApp.value)
+  const showGoogleLogin = computed(() => !disabledFeatures.socialLogin && canShowGoogleIdentityButton(
     googleEnabled.value,
     googleClientID.value,
     isTelegramMiniApp.value,
@@ -111,7 +114,7 @@ export function useLogin() {
     showGoogleLogin.value,
   ))
   const telegramMiniAppEntryLink = computed(() => buildTelegramMiniAppEntryLink(telegramBotUsername.value, telegramMiniAppURL.value))
-  const showTelegramMiniAppEntry = computed(() => !isTelegramMiniApp.value && telegramMiniAppEntryLink.value !== '')
+  const showTelegramMiniAppEntry = computed(() => !disabledFeatures.socialLogin && !isTelegramMiniApp.value && telegramMiniAppEntryLink.value !== '')
   const telegramCallbackName = '__dujiaoUserTelegramLogin'
   const miniAppLoginAttempted = ref(false)
   const attemptingMiniAppLogin = ref(false)
@@ -350,7 +353,7 @@ export function useLogin() {
   }
 
   const tryTelegramMiniAppLogin = async () => {
-    if (!isTelegramMiniApp.value || miniAppInitData.value === '' || miniAppLoginAttempted.value || attemptingMiniAppLogin.value) {
+    if (disabledFeatures.socialLogin || !isTelegramMiniApp.value || miniAppInitData.value === '' || miniAppLoginAttempted.value || attemptingMiniAppLogin.value) {
       return
     }
 
@@ -504,6 +507,7 @@ export function useLogin() {
     // flags
     registrationEnabled,
     emailVerificationEnabled,
+    showForgotPassword,
     // telegram
     showTelegramWidget,
     telegramWidgetRef,

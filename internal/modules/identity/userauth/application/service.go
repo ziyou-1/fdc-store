@@ -48,6 +48,18 @@ type Service struct {
 	googleRedirectStore   GoogleRedirectStore
 	memberLevelSvc        MemberLevelAssigner
 	authUnitOfWork        AuthUnitOfWork
+	inviterResolver       InviterResolver
+	referralRewarder      ReferralRewarder
+}
+
+// SetReferralServices 注入邀请码解析与推荐奖励发放。
+// 用 setter 而不是构造参数：affiliate 与 points 的服务构造晚于 userauth。
+func (s *Service) SetReferralServices(resolver InviterResolver, rewarder ReferralRewarder) {
+	if s == nil {
+		return
+	}
+	s.inviterResolver = resolver
+	s.referralRewarder = rewarder
 }
 
 type MemberLevelAssigner interface {
@@ -259,7 +271,7 @@ func (s *Service) checkRegistrationEmailDomain(email string) error {
 }
 
 // Register 用户注册
-func (s *Service) Register(email, password, code string, agreementAccepted bool, emailVerificationEnabled bool) (*userdomain.User, string, time.Time, error) {
+func (s *Service) Register(email, password, code, inviteCode string, agreementAccepted bool, emailVerificationEnabled bool) (*userdomain.User, string, time.Time, error) {
 	if !agreementAccepted {
 		return nil, "", time.Time{}, ErrAgreementRequired
 	}
@@ -293,6 +305,9 @@ func (s *Service) Register(email, password, code string, agreementAccepted bool,
 		return nil, "", time.Time{}, err
 	}
 
+	// 邀请码解析放在建号之前：解析失败只是不记推荐关系，绝不阻断注册。
+	inviterUserID := s.resolveInviterUserID(inviteCode)
+
 	now := time.Now()
 	nickname := resolveNicknameFromEmail(normalized)
 	user := &userdomain.User{
@@ -301,6 +316,7 @@ func (s *Service) Register(email, password, code string, agreementAccepted bool,
 		DisplayName:     nickname,
 		Status:          constants.UserStatusActive,
 		EmailVerifiedAt: &now,
+		InviterUserID:   inviterUserID,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -325,7 +341,34 @@ func (s *Service) Register(email, password, code string, agreementAccepted bool,
 		_ = s.memberLevelSvc.AssignDefaultLevel(user.ID)
 	}
 
+	// 推荐注册奖励放在最后：注册主流程已全部成功才发奖，避免"奖已发但号没建成"。
+	// 反过来发奖失败也不回滚注册——奖励用 referral_register:<userID> 作稳定 reference，
+	// 后续任何补偿重试都只会入账一次。
+	s.awardReferralOnRegister(inviterUserID, user.ID)
+
 	return user, token, expiresAt, nil
+}
+
+func (s *Service) resolveInviterUserID(inviteCode string) *uint {
+	if s == nil || s.inviterResolver == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(inviteCode)
+	if trimmed == "" {
+		return nil
+	}
+	resolved, err := s.inviterResolver.ResolveInviterUserID(trimmed)
+	if err != nil || resolved == 0 {
+		return nil
+	}
+	return &resolved
+}
+
+func (s *Service) awardReferralOnRegister(inviterUserID *uint, inviteeUserID uint) {
+	if s == nil || inviterUserID == nil || s.referralRewarder == nil || inviteeUserID == 0 {
+		return
+	}
+	_ = s.referralRewarder.AwardReferralRegister(*inviterUserID, inviteeUserID)
 }
 
 // LoginStep1 用户密码登录第一步：校验密码，根据是否启用 2FA 返回 challenge token 或正式 JWT。

@@ -93,7 +93,7 @@ func (h *AdminHandler) CreatePost(c *gin.Context) {
 			ginutil.RespondError(c, response.CodeBadRequest, "error.post_type_invalid", nil)
 		case errors.Is(err, contentcontract.ErrPostCategoryInvalid):
 			ginutil.RespondError(c, response.CodeBadRequest, "error.post_category_invalid", nil)
-		case errors.Is(err, contentcontract.ErrPostNoticeCategoryUnsupported):
+		case errors.Is(err, contentcontract.ErrPostCategoryTypeUnsupported):
 			ginutil.RespondError(c, response.CodeBadRequest, "error.post_notice_category_unsupported", nil)
 		case errors.Is(err, contentcontract.ErrSlugExists):
 			ginutil.RespondError(c, response.CodeBadRequest, "error.slug_exists", nil)
@@ -120,7 +120,7 @@ func (h *AdminHandler) UpdatePost(c *gin.Context) {
 			ginutil.RespondError(c, response.CodeBadRequest, "error.post_type_invalid", nil)
 		case errors.Is(err, contentcontract.ErrPostCategoryInvalid):
 			ginutil.RespondError(c, response.CodeBadRequest, "error.post_category_invalid", nil)
-		case errors.Is(err, contentcontract.ErrPostNoticeCategoryUnsupported):
+		case errors.Is(err, contentcontract.ErrPostCategoryTypeUnsupported):
 			ginutil.RespondError(c, response.CodeBadRequest, "error.post_notice_category_unsupported", nil)
 		case errors.Is(err, contentcontract.ErrNotFound):
 			ginutil.RespondError(c, response.CodeNotFound, "error.post_not_found", nil)

@@ -230,7 +230,7 @@ const timeline = computed(() => {
 const localized = (value?: Record<string, string>) => {
   if (!value) return '-'
   const loc = locale.value as string
-  return value[loc] || value['zh-CN'] || value['zh-TW'] || value['en-US'] || Object.values(value)[0] || '-'
+  return value[loc] || value['zh-CN'] || value['zh-TW'] || value['en-US'] || value['id-ID'] || Object.values(value)[0] || '-'
 }
 
 const skuText = (item: unknown) => formatResellerOrderItemSkuText(item, {

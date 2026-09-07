@@ -75,6 +75,7 @@ func TestValidateChannelWechatInvalidInteractionMode(t *testing.T) {
 		ProviderType:    constants.PaymentProviderOfficial,
 		ChannelType:     constants.PaymentChannelTypeWechat,
 		InteractionMode: constants.PaymentInteractionWAP,
+		IsActive:        true, // 网关面校验只对启用中的渠道生效
 		FeeRate:         money.FromDecimal(decimal.Zero),
 		ConfigJSON: jsonmap.JSON{
 			"appid":                "wx1234567890",

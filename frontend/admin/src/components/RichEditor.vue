@@ -28,6 +28,33 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
+const Video = Image.extend({
+  name: 'video',
+  group: 'block',
+  inline: false,
+  atom: true,
+  addAttributes() {
+    return {
+      src: { default: null },
+      controls: { default: true },
+      preload: { default: 'metadata' },
+    }
+  },
+  parseHTML() {
+    return [{
+      tag: 'video',
+      getAttrs: (element: HTMLElement) => ({
+        src: element.getAttribute('src') || element.querySelector('source')?.getAttribute('src'),
+        controls: true,
+        preload: 'metadata',
+      }),
+    }]
+  },
+  renderHTML({ HTMLAttributes }: { HTMLAttributes: Record<string, any> }) {
+    return ['video', { ...HTMLAttributes, controls: 'controls', preload: 'metadata' }]
+  },
+})
+
 const mediaPickerRef = ref<InstanceType<typeof MediaPicker> | null>(null)
 const mediaPickerValue = ref<string[]>([])
 
@@ -116,6 +143,7 @@ const editor = useEditor({
     TableRow,
     TableHeader,
     TableCell,
+    Video,
   ],
   editorProps: {
     attributes: {
@@ -171,6 +199,20 @@ const addLink = () => {
   if (url && editor.value) {
     editor.value.chain().focus().setLink({ href: url }).run()
   }
+}
+
+const addVideo = () => {
+  const url = String(window.prompt(t('admin.richEditor.enterVideoUrl')) || '').trim()
+  if (!url || !editor.value) {
+    return
+  }
+  if (!/^(https?:|\/(?!\/))/i.test(url)) {
+    return
+  }
+  editor.value.chain().focus().insertContent({
+    type: 'video',
+    attrs: { src: url, controls: true, preload: 'metadata' },
+  }).run()
 }
 
 const setColor = (color: string) => {
@@ -262,6 +304,12 @@ onBeforeUnmount(() => {
       <button type="button" class="toolbar-btn" :title="t('admin.richEditor.insertLink')" :class="{ 'is-active': editor.isActive('link') }" @click="addLink">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" />
+        </svg>
+      </button>
+
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.insertVideo')" @click="addVideo">
+        <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm4 3.5v5l5-2.5-5-2.5z" />
         </svg>
       </button>
 
@@ -501,6 +549,12 @@ onBeforeUnmount(() => {
 
 :deep(.ProseMirror .tiptap-image-wrapper + p:not(:empty)) {
   margin-top: 1rem;
+}
+
+:deep(.ProseMirror video) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
 }
 
 :deep(.ProseMirror a) {

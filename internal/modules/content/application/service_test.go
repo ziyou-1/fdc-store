@@ -30,7 +30,7 @@ func TestPostServiceUsesInjectedClockForFirstPublish(t *testing.T) {
 
 	post, err := service.Create(context.Background(), CreatePostInput{
 		Slug:        "clocked-post",
-		Type:        constants.PostTypeBlog,
+		Type:        constants.PostTypeNotice,
 		IsPublished: &published,
 	})
 	if err != nil {
@@ -211,4 +211,57 @@ var _ contract.WarningLogger = (*warningLoggerStub)(nil)
 
 func (l *warningLoggerStub) Warnw(message string, _ ...interface{}) {
 	l.message = message
+}
+
+func TestPostServiceAcceptsFAQType(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 9, 5, 10, 0, 0, 0, time.UTC)
+	store := &postStoreStub{}
+	service := NewPostService(store, store, nil, fixedClock{now: now})
+
+	post, err := service.Create(context.Background(), CreatePostInput{
+		Slug: "how-to-activate",
+		Type: constants.PostTypeFAQ,
+	})
+	if err != nil {
+		t.Fatalf("faq 类型必须被接受: %v", err)
+	}
+	if post.Type != constants.PostTypeFAQ {
+		t.Fatalf("Type = %q, want %q", post.Type, constants.PostTypeFAQ)
+	}
+}
+
+func TestPostServiceRejectsUnknownType(t *testing.T) {
+	t.Parallel()
+
+	store := &postStoreStub{}
+	service := NewPostService(store, store, nil, fixedClock{now: time.Now()})
+
+	if _, err := service.Create(context.Background(), CreatePostInput{
+		Slug: "bad-type",
+		Type: "changelog",
+	}); !errors.Is(err, contract.ErrInvalidPostType) {
+		t.Fatalf("未知类型必须被拒绝，got %v", err)
+	}
+}
+
+// FAQ 是扁平列表：挂分类必须被拒，否则后台会出现
+// 一批挂在分类树下、前台 FAQ 页却查不到的文章。
+// 公告不在此列——博客下线后由公告承接分类树。
+func TestPostServiceRejectsCategoryOnFlatTypes(t *testing.T) {
+	t.Parallel()
+
+	categoryID := uint(7)
+	for _, postType := range []string{constants.PostTypeFAQ} {
+		store := &postStoreStub{}
+		service := NewPostService(store, store, nil, fixedClock{now: time.Now()})
+		if _, err := service.Create(context.Background(), CreatePostInput{
+			Slug:       "flat-" + postType,
+			Type:       postType,
+			CategoryID: &categoryID,
+		}); !errors.Is(err, contract.ErrPostCategoryTypeUnsupported) {
+			t.Fatalf("%s 不该允许挂分类，got %v", postType, err)
+		}
+	}
 }

@@ -17,7 +17,6 @@ export function useAbout() {
   })
 
   const aboutConfig = computed(() => appStore.config?.about || null)
-  const contactConfig = computed(() => appStore.config?.contact || null)
 
   const resolveLocalizedText = (raw: unknown): string => {
     if (!raw || typeof raw !== 'object') {
@@ -26,7 +25,7 @@ export function useAbout() {
 
     const record = raw as Record<string, unknown>
     const lang = String(locale.value || appStore.locale || 'zh-CN')
-    const candidates = [record[lang], record['zh-CN'], record['zh-TW'], record['en-US']]
+    const candidates = [record[lang], record['zh-CN'], record['zh-TW'], record['en-US'], record['id-ID']]
 
     for (const candidate of candidates) {
       if (typeof candidate === 'string' && candidate.trim() !== '') {
@@ -57,8 +56,7 @@ export function useAbout() {
 
   const hasIntroduction = computed(() => introductionText.value !== '')
   const hasServices = computed(() => servicesTitle.value !== '' || serviceItems.value.length > 0)
-  const hasContactLinks = computed(() => !!(contactConfig.value?.telegram || contactConfig.value?.whatsapp))
-  const hasContact = computed(() => contactTitle.value !== '' || contactText.value !== '' || hasContactLinks.value)
+  const hasContact = computed(() => contactTitle.value !== '' || contactText.value !== '')
 
   onMounted(async () => {
     if (!appStore.config) {
@@ -67,7 +65,6 @@ export function useAbout() {
   })
 
   return {
-    contactConfig,
     heroTitle,
     heroSubtitle,
     introductionText,
@@ -77,7 +74,6 @@ export function useAbout() {
     serviceItems,
     hasIntroduction,
     hasServices,
-    hasContactLinks,
     hasContact,
   }
 }

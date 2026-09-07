@@ -55,7 +55,7 @@
         </Badge>
 
         <!-- Desktop: all badges -->
-        <Badge class="hidden sm:inline-flex" size="xs" :variant="product.purchase_type === 'guest' ? 'warning' : 'success'">
+        <Badge class="hidden sm:inline-flex" size="xs" variant="success">
           {{ getPurchaseTypeLabel(product.purchase_type) }}
         </Badge>
         <Badge class="hidden sm:inline-flex" size="xs" :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'">
@@ -71,19 +71,23 @@
     <div class="flex-shrink-0 flex items-center gap-1 sm:gap-3 pr-1.5 sm:pr-4">
       <!-- Price -->
       <div class="text-right">
-        <div v-if="hasPromotionPrice(product)" class="flex flex-col items-end">
-          <span class="text-xs sm:text-sm font-bold text-destructive whitespace-nowrap">
-            {{ formatPrice(getPromotionPriceAmount(product), siteCurrency) }}
+        <div v-if="hasPromo || isMemberPrice" class="flex flex-col items-end">
+          <span class="text-xs sm:text-sm font-bold whitespace-nowrap" :class="hasPromo && !isMemberPrice ? 'text-destructive' : 'text-foreground'">
+            {{ formatPrice(displayAmount, siteCurrency) }}
           </span>
           <div class="flex items-center gap-1">
-            <span class="text-[10px] text-muted-foreground line-through">{{ formatPrice(product.price_amount, siteCurrency) }}</span>
-            <Badge variant="danger" size="xs" class="px-1 py-0 text-[9px] leading-tight">{{ t('products.promotionTag') }}</Badge>
+            <span class="text-[10px] text-muted-foreground line-through">{{ formatPrice(listAmount, siteCurrency) }}</span>
+            <Badge v-if="isMemberPrice" variant="accent" size="xs" class="px-1 py-0 text-[9px] leading-tight">{{ t('products.memberPriceTag') }}</Badge>
+            <Badge v-if="hasPromo" variant="danger" size="xs" class="px-1 py-0 text-[9px] leading-tight">{{ t('products.promotionTag') }}</Badge>
           </div>
         </div>
         <div v-else>
           <span class="text-xs sm:text-sm font-bold text-foreground whitespace-nowrap">
-            {{ formatPrice(product.price_amount, siteCurrency) }}
+            {{ formatPrice(displayAmount, siteCurrency) }}
           </span>
+          <div v-if="pointsPrice > 0" class="text-[10px] font-medium text-muted-foreground">
+            {{ t('products.pointsPrice', { n: pointsPrice }) }}
+          </div>
           <div v-if="hasWholesalePrices(product)">
             <Badge variant="success" size="xs" class="px-1 py-0 text-[9px] leading-tight">{{ t('products.wholesaleTag') }}</Badge>
           </div>
@@ -113,15 +117,17 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, Image as ImageIcon, ShoppingCart } from 'lucide-vue-next'
 import { getFirstImageUrl, getImageUrl } from '../utils/image'
-import { useLocalized, useProductLabels } from '../composables/useProduct'
+import { useListingDisplayPrice, useLocalized, useProductLabels } from '../composables/useProduct'
+import { pointsPriceOf } from '../utils/productPoints'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   product: any
   index?: number
   animationStep?: number
@@ -137,5 +143,7 @@ defineEmits<{
 
 const { t } = useI18n()
 const { getLocalizedText, siteCurrency, formatPrice } = useLocalized()
-const { getPurchaseTypeLabel, getFulfillmentTypeLabel, getStockBadgeVariant, getStockStatusLabel, isSoldOut, hasPromotionPrice, getPromotionPriceAmount, hasPromotionRules, hasWholesalePrices } = useProductLabels()
+const { getPurchaseTypeLabel, getFulfillmentTypeLabel, getStockBadgeVariant, getStockStatusLabel, isSoldOut, hasPromotionRules, hasWholesalePrices } = useProductLabels()
+const { displayAmount, listAmount, isMemberPrice, hasPromo } = useListingDisplayPrice(() => props.product)
+const pointsPrice = computed(() => pointsPriceOf(props.product))
 </script>

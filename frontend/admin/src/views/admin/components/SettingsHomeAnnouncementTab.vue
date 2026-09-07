@@ -11,7 +11,7 @@ import { notifyError, notifySuccess } from '@/utils/notify'
 
 const { t } = useI18n()
 
-const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US'] as const
+const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const
 type SupportedLanguage = (typeof supportedLanguages)[number]
 
 const props = defineProps<{
@@ -29,6 +29,7 @@ const createLocalizedField = (): Record<SupportedLanguage, string> => ({
   'zh-CN': '',
   'zh-TW': '',
   'en-US': '',
+  'id-ID': '',
 })
 
 const form = reactive({

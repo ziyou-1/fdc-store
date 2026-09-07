@@ -336,6 +336,16 @@ func (s *Service) CreateAuto(orderID uint) (*fulfillmentdomain.Fulfillment, erro
 			return nil, ErrFulfillmentCreateFailed
 		}
 	}
+	s.afterDelivered(order, orderID, now)
+	return fulfillment, nil
+}
+
+// afterDelivered 执行交付完成后的公共收尾：父订单状态同步、状态邮件、
+// Telegram 通知与下游回调。auto 与 content 两种交付共用。
+func (s *Service) afterDelivered(order *orderdomain.Order, orderID uint, now time.Time) {
+	if order == nil {
+		return
+	}
 	if s.orderQueue != nil {
 		if order.ParentID != nil {
 			status, syncErr := orderapp.SyncParentStatus(s.orderStore, *order.ParentID, now)
@@ -378,10 +388,85 @@ func (s *Service) CreateAuto(orderID uint) (*fulfillmentdomain.Fulfillment, erro
 		notifyOrderID = *order.ParentID
 	}
 	go s.NotifyBotOrderFulfilled(order.UserID, notifyOrderID)
-	// B 侧：自动交付完成后触发下游回调
+	// B 侧：交付完成后触发下游回调
 	if s.downstreamCallbackSvc != nil {
 		s.downstreamCallbackSvc.EnqueueCallback(orderID)
 	}
+}
+
+// CreateContent 处理纯内容交付：订单支付成功后立即完成，交付物是商品自带的使用教程，
+// 不消耗卡密库存也不占用人工库存。同一订单重复调用返回 ErrFulfillmentExists。
+func (s *Service) CreateContent(orderID uint) (*fulfillmentdomain.Fulfillment, error) {
+	if orderID == 0 {
+		return nil, ErrFulfillmentInvalid
+	}
+
+	order, err := s.orderStore.GetByID(orderID)
+	if err != nil {
+		return nil, ErrOrderFetchFailed
+	}
+	if order == nil {
+		return nil, ErrOrderNotFound
+	}
+	if order.ParentID == nil && len(order.Children) > 0 {
+		return nil, ErrFulfillmentInvalid
+	}
+	if order.Status != constants.OrderStatusPaid {
+		return nil, ErrOrderStatusInvalid
+	}
+	if len(order.Items) == 0 {
+		return nil, ErrFulfillmentInvalid
+	}
+	for _, item := range order.Items {
+		if strings.TrimSpace(item.FulfillmentType) != constants.FulfillmentTypeContent {
+			return nil, ErrFulfillmentNotContent
+		}
+	}
+
+	now := time.Now()
+	var fulfillment *fulfillmentdomain.Fulfillment
+	err = s.orderStore.WithinTransaction(func(tx ordercontract.Transaction) error {
+		if _, found, err := tx.Fulfillments().FindByOrderIDForUpdate(orderID); err != nil {
+			return err
+		} else if found {
+			return ErrFulfillmentExists
+		}
+
+		fulfillment = &fulfillmentdomain.Fulfillment{
+			OrderID:     orderID,
+			Type:        constants.FulfillmentTypeContent,
+			Status:      constants.FulfillmentStatusDelivered,
+			Payload:     "",
+			DeliveredAt: &now,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		// 交付内容本身由订单详情读取商品的多语言使用教程渲染，这里只标记交付形态，
+		// 便于前端分支与后台统计区分三类交付。
+		fulfillment.LogisticsJSON = jsonmap.JSON{"delivery_kind": constants.FulfillmentTypeContent}
+		if err := tx.Fulfillments().Create(fulfillment); err != nil {
+			return ErrFulfillmentCreateFailed
+		}
+		if err := tx.Orders().UpdateFields(orderID, map[string]interface{}{
+			"status":     constants.OrderStatusCompleted,
+			"updated_at": now,
+		}); err != nil {
+			return ErrOrderUpdateFailed
+		}
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrFulfillmentExists):
+			return nil, ErrFulfillmentExists
+		case errors.Is(err, ErrOrderUpdateFailed):
+			return nil, ErrOrderUpdateFailed
+		default:
+			return nil, ErrFulfillmentCreateFailed
+		}
+	}
+
+	s.afterDelivered(order, orderID, now)
 	return fulfillment, nil
 }
 

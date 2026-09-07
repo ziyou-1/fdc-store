@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { userAuthAPI } from '../api'
+import { inviteCodeFields } from '../utils/affiliate'
 
 export const useUserAuthStore = defineStore('user-auth', () => {
     const router = useRouter()
@@ -122,7 +123,7 @@ export const useUserAuthStore = defineStore('user-auth', () => {
     const telegramLogin = async (payload: any) => {
         loading.value = true
         try {
-            const response = await userAuthAPI.telegramLogin(payload)
+            const response = await userAuthAPI.telegramLogin({ ...payload, ...inviteCodeFields() })
             return handleLoginResponse(response.data.data)
         } finally {
             loading.value = false
@@ -132,7 +133,7 @@ export const useUserAuthStore = defineStore('user-auth', () => {
     const telegramOidcLogin = async (payload: { code: string; state: string }) => {
         loading.value = true
         try {
-            const response = await userAuthAPI.telegramOidcCallback(payload)
+            const response = await userAuthAPI.telegramOidcCallback({ ...payload, ...inviteCodeFields() })
             return handleLoginResponse(response.data.data)
         } finally {
             loading.value = false
@@ -142,7 +143,7 @@ export const useUserAuthStore = defineStore('user-auth', () => {
     const telegramMiniAppLogin = async (initData: string) => {
         loading.value = true
         try {
-            const response = await userAuthAPI.telegramMiniAppLogin({ init_data: initData })
+            const response = await userAuthAPI.telegramMiniAppLogin({ init_data: initData, ...inviteCodeFields() })
             return handleLoginResponse(response.data.data)
         } finally {
             loading.value = false
@@ -152,7 +153,7 @@ export const useUserAuthStore = defineStore('user-auth', () => {
     const googleLogin = async (credential: string) => {
         loading.value = true
         try {
-            const response = await userAuthAPI.googleLogin({ credential })
+            const response = await userAuthAPI.googleLogin({ credential, ...inviteCodeFields() })
             return handleLoginResponse(response.data.data)
         } finally {
             loading.value = false
@@ -162,7 +163,7 @@ export const useUserAuthStore = defineStore('user-auth', () => {
     const googleRedirectLogin = async () => {
         loading.value = true
         try {
-            const response = await userAuthAPI.googleRedirectExchange()
+            const response = await userAuthAPI.googleRedirectExchange(inviteCodeFields())
             return handleLoginResponse(response.data.data)
         } finally {
             loading.value = false

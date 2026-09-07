@@ -135,7 +135,9 @@ func (s *Service) UpsertItem(input UpsertItemInput) error {
 	if fulfillmentType == "" {
 		fulfillmentType = constants.FulfillmentTypeManual
 	}
-	if fulfillmentType != constants.FulfillmentTypeManual && fulfillmentType != constants.FulfillmentTypeAuto {
+	if fulfillmentType != constants.FulfillmentTypeManual &&
+		fulfillmentType != constants.FulfillmentTypeAuto &&
+		fulfillmentType != constants.FulfillmentTypeContent {
 		return contract.ErrFulfillmentInvalid
 	}
 	if fulfillmentType == constants.FulfillmentTypeManual &&

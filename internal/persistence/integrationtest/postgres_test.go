@@ -190,9 +190,9 @@ func TestPostgresContentGormStoresPreserveQuerySemantics(t *testing.T) {
 	newer := now.Add(-time.Hour)
 
 	posts := []contentdomain.Post{
-		{Slug: "pg-content-older", Type: constants.PostTypeBlog, TitleJSON: jsonmap.JSON{"zh-CN": "模块化指南"}, IsPublished: true, PublishedAt: &older},
-		{Slug: "pg-content-newer", Type: constants.PostTypeBlog, TitleJSON: jsonmap.JSON{"zh-CN": "模块化指南新版"}, IsPublished: true, PublishedAt: &newer},
-		{Slug: "pg-content-draft", Type: constants.PostTypeBlog, TitleJSON: jsonmap.JSON{"zh-CN": "模块化指南草稿"}, IsPublished: false},
+		{Slug: "pg-content-older", Type: constants.PostTypeNotice, TitleJSON: jsonmap.JSON{"zh-CN": "模块化指南"}, IsPublished: true, PublishedAt: &older},
+		{Slug: "pg-content-newer", Type: constants.PostTypeNotice, TitleJSON: jsonmap.JSON{"zh-CN": "模块化指南新版"}, IsPublished: true, PublishedAt: &newer},
+		{Slug: "pg-content-draft", Type: constants.PostTypeNotice, TitleJSON: jsonmap.JSON{"zh-CN": "模块化指南草稿"}, IsPublished: false},
 	}
 	for index := range posts {
 		if err := db.Create(&posts[index]).Error; err != nil {
@@ -204,7 +204,7 @@ func TestPostgresContentGormStoresPreserveQuerySemantics(t *testing.T) {
 	modularPosts, modularTotal, err := postStore.List(ctx, contentcontract.PostQuery{
 		Page:          1,
 		PageSize:      20,
-		Type:          constants.PostTypeBlog,
+		Type:          constants.PostTypeNotice,
 		Search:        "模块化",
 		OnlyPublished: true,
 		Order:         contentcontract.PostOrderPublishedDesc,
@@ -221,7 +221,7 @@ func TestPostgresContentGormStoresPreserveQuerySemantics(t *testing.T) {
 
 	rollbackPost := &contentdomain.Post{
 		Slug:      "pg-content-rollback",
-		Type:      constants.PostTypeBlog,
+		Type:      constants.PostTypeNotice,
 		TitleJSON: jsonmap.JSON{"zh-CN": "事务回滚"},
 	}
 	forcedRollback := errors.New("forced content transaction rollback")

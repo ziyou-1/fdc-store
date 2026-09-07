@@ -376,6 +376,7 @@ func (a orderPaymentCreatorAdapter) CreatePayment(input ordertransport.CreatePay
 		OrderID:       input.OrderID,
 		ChannelID:     input.ChannelID,
 		UseBalance:    input.UseBalance,
+		UsePoints:     input.UsePoints,
 		ClientIP:      input.ClientIP,
 		Context:       input.Context,
 		RequestScheme: input.RequestScheme,
@@ -476,6 +477,7 @@ func mapOrderPreview(preview *orderapp.OrderPreview) *ordertransport.OrderPrevie
 		PromotionDiscountAmount: preview.PromotionDiscountAmount,
 		WholesaleDiscountAmount: preview.WholesaleDiscountAmount,
 		TotalAmount:             preview.TotalAmount,
+		PointsAmount:            preview.PointsAmount,
 		Items:                   items,
 	}
 }
@@ -492,6 +494,8 @@ func mapOrderTransportError(err error) error {
 		target error
 	}{
 		{orderapp.ErrOrderNotFound, ordertransport.ErrOrderNotFound},
+		{orderapp.ErrFreeClaimOrderRefundForbidden, ordertransport.ErrFreeClaimOrderRefundForbidden},
+		{orderapp.ErrPointsOrderCashRefundForbidden, ordertransport.ErrPointsOrderCashRefundForbidden},
 		{orderapp.ErrOrderStatusInvalid, ordertransport.ErrOrderStatusInvalid},
 		{orderapp.ErrOrderFetchFailed, ordertransport.ErrOrderFetchFailed},
 		{orderapp.ErrGuestOrderNotFound, ordertransport.ErrGuestOrderNotFound},

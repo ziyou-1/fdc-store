@@ -15,14 +15,7 @@
           <p class="mt-2 text-sm text-muted-foreground">{{ t('auth.forgot.subtitle') }}</p>
         </div>
 
-        <Alert v-if="!emailVerificationEnabled" variant="destructive" class="text-center">
-          <AlertDescription class="block">
-            <p class="text-sm font-medium">{{ t('auth.forgot.disabled') }}</p>
-            <RouterLink to="/auth/login" class="mt-3 inline-block text-sm text-muted-foreground transition-colors hover:text-foreground">{{ t('auth.forgot.backLogin') }}</RouterLink>
-          </AlertDescription>
-        </Alert>
-
-        <form v-else class="grid gap-[18px]" @submit.prevent="handleReset">
+        <form class="grid gap-[18px]" @submit.prevent="handleReset">
           <!-- 邮箱 -->
           <div>
             <label class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
@@ -105,7 +98,7 @@ import { useForgot } from '../../../composables/useForgot'
 const { t } = useI18n()
 
 const {
-  userAuthStore, brandSiteName, emailVerificationEnabled,
+  userAuthStore, brandSiteName,
   email, code, newPassword, error, sending, countdown,
   captchaPayload, turnstileToken, imageCaptchaRef, turnstileRef,
   captchaProvider, sendCodeCaptchaEnabled, turnstileSiteKey,

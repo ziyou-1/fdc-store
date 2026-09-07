@@ -107,6 +107,7 @@ func (s *WriteService) Create(input CreateProductInput) (*productdomain.Product,
 		ManualFormSchemaJSON: jsonmap.JSON{},
 		PriceAmount:          money.FromDecimal(priceAmount),
 		CostPriceAmount:      money.FromDecimal(costPriceAmount),
+		PointsPrice:          input.PointsPrice,
 		WholesalePrices:      productdomain.WholesalePriceTiers{},
 		Images:               jsonslice.Strings(input.Images),
 		Tags:                 jsonslice.Strings(input.Tags),
@@ -129,6 +130,9 @@ func (s *WriteService) Create(input CreateProductInput) (*productdomain.Product,
 			return nil, err
 		}
 		product.ManualFormSchemaJSON = normalizedSchemaJSON
+		product.ManualFormTiming = productdomain.NormalizeManualFormTiming(input.ManualFormTiming)
+	} else {
+		product.ManualFormTiming = constants.ManualFormTimingCheckout
 	}
 
 	if err := s.transactions.WithinTransaction(func(repositories TransactionRepositories) error {
@@ -142,7 +146,7 @@ func (s *WriteService) Create(input CreateProductInput) (*productdomain.Product,
 			if err := s.applyProductSKUsWithStockGuard(skuRepo, cardSecretRepo, product.ID, fulfillmentType, normalizedSKUs); err != nil {
 				return err
 			}
-		} else if err := s.syncSingleProductSKU(skuRepo, product.ID, priceAmount, costPriceAmount, manualStockTotal, true); err != nil {
+		} else if err := s.syncSingleProductSKU(skuRepo, product.ID, priceAmount, costPriceAmount, product.PointsPrice, manualStockTotal, true); err != nil {
 			return err
 		}
 		if input.WholesalePrices != nil {

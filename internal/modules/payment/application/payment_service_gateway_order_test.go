@@ -904,6 +904,7 @@ func TestValidateChannelRejectsInvalidEpayInteractionMode(t *testing.T) {
 		ProviderType:    constants.PaymentProviderEpay,
 		ChannelType:     constants.PaymentChannelTypeWechat,
 		InteractionMode: constants.PaymentInteractionPage,
+		IsActive:        true, // 网关面校验只对启用中的渠道生效
 		ConfigJSON: jsonmap.JSON{
 			"gateway_url":  "https://gateway.example.com",
 			"epay_version": "v1",
@@ -924,6 +925,7 @@ func TestValidateChannelRejectsBepusdtCashierQR(t *testing.T) {
 		ProviderType:    constants.PaymentProviderBepusdt,
 		ChannelType:     constants.PaymentProviderBepusdt,
 		InteractionMode: constants.PaymentInteractionQR,
+		IsActive:        true, // 网关面校验只对启用中的渠道生效
 		ConfigJSON: jsonmap.JSON{
 			"gateway_url": "https://bepusdt.example.com",
 			"auth_token":  "token-001",
@@ -943,6 +945,7 @@ func TestValidateChannelAllowsUnlimitedMaxAmount(t *testing.T) {
 		ProviderType:    constants.PaymentProviderEpay,
 		ChannelType:     constants.PaymentChannelTypeWechat,
 		InteractionMode: constants.PaymentInteractionRedirect,
+		IsActive:        true, // 网关面校验只对启用中的渠道生效
 		MinAmount:       money.FromDecimal(decimal.RequireFromString("10.00")),
 		MaxAmount:       money.FromDecimal(decimal.Zero),
 		ConfigJSON: jsonmap.JSON{
@@ -1447,5 +1450,43 @@ func TestSupersededPaymentLateSuccessIsRecordedWithoutDuplicateFulfillment(t *te
 	}
 	if duplicate.Status != constants.PaymentStatusSuccess || duplicate.ExceptionCode != constants.PaymentExceptionDuplicateSucceeded {
 		t.Fatalf("duplicate payment was not flagged: %+v", duplicate)
+	}
+}
+
+// 种子建出来的渠道默认「启用且无凭证」（Payssion 那 15 条即是）。停用它们时若仍校验
+// 网关配置，后台停用按钮会永远报「配置不完整」，渠道彻底关不掉。
+func TestValidateChannelAllowsDisablingChannelWithIncompleteConfig(t *testing.T) {
+	svc, _ := setupPaymentServiceWalletTest(t)
+	newChannel := func(active bool) *paymentdomain.PaymentChannel {
+		return &paymentdomain.PaymentChannel{
+			ProviderType:    constants.PaymentProviderEpay,
+			ChannelType:     constants.PaymentChannelTypeWechat,
+			InteractionMode: constants.PaymentInteractionRedirect,
+			ConfigJSON:      jsonmap.JSON{"gateway_url": "https://gateway.example.com"}, // 缺 merchant_id/merchant_key
+			IsActive:        active,
+		}
+	}
+
+	if err := svc.ValidateChannel(newChannel(false)); err != nil {
+		t.Fatalf("停用中的渠道不该因为凭证缺失被拒: %v", err)
+	}
+	if err := svc.ValidateChannel(newChannel(true)); err == nil {
+		t.Fatal("启用中的渠道仍必须校验网关凭证")
+	}
+}
+
+// 停用不能变成绕过结构性校验的后门：provider/channel_type 本身不被支持时，
+// 无论启用与否都该拒。
+func TestValidateChannelStillRejectsUnknownProviderWhenDisabled(t *testing.T) {
+	svc, _ := setupPaymentServiceWalletTest(t)
+	channel := &paymentdomain.PaymentChannel{
+		ProviderType:    "no_such_provider",
+		ChannelType:     "whatever",
+		InteractionMode: constants.PaymentInteractionRedirect,
+		ConfigJSON:      jsonmap.JSON{},
+		IsActive:        false,
+	}
+	if err := svc.ValidateChannel(channel); err == nil {
+		t.Fatal("未知 provider 即便处于停用状态也必须被拒")
 	}
 }

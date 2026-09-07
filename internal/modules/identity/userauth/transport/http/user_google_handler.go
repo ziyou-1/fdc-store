@@ -74,13 +74,13 @@ type GoogleRedirectCompletionResult struct {
 
 // UserGoogleService is the minimal Google authentication transport port.
 type UserGoogleService interface {
-	LoginWithGoogle(ctx context.Context, credential string) (*AuthLoginResult, error)
+	LoginWithGoogle(ctx context.Context, credential, inviteCode string) (*AuthLoginResult, error)
 	GetGoogleBinding(userID uint) (*GoogleBindingResult, error)
 	BindGoogle(ctx context.Context, userID uint, credential string) (*GoogleBindingResult, error)
 	UnbindGoogle(userID uint) error
 	CreateGoogleRedirectIntent(ctx context.Context, flow string, userID uint, tenant GoogleRedirectTenant) (string, error)
 	CompleteGoogleRedirect(ctx context.Context, state, credential string, tenant GoogleRedirectTenant) (*GoogleRedirectCompletionResult, error)
-	ExchangeGoogleRedirectLogin(ctx context.Context, handle string, tenant GoogleRedirectTenant) (*AuthLoginResult, error)
+	ExchangeGoogleRedirectLogin(ctx context.Context, handle string, tenant GoogleRedirectTenant, inviteCode string) (*AuthLoginResult, error)
 	ExchangeGoogleRedirectBind(ctx context.Context, handle string, userID uint, tenant GoogleRedirectTenant) (*GoogleBindingResult, error)
 }
 
@@ -99,6 +99,11 @@ func NewUserGoogleHandler(service UserGoogleService, recorder LoginRecorder) *Us
 
 type UserGoogleCredentialRequest struct {
 	Credential string `json:"credential" binding:"required"`
+	InviteCode string `json:"invite_code"`
+}
+
+type googleRedirectLoginExchangeRequest struct {
+	InviteCode string `json:"invite_code"`
 }
 
 func bindGoogleCredentialRequest(c *gin.Context, request *UserGoogleCredentialRequest) (bool, error) {
@@ -215,7 +220,7 @@ func (h *UserGoogleHandler) UserGoogleLogin(c *gin.Context) {
 		respondGoogleCredentialRequestError(c, tooLarge, err)
 		return
 	}
-	result, err := h.service.LoginWithGoogle(c.Request.Context(), request.Credential)
+	result, err := h.service.LoginWithGoogle(c.Request.Context(), request.Credential, request.InviteCode)
 	if err != nil {
 		h.respondGoogleLoginError(c, err)
 		return
@@ -380,8 +385,12 @@ func (h *UserGoogleHandler) ExchangeGoogleRedirectLogin(c *gin.Context) {
 		respondGoogleRedirectAPIError(c, ErrGoogleRedirectSessionExpired)
 		return
 	}
+	var exchangeReq googleRedirectLoginExchangeRequest
+	if c.Request != nil && c.Request.ContentLength != 0 {
+		_ = c.ShouldBindJSON(&exchangeReq)
+	}
 	tenant, _ := googleRedirectTenantFromContext(c)
-	result, err := h.service.ExchangeGoogleRedirectLogin(c.Request.Context(), handle, tenant)
+	result, err := h.service.ExchangeGoogleRedirectLogin(c.Request.Context(), handle, tenant, exchangeReq.InviteCode)
 	if err != nil {
 		if isGoogleRedirectStateError(err) {
 			respondGoogleRedirectAPIError(c, err)

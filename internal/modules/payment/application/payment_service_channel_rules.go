@@ -207,6 +207,9 @@ type AvailablePaymentChannelFilter struct {
 }
 
 func (s *PaymentService) GetAvailableChannels(filter AvailablePaymentChannelFilter) ([]map[string]interface{}, error) {
+	if s.skipPayment && (filter.PaymentType == "" || filter.PaymentType == constants.PaymentTypeOrder) {
+		return []map[string]interface{}{}, nil
+	}
 	channels, _, err := s.ListChannels(paymentcontract.ChannelListFilter{
 		Page: 1, PageSize: 200, ActiveOnly: true,
 	})

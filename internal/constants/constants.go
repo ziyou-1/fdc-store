@@ -22,11 +22,22 @@ const (
 
 // 交付类型与状态常量
 const (
-	FulfillmentTypeAuto        = "auto"
-	FulfillmentTypeManual      = "manual"
-	FulfillmentTypeUpstream    = "upstream"
+	FulfillmentTypeAuto     = "auto"
+	FulfillmentTypeManual   = "manual"
+	FulfillmentTypeUpstream = "upstream"
+	// FulfillmentTypeContent 纯内容交付：支付成功后立即完成，交付物是商品的使用教程，
+	// 不占用卡密库存也不占用人工库存。
+	FulfillmentTypeContent     = "content"
 	FulfillmentStatusPending   = "pending"
 	FulfillmentStatusDelivered = "delivered"
+
+	// ManualFormTimingCheckout 人工交付表单在下单时采集（默认，保持既有行为）。
+	ManualFormTimingCheckout = "checkout"
+	// ManualFormTimingAfterPayment 人工交付表单在支付成功后采集：
+	// 下单不校验表单，支付成功后由买家在订单详情补填，运营按 SLA 处理。
+	ManualFormTimingAfterPayment = "after_payment"
+	// ManualFormSLAHours 支付成功后人工交付的承诺处理时限（小时）。
+	ManualFormSLAHours = 24
 )
 
 // 支付状态常量
@@ -64,21 +75,32 @@ const (
 	PaymentProviderOkpay     = "okpay"
 	PaymentProviderTokenpay  = "tokenpay"
 	PaymentProviderWallet    = "wallet"
+	// PaymentProviderPoints 积分兑换生成的合成支付记录。绝不复用 wallet 的
+	// provider/channel type，否则后台与对账会把积分订单算成余额支付。
+	PaymentProviderPayssion = "payssion"
+	PaymentProviderPoints   = "points"
+	// PaymentProviderFreeClaim 每日免费领取生成的合成支付记录。
+	PaymentProviderFreeClaim = "free_claim"
+	// PaymentProviderSkipPayment 关闭在线支付时生成的合成支付记录。
+	PaymentProviderSkipPayment = "skip_payment"
 )
 
 // 支付渠道类型常量
 const (
-	PaymentChannelTypeWechat    = "wechat"
-	PaymentChannelTypeWxpay     = "wxpay"
-	PaymentChannelTypeAlipay    = "alipay"
-	PaymentChannelTypePaypal    = "paypal"
-	PaymentChannelTypeStripe    = "stripe"
-	PaymentChannelTypeQqpay     = "qqpay"
-	PaymentChannelTypeUsdt      = "usdt"
-	PaymentChannelTypeUsdtTrc20 = "usdt-trc20"
-	PaymentChannelTypeUsdcTrc20 = "usdc-trc20"
-	PaymentChannelTypeTrx       = "trx"
-	PaymentChannelTypeBalance   = "balance"
+	PaymentChannelTypeWechat      = "wechat"
+	PaymentChannelTypeWxpay       = "wxpay"
+	PaymentChannelTypeAlipay      = "alipay"
+	PaymentChannelTypePaypal      = "paypal"
+	PaymentChannelTypeStripe      = "stripe"
+	PaymentChannelTypeQqpay       = "qqpay"
+	PaymentChannelTypeUsdt        = "usdt"
+	PaymentChannelTypeUsdtTrc20   = "usdt-trc20"
+	PaymentChannelTypeUsdcTrc20   = "usdc-trc20"
+	PaymentChannelTypeTrx         = "trx"
+	PaymentChannelTypeBalance     = "balance"
+	PaymentChannelTypePoints      = "points"
+	PaymentChannelTypeFreeClaim   = "free_claim"
+	PaymentChannelTypeSkipPayment = "skip_payment"
 )
 
 // 支付渠道付款角色常量
@@ -95,11 +117,21 @@ const (
 
 // 支付交互方式常量
 const (
-	PaymentInteractionQR       = "qr"
-	PaymentInteractionRedirect = "redirect"
-	PaymentInteractionWAP      = "wap"
-	PaymentInteractionPage     = "page"
-	PaymentInteractionBalance  = "balance"
+	PaymentInteractionQR          = "qr"
+	PaymentInteractionRedirect    = "redirect"
+	PaymentInteractionWAP         = "wap"
+	PaymentInteractionPage        = "page"
+	PaymentInteractionBalance     = "balance"
+	PaymentInteractionPoints      = "points"
+	PaymentInteractionFreeClaim   = "free_claim"
+	PaymentInteractionSkipPayment = "skip"
+)
+
+// 充值到账目标常量
+const (
+	RechargeCreditTargetWallet     = "wallet"
+	RechargeCreditTargetPoints     = "points"
+	RechargeCreditTargetMembership = "membership"
 )
 
 // BEpusdt 订单接口模式常量
@@ -222,8 +254,9 @@ const (
 
 // 文章类型常量
 const (
-	PostTypeBlog   = "blog"
 	PostTypeNotice = "notice"
+	// PostTypeFAQ 常见问题。与公告一样是扁平列表，不挂分类。
+	PostTypeFAQ = "faq"
 )
 
 // 商品购买身份常量
@@ -387,6 +420,8 @@ const (
 	TaskNotificationDispatch        = "notification:dispatch"
 	TaskAffiliateConfirmCommissions = "affiliate:confirm_commissions"
 	TaskResellerConfirmLedger       = "reseller:confirm_ledger"
+	TaskMembershipExpire            = "membership:expire"
+	TaskMembershipExpiryReminder    = "membership:expiry_reminder"
 	TaskProcurementSubmit           = "procurement:submit"
 	TaskProcurementPollStatus       = "procurement:poll_status"
 	TaskProcurementSyncAccepted     = "procurement:sync_accepted"
@@ -538,10 +573,11 @@ const (
 	LocaleZhCN = "zh-CN"
 	LocaleZhTW = "zh-TW"
 	LocaleEnUS = "en-US"
+	LocaleIdID = "id-ID"
 )
 
 // 支持的站点语言顺序（含回退顺序）
-var SupportedLocales = []string{LocaleZhCN, LocaleZhTW, LocaleEnUS}
+var SupportedLocales = []string{LocaleZhCN, LocaleZhTW, LocaleEnUS, LocaleIdID}
 
 // 通知业务类型常量
 const (

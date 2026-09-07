@@ -147,6 +147,7 @@ type OrderPreview struct {
 	PromotionDiscountAmount money.Amount       `json:"promotion_discount_amount"`
 	WholesaleDiscountAmount money.Amount       `json:"wholesale_discount_amount"`
 	TotalAmount             money.Amount       `json:"total_amount"`
+	PointsAmount            int64              `json:"points_amount"`
 	Items                   []OrderPreviewItem `json:"items"`
 }
 

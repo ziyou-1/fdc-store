@@ -11,7 +11,7 @@ import { orderEmailSceneKeys } from '@/utils/orderEmailTemplates'
 
 const { t } = useI18n()
 
-const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US'] as const
+const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const
 type SupportedLanguage = (typeof supportedLanguages)[number]
 
 type OrderEmailLocalizedTemplate = { subject: string; body: string }
@@ -50,11 +50,12 @@ const createSceneTemplate = (): OrderEmailSceneTemplate => ({
   'zh-CN': createLocalizedTemplate(),
   'zh-TW': createLocalizedTemplate(),
   'en-US': createLocalizedTemplate(),
+  'id-ID': createLocalizedTemplate(),
 })
 
 const deepCloneTemplate = (src: OrderEmailSceneTemplate): OrderEmailSceneTemplate => {
   const result = createSceneTemplate()
-  ;(['zh-CN', 'zh-TW', 'en-US'] as const).forEach((lang) => {
+  ;(['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const).forEach((lang) => {
     result[lang].subject = src[lang]?.subject || ''
     result[lang].body = src[lang]?.body || ''
   })
@@ -70,7 +71,7 @@ const form = reactive({
     refunded: createSceneTemplate(),
     partially_refunded: createSceneTemplate(),
   },
-  guest_tip: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as Record<SupportedLanguage, string>,
+  guest_tip: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as Record<SupportedLanguage, string>,
 })
 
 const syncFromProps = () => {

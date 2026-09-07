@@ -158,6 +158,26 @@ func (r *concurrentUserRepository) IncrementTotalRecharged(userID uint, amount d
 	return r.base.IncrementTotalRecharged(userID, amount)
 }
 
+func (r *concurrentUserRepository) ExpireMemberships(now time.Time) (int64, error) {
+	return r.base.ExpireMemberships(now)
+}
+
+func (r *concurrentUserRepository) ClaimMembershipExpiryReminder(
+	userID uint, from, to time.Time,
+) (bool, error) {
+	return r.base.ClaimMembershipExpiryReminder(userID, from, to)
+}
+
+func (r *concurrentUserRepository) ReleaseMembershipExpiryReminder(userID uint) error {
+	return r.base.ReleaseMembershipExpiryReminder(userID)
+}
+
+func (r *concurrentUserRepository) ListMembershipsExpiringBetween(
+	from, to time.Time, limit int,
+) ([]userdomain.User, error) {
+	return r.base.ListMembershipsExpiringBetween(from, to, limit)
+}
+
 func (r *concurrentUserRepository) IncrementTotalSpent(userID uint, amount decimal.Decimal) error {
 	if err := r.base.IncrementTotalSpent(userID, amount); err != nil {
 		return err

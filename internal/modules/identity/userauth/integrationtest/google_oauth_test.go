@@ -93,6 +93,31 @@ func TestLoginVerifiedGoogleCreatesVerifiedUserAndIdentity(t *testing.T) {
 	}
 }
 
+func TestLoginVerifiedGoogleAppliesInviteCode(t *testing.T) {
+	svc, _, db := setupTelegramOAuthTestService(t)
+	now := time.Now()
+	inviter := &userdomain.User{
+		Email: "google-inviter@example.com", PasswordHash: "not-used", DisplayName: "Inviter",
+		Status: constants.UserStatusActive, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := db.Create(inviter).Error; err != nil {
+		t.Fatalf("create inviter: %v", err)
+	}
+	rewarder := &recordingReferralRewarder{}
+	svc.SetReferralServices(staticInviterResolver{userID: inviter.ID}, rewarder)
+
+	res, err := svc.LoginVerifiedGoogle(verifiedGoogleIdentity("invitee@gmail.com", "google-invite-1", true), "INVITE1")
+	if err != nil || res == nil || res.User == nil {
+		t.Fatalf("login = %+v err=%v", res, err)
+	}
+	if res.User.InviterUserID == nil || *res.User.InviterUserID != inviter.ID {
+		t.Fatalf("inviter = %v, want %d", res.User.InviterUserID, inviter.ID)
+	}
+	if rewarder.calls != 1 || rewarder.inviter != inviter.ID || rewarder.invitee != res.User.ID {
+		t.Fatalf("award = %+v", rewarder)
+	}
+}
+
 func TestLoginVerifiedGoogleRespectsRegistrationAndEmailDomainSettings(t *testing.T) {
 	t.Run("registration disabled", func(t *testing.T) {
 		svc, settings, _ := setupTelegramOAuthTestService(t)

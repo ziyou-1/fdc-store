@@ -44,6 +44,7 @@ const languages = computed(() => [
   { code: 'zh-CN', name: t('admin.common.lang.zhCN') },
   { code: 'zh-TW', name: t('admin.common.lang.zhTW') },
   { code: 'en-US', name: t('admin.common.lang.enUS') },
+  { code: 'id-ID', name: t('admin.common.lang.idID') },
 ])
 
 const categoryMap = computed(() => createAdminCategoryMap(props.categories))
@@ -94,6 +95,7 @@ type SKUFormItem = {
   spec_values: Record<string, string>
   price_amount: number
   cost_price_amount: number
+  points_price: number
   manual_stock_total: number
   is_active: boolean
   sort_order: number
@@ -116,6 +118,7 @@ const createEmptyLocaleText = () => ({
   'zh-CN': '',
   'zh-TW': '',
   'en-US': '',
+  'id-ID': '',
 })
 
 const createSKUFormItem = (raw?: Partial<AdminProductSKU>): SKUFormItem => ({
@@ -133,6 +136,7 @@ const createSKUFormItem = (raw?: Partial<AdminProductSKU>): SKUFormItem => ({
   },
   price_amount: Number(raw?.price_amount || 0),
   cost_price_amount: Number(raw?.cost_price_amount || 0),
+  points_price: asPointsPrice(raw?.points_price),
   manual_stock_total: toSafeStockTotal(raw?.manual_stock_total),
   is_active: raw?.is_active ?? true,
   sort_order: Number(raw?.sort_order || 0),
@@ -140,14 +144,15 @@ const createSKUFormItem = (raw?: Partial<AdminProductSKU>): SKUFormItem => ({
 
 const form = reactive({
   id: 0,
-  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
+  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as LocalizedText,
   slug: '',
-  seo_meta: { keywords: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' }, description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } } as { keywords: LocalizedText; description: LocalizedText; [key: string]: LocalizedText },
-  description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
-  content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
-  instructions: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
+  seo_meta: { keywords: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' }, description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } } as { keywords: LocalizedText; description: LocalizedText; [key: string]: LocalizedText },
+  description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as LocalizedText,
+  content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as LocalizedText,
+  instructions: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as LocalizedText,
   price_amount: 0,
   cost_price_amount: 0,
+  points_price: 0,
   images: [] as string[],
   tags: [] as string[],
   purchase_type: 'member',
@@ -155,6 +160,7 @@ const form = reactive({
   max_purchase_quantity: '' as number | '',
   stock_display_mode: 'exact',
   fulfillment_type: 'manual',
+  manual_form_timing: 'checkout',
   manual_stock_total: 0,
   skus: [] as SKUFormItem[],
   category_id: null as number | null,
@@ -201,17 +207,17 @@ const getCurrentLangName = () => {
   return languages.value.find((item) => item.code === currentLang.value)?.name || t('admin.common.lang.zhCN')
 }
 
-const emptyI18nString = () => ({ 'zh-CN': '', 'zh-TW': '', 'en-US': '' })
+const emptyI18nString = () => ({ 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' })
 
 const normalizeSeoMeta = (raw: Record<string, LocalizedText> | null | undefined) => {
   if (!raw) return { keywords: emptyI18nString(), description: emptyI18nString() }
   const normalize = (val: string | LocalizedText | null | undefined) => {
     if (!val) return emptyI18nString()
     if (typeof val === 'string') {
-      return { 'zh-CN': val, 'zh-TW': '', 'en-US': '' }
+      return { 'zh-CN': val, 'zh-TW': '', 'en-US': '', 'id-ID': '' }
     }
     if (typeof val === 'object') {
-      return { 'zh-CN': val['zh-CN'] || '', 'zh-TW': val['zh-TW'] || '', 'en-US': val['en-US'] || '' }
+      return { 'zh-CN': val['zh-CN'] || '', 'zh-TW': val['zh-TW'] || '', 'en-US': val['en-US'] || '', 'id-ID': val['id-ID'] || '' }
     }
     return emptyI18nString()
   }
@@ -233,6 +239,11 @@ const toSafeStockTotal = (value: unknown) => {
   const integer = Math.floor(num)
   if (integer === -1) return -1
   return Math.max(integer, 0)
+}
+
+const asPointsPrice = (value: unknown) => {
+  const n = Math.trunc(Number(value))
+  return Number.isFinite(n) && n > 0 ? n : 0
 }
 
 const isNotifiedError = (error: unknown) => {
@@ -293,7 +304,7 @@ const stockDisplayModeOptions = computed(() => [
 const normalizeLocaleText = (value: unknown) => {
   const result: Record<string, string> = {}
   const obj = (value && typeof value === 'object' ? value : {}) as Record<string, string>
-  for (const code of ['zh-CN', 'zh-TW', 'en-US']) {
+  for (const code of ['zh-CN', 'zh-TW', 'en-US', 'id-ID']) {
     const text = String(obj[code] || '').trim()
     if (text) {
       result[code] = text
@@ -419,6 +430,7 @@ const addSKU = () => {
     createSKUFormItem({
       sku_code: `SKU-${form.skus.length + 1}`,
       price_amount: Number(form.price_amount || 0),
+      points_price: asPointsPrice(form.points_price),
       manual_stock_total: toSafeStockTotal(form.manual_stock_total),
       is_active: true,
       sort_order: form.skus.length,
@@ -462,6 +474,7 @@ const normalizeSKUsForSubmit = () => {
       spec_values: specValues,
       price_amount: priceAmount,
       cost_price_amount: Number(item.cost_price_amount) || 0,
+      points_price: asPointsPrice(item.points_price),
       manual_stock_total: manualStockTotal,
       is_active: isActive,
       sort_order: Number(item.sort_order) || 0,
@@ -482,14 +495,15 @@ const resetForm = () => {
   initialCategoryID.value = null
   Object.assign(form, {
     id: 0,
-    title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+    title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
     slug: '',
-    seo_meta: { keywords: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' }, description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } },
-    description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
-    content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
-    instructions: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+    seo_meta: { keywords: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' }, description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } },
+    description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
+    content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
+    instructions: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
     price_amount: 0,
     cost_price_amount: 0,
+    points_price: 0,
     images: [],
     tags: [],
     purchase_type: 'member',
@@ -497,6 +511,7 @@ const resetForm = () => {
     max_purchase_quantity: '',
     stock_display_mode: 'exact',
     fulfillment_type: 'manual',
+    manual_form_timing: 'checkout',
     manual_stock_total: 0,
     skus: [],
     category_id: null,
@@ -530,14 +545,15 @@ const populateForm = (product: AdminProduct) => {
 
   Object.assign(form, {
     id: product.id,
-    title: product.title || { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+    title: product.title || { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
     slug: product.slug,
     seo_meta: normalizeSeoMeta(product.seo_meta),
-    description: product.description || { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
-    content: product.content || { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
-    instructions: (product as AdminProduct & { instructions?: LocalizedText }).instructions || { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+    description: product.description || { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
+    content: product.content || { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
+    instructions: (product as AdminProduct & { instructions?: LocalizedText }).instructions || { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
     price_amount: Number(product.price_amount || 0),
     cost_price_amount: Number(product.cost_price_amount || 0),
+    points_price: asPointsPrice(product.points_price),
     images: imagesList,
     tags: tagsList,
     purchase_type: product.purchase_type || 'member',
@@ -545,6 +561,7 @@ const populateForm = (product: AdminProduct) => {
     max_purchase_quantity: Number(product.max_purchase_quantity || 0) > 0 ? Math.floor(Number(product.max_purchase_quantity || 0)) : '',
     stock_display_mode: product.stock_display_mode || 'exact',
     fulfillment_type: product.fulfillment_type || 'manual',
+    manual_form_timing: product.manual_form_timing === 'after_payment' ? 'after_payment' : 'checkout',
     manual_stock_total: resolveManualStockMetrics(product).total,
     skus: Array.isArray(product.skus) ? product.skus.map((item: AdminProductSKU) => createSKUFormItem(item)) : [],
     category_id: Number(product.category_id || 0) || null,
@@ -575,10 +592,12 @@ const handleSubmit = async () => {
     const activeSKU = normalizedSKUs.find((item) => item.is_active)
     let effectivePrice = Number(form.price_amount)
     let effectiveCostPrice = Number(form.cost_price_amount)
+    let effectivePointsPrice = asPointsPrice(form.points_price)
     if (normalizedSKUs.length > 0) {
       const priceSource = activeSKU || normalizedSKUs[0]!
       effectivePrice = Number(priceSource.price_amount)
       effectiveCostPrice = Number(priceSource.cost_price_amount || 0)
+      effectivePointsPrice = asPointsPrice(priceSource.points_price)
     }
     const normalizedMinPurchaseQuantity = Number(form.min_purchase_quantity)
     const normalizedMaxPurchaseQuantity = Number(form.max_purchase_quantity)
@@ -611,6 +630,7 @@ const handleSubmit = async () => {
       instructions: form.instructions,
       price_amount: effectivePrice,
       cost_price_amount: effectiveCostPrice,
+      points_price: effectivePointsPrice,
       images: form.images,
       tags: form.tags,
       purchase_type: form.purchase_type,
@@ -618,6 +638,7 @@ const handleSubmit = async () => {
       max_purchase_quantity: maxPurchaseQuantityValue,
       stock_display_mode: form.stock_display_mode,
       fulfillment_type: form.fulfillment_type,
+      manual_form_timing: form.fulfillment_type === 'manual' ? form.manual_form_timing : 'checkout',
       manual_stock_total: effectiveManualStockTotal,
       skus: normalizedSKUs,
       payment_channel_ids: form.payment_channel_ids.length > 0 ? form.payment_channel_ids : [],
@@ -789,7 +810,6 @@ watch(
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="member">{{ t('admin.products.purchaseType.member') }}</SelectItem>
-                <SelectItem value="guest">{{ t('admin.products.purchaseType.guest') }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -840,12 +860,13 @@ watch(
               <SelectContent>
                 <SelectItem value="manual">{{ t('admin.products.fulfillmentType.manual') }}</SelectItem>
                 <SelectItem value="auto">{{ t('admin.products.fulfillmentType.auto') }}</SelectItem>
+                <SelectItem value="content">{{ t('admin.products.fulfillmentType.content') }}</SelectItem>
               </SelectContent>
             </Select>
             <p v-if="editingIsMapped" class="mt-1 text-xs text-indigo-600">{{ t('admin.products.mappedFulfillmentLocked') }}</p>
           </div>
 
-          <div class="col-span-1">
+          <div v-if="form.fulfillment_type !== 'content'" class="col-span-1">
             <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.manualStockTotal') }}</label>
             <Input
               v-model.number="form.manual_stock_total"
@@ -861,6 +882,21 @@ watch(
           </div>
 
           <div v-if="form.fulfillment_type === 'manual' || editingIsMapped" class="col-span-1 md:col-span-2 rounded-xl border border-border bg-muted/20 p-4 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.manualFormTiming') }}</label>
+                <Select v-model="form.manual_form_timing" :disabled="editingIsMapped">
+                  <SelectTrigger class="h-9 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="checkout">{{ t('admin.products.form.manualFormTimingCheckout') }}</SelectItem>
+                    <SelectItem value="after_payment">{{ t('admin.products.form.manualFormTimingAfterPayment') }}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.products.form.manualFormTimingTip') }}</p>
+              </div>
+            </div>
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="text-sm font-semibold text-foreground">{{ t('admin.products.form.manualFormSchemaTitle') }}</h3>
@@ -991,6 +1027,10 @@ watch(
                   <Input v-model.number="sku.cost_price_amount" type="number" step="0.01" min="0" :placeholder="t('admin.products.form.skuCostPricePlaceholder')" :disabled="editingIsMapped" />
                   <p v-if="editingIsMapped" class="mt-1 text-xs text-muted-foreground">{{ t('admin.products.form.costPriceAutoFromUpstream') }}</p>
                 </div>
+                <div class="md:col-span-1">
+                  <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.skuPointsPrice') }}</label>
+                  <Input v-model.number="sku.points_price" type="number" step="1" min="0" :placeholder="t('admin.products.form.skuPointsPricePlaceholder')" />
+                </div>
                 <div v-if="form.fulfillment_type === 'manual'" class="md:col-span-1">
                   <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.skuManualStock') }}</label>
                   <Input v-model.number="sku.manual_stock_total" type="number" min="-1" :placeholder="t('admin.products.form.skuManualStockPlaceholder')" />
@@ -1027,6 +1067,22 @@ watch(
               {{ t('admin.products.form.priceAmountSkuTip') }}
             </p>
             <p v-else class="mt-1 text-xs text-muted-foreground">{{ t('admin.products.form.priceAmountTip') }}</p>
+          </div>
+
+          <div class="col-span-1">
+            <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.pointsPrice') }}</label>
+            <Input
+              v-model.number="form.points_price"
+              type="number"
+              step="1"
+              min="0"
+              :placeholder="t('admin.products.form.pointsPricePlaceholder')"
+              :disabled="form.skus.length > 0"
+            />
+            <p v-if="form.skus.length > 0" class="mt-1 text-xs text-muted-foreground">
+              {{ t('admin.products.form.pointsPriceSkuTip') }}
+            </p>
+            <p v-else class="mt-1 text-xs text-muted-foreground">{{ t('admin.products.form.pointsPriceTip') }}</p>
           </div>
 
           <div class="col-span-1">

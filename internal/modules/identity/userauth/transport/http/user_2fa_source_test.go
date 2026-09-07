@@ -115,3 +115,12 @@ func TestVerifyUser2FAPreservesExternalLoginSource(t *testing.T) {
 		})
 	}
 }
+
+func TestAllowSendVerifyCodeResetIgnoresRegistrationFlag(t *testing.T) {
+	if !allowSendVerifyCode(constants.VerifyPurposeReset, false) {
+		t.Fatal("reset codes must send when registration email verification is off")
+	}
+	if allowSendVerifyCode(constants.VerifyPurposeRegister, false) {
+		t.Fatal("register codes must stay gated by email verification")
+	}
+}

@@ -38,6 +38,14 @@ func (h *PublicHandler) decorateProductStock(product *productdomain.Product, ite
 		return
 	}
 
+	// content 类型：纯内容交付，交付物是教程本身，不占卡密库存也不占人工库存，恒为不限量。
+	if fulfillmentType == constants.FulfillmentTypeContent {
+		item.ManualStockAvailable = constants.ManualStockUnlimited
+		item.StockStatus = constants.ProductStockStatusUnlimited
+		item.IsSoldOut = false
+		return
+	}
+
 	if fulfillmentType == constants.FulfillmentTypeManual {
 		hasActiveSKU := false
 		hasUnlimitedSKU := false

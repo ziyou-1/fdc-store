@@ -308,7 +308,8 @@ func (s *PaymentService) ValidateChannel(channel *paymentdomain.PaymentChannel) 
 
 	// 非 official provider（epay/bepusdt/epusdt/okpay/tokenpay）只支持 qr/redirect。
 	// official provider 的 interaction_mode 验证由各 adapter 的 ValidateConfig 负责。
-	if providerType != constants.PaymentProviderOfficial {
+	// 与下面的 ValidateConfig 一样，只对启用中的渠道校验：见 checkGatewayConfig 处的说明。
+	if channel.IsActive && providerType != constants.PaymentProviderOfficial {
 		mode := strings.ToLower(strings.TrimSpace(channel.InteractionMode))
 		if mode != constants.PaymentInteractionQR && mode != constants.PaymentInteractionRedirect {
 			return ErrPaymentChannelConfigInvalid
@@ -338,6 +339,14 @@ func (s *PaymentService) ValidateChannel(channel *paymentdomain.PaymentChannel) 
 	} else {
 		validateParam = channelType
 	}
+	// 网关面的校验（interaction_mode + provider 配置）只对启用中的渠道生效。
+	// 停用的渠道不参与任何支付创建，配置是否完整无关紧要；反过来，若照样校验，
+	// 种子建出来的「启用且无凭证」渠道会永远关不掉——后台停用按钮必然报配置不完整。
+	// 校验时机因此定在「激活」而不是「保存」：重新启用时这里会完整跑一遍。
+	if !channel.IsActive {
+		return nil
+	}
+
 	if err := p.ValidateConfig(channel.ConfigJSON, validateParam); err != nil {
 		return mapProviderErrorToService(err)
 	}

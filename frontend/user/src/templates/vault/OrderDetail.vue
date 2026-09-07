@@ -46,12 +46,27 @@
         </div>
       </div>
 
+      <OrderPendingManualForm
+        class="mb-[18px]"
+        v-model="pendingManualFormData"
+        :manual-form-products="pendingManualForms"
+        :submit-attempted="pendingManualSubmitAttempted"
+        :submitting="pendingManualSubmitting"
+        :sla-hours="pendingManualSlaHours"
+        :deadline="formatDate(order.manual_form_deadline)"
+        :get-manual-field-label="getPendingManualFieldLabel"
+        :get-manual-field-placeholder="getPendingManualFieldPlaceholder"
+        :manual-field-error="pendingManualFieldError"
+        @submit="submitPendingManualForm"
+      />
+
       <VaultOrderBody
         :order="order"
         variant="user"
         :fulfillment-downloading="fulfillmentDownloading"
         @download="handleDownloadFulfillment"
       />
+      <ContentTutorialDialog v-model:open="contentTutorialOpen" :blocks="contentTutorialBlocks" />
     </template>
   </div>
 </template>
@@ -62,6 +77,8 @@ import { AlertCircle } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import VaultOrderBody from './components/VaultOrderBody.vue'
+import OrderPendingManualForm from '../../components/order/OrderPendingManualForm.vue'
+import ContentTutorialDialog from '../../components/order/ContentTutorialDialog.vue'
 import { useOrderDetail } from '../../composables/useOrderDetail'
 
 const { t } = useI18n()
@@ -69,5 +86,9 @@ const { t } = useI18n()
 const {
   loading, order, debouncedLoadOrder, cancelOrder, fulfillmentDownloading, handleDownloadFulfillment,
   statusLabel, statusVariant, formatDate, formatMoney,
+  pendingManualForms, pendingManualFormData, pendingManualSubmitAttempted, pendingManualSubmitting,
+  pendingManualSlaHours, getPendingManualFieldLabel, getPendingManualFieldPlaceholder,
+  pendingManualFieldError, submitPendingManualForm,
+  contentTutorialBlocks, contentTutorialOpen,
 } = useOrderDetail()
 </script>

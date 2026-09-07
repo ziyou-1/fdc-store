@@ -416,7 +416,7 @@ const activeSection = ref('brand')
 const baseline = ref('')
 const builtinNavKeys = ['blog', 'notice', 'about']
 
-const localeLabels: Record<string, string> = { 'zh-CN': '简体', 'zh-TW': '繁體', 'en-US': 'EN' }
+const localeLabels: Record<string, string> = { 'zh-CN': '简体', 'zh-TW': '繁體', 'en-US': 'EN', 'id-ID': 'ID' }
 
 type SiteConfigSection = {
     value: 'brand' | 'support' | 'content' | 'navigation'

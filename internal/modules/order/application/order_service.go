@@ -11,6 +11,7 @@ import (
 	couponcontract "github.com/dujiao-next/internal/modules/coupon/contract"
 	coupondomain "github.com/dujiao-next/internal/modules/coupon/domain"
 	usercontract "github.com/dujiao-next/internal/modules/identity/user/contract"
+	userdomain "github.com/dujiao-next/internal/modules/identity/user/domain"
 	ordercontract "github.com/dujiao-next/internal/modules/order/contract"
 	orderdomain "github.com/dujiao-next/internal/modules/order/domain"
 	orderriskcontract "github.com/dujiao-next/internal/modules/orderrisk/contract"
@@ -55,6 +56,7 @@ type OrderService struct {
 
 type OrderMemberLevelService interface {
 	ResolveMemberPrice(levelID, productID, skuID uint, basePrice decimal.Decimal) (decimal.Decimal, decimal.Decimal)
+	ResolveMemberPriceForUser(user *userdomain.User, productID, skuID uint, basePrice decimal.Decimal) (decimal.Decimal, decimal.Decimal)
 	OnOrderPaid(userID uint, amount decimal.Decimal) error
 }
 
@@ -183,6 +185,7 @@ type childOrderPlan struct {
 	WholesaleDiscount decimal.Decimal
 	CouponDiscount    decimal.Decimal
 	Currency          string
+	PointsAmount      int64
 }
 
 var allowedTransitions = map[string]map[string]bool{
@@ -299,6 +302,7 @@ type OrderPreview struct {
 	PromotionDiscountAmount money.Amount       `json:"promotion_discount_amount"`
 	WholesaleDiscountAmount money.Amount       `json:"wholesale_discount_amount"`
 	TotalAmount             money.Amount       `json:"total_amount"`
+	PointsAmount            int64              `json:"points_amount"`
 	Items                   []OrderPreviewItem `json:"items"`
 }
 
@@ -331,6 +335,7 @@ type orderBuildResult struct {
 	DiscountAmount          decimal.Decimal
 	TotalAmount             decimal.Decimal
 	Currency                string
+	PointsAmount            int64
 	OrderPromotionID        *uint
 	MemberLevelID           *uint
 	AppliedCoupon           *coupondomain.Coupon
@@ -421,6 +426,7 @@ func (s *OrderService) previewOrder(input orderCreateParams) (*OrderPreview, err
 		PromotionDiscountAmount: money.FromDecimal(result.PromotionDiscountAmount),
 		WholesaleDiscountAmount: money.FromDecimal(result.WholesaleDiscountAmount),
 		TotalAmount:             money.FromDecimal(result.TotalAmount),
+		PointsAmount:            result.PointsAmount,
 		Items:                   items,
 	}, nil
 }
@@ -514,6 +520,8 @@ func (s *OrderService) createOrder(input orderCreateParams) (*orderdomain.Order,
 		PromotionDiscountAmount: money.FromDecimal(result.PromotionDiscountAmount),
 		WholesaleDiscountAmount: money.FromDecimal(result.WholesaleDiscountAmount),
 		TotalAmount:             money.FromDecimal(result.TotalAmount),
+		PointsAmount:            result.PointsAmount,
+		PointsPaidAmount:        money.FromDecimal(decimal.Zero),
 		WalletPaidAmount:        money.FromDecimal(decimal.Zero),
 		OnlinePaidAmount:        money.FromDecimal(result.TotalAmount),
 		RefundedAmount:          money.FromDecimal(decimal.Zero),
@@ -572,6 +580,8 @@ func (s *OrderService) createOrder(input orderCreateParams) (*orderdomain.Order,
 				PromotionDiscountAmount: money.FromDecimal(plan.PromotionDiscount),
 				WholesaleDiscountAmount: money.FromDecimal(plan.WholesaleDiscount),
 				TotalAmount:             money.FromDecimal(normalizeOrderAmount(plan.TotalAmount.Sub(plan.CouponDiscount))),
+				PointsAmount:            plan.PointsAmount,
+				PointsPaidAmount:        money.FromDecimal(decimal.Zero),
 				WalletPaidAmount:        money.FromDecimal(decimal.Zero),
 				OnlinePaidAmount:        money.FromDecimal(normalizeOrderAmount(plan.TotalAmount.Sub(plan.CouponDiscount))),
 				RefundedAmount:          money.FromDecimal(decimal.Zero),

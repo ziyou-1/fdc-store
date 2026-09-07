@@ -43,7 +43,12 @@ import {
   Wifi,
   Send,
   Crown,
+  Coins,
+  Headset,
+  MessagesSquare,
+  MessageSquareText,
   Bell,
+  HelpCircle,
   ImageIcon,
 } from 'lucide-vue-next'
 import { Menu } from 'lucide-vue-next'
@@ -58,6 +63,9 @@ import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import { applySiteIcon } from '@/utils/favicon'
 import { adminUrl } from '@/utils/adminBase'
+import { isDisabledFeaturePath } from '@/utils/disabledFeatures'
+import type { AdminOrder } from '@/api/types'
+import { countManualFulfillmentPrompts } from '@/utils/manualFulfillmentPrompt'
 
 interface NavGroupItem {
   label: string
@@ -117,6 +125,12 @@ const expandedGroups = ref<Record<string, boolean>>(readExpandedGroups())
 const mobileNavOpen = ref(false)
 const sidebarCollapsed = ref(false)
 const sidebarUserToggled = ref(false) // tracks if user manually toggled
+const supportUnread = ref(0)
+const SUPPORT_UNREAD_POLL_MS = 10000
+let supportUnreadTimer: ReturnType<typeof setInterval> | null = null
+const manualAwaitingCount = ref(0)
+const MANUAL_AWAITING_POLL_MS = 30000
+let manualAwaitingTimer: ReturnType<typeof setInterval> | null = null
 
 // Close mobile nav on route change
 watch(() => route.path, () => {
@@ -247,6 +261,31 @@ const navGroups = computed<NavGroup[]>(() => {
           icon: Crown,
           permission: 'GET:/admin/member-levels',
         },
+        {
+          label: t('admin.navItems.pointsConfig'),
+          to: '/points-config',
+          icon: Coins,
+          permission: 'GET:/admin/points/config',
+        },
+      ],
+    },
+    {
+      id: 'support',
+      label: t('admin.navGroups.customerService'),
+      icon: Headset,
+      items: [
+        {
+          label: t('admin.navItems.support'),
+          to: '/support',
+          icon: MessagesSquare,
+          permission: 'GET:/admin/support/conversations',
+        },
+        {
+          label: t('admin.navItems.supportQuickReplies'),
+          to: '/support-quick-replies',
+          icon: MessageSquareText,
+          permission: 'GET:/admin/support/quick-replies',
+        },
       ],
     },
     {
@@ -291,6 +330,12 @@ const navGroups = computed<NavGroup[]>(() => {
           icon: Bell,
           permission: 'GET:/admin/posts',
         },
+        {
+          label: t('admin.navItems.faqList'),
+          to: '/posts/faq',
+          icon: HelpCircle,
+          permission: 'GET:/admin/posts',
+        },
       ],
     },
     {
@@ -321,6 +366,12 @@ const navGroups = computed<NavGroup[]>(() => {
           to: '/gift-cards',
           icon: Gift,
           permission: 'GET:/admin/gift-cards',
+        },
+        {
+          label: t('admin.navItems.freeClaim'),
+          to: '/free-claim',
+          icon: Gift,
+          permission: 'GET:/admin/free-claim/config',
         },
       ],
     },
@@ -420,6 +471,12 @@ const navGroups = computed<NavGroup[]>(() => {
           to: '/site-connections',
           icon: Link,
           permission: 'GET:/admin/site-connections',
+        },
+        {
+          label: t('admin.navItems.tokenStations'),
+          to: '/token-stations',
+          icon: KeyRound,
+          permission: 'GET:/admin/token-stations',
         },
         {
           label: t('admin.navItems.productMappings'),
@@ -537,7 +594,7 @@ const navGroups = computed<NavGroup[]>(() => {
   return groups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => authStore.hasPermission(item.permission)),
+      items: group.items.filter((item) => !isDisabledFeaturePath(item.to) && authStore.hasPermission(item.permission)),
     }))
     .filter((group) => group.items.length > 0)
 })
@@ -688,6 +745,54 @@ const handleResize = () => {
   sidebarCollapsed.value = window.innerWidth < SIDEBAR_AUTO_COLLAPSE_WIDTH
 }
 
+const fetchSupportUnread = async () => {
+  if (!authStore.hasPermission('GET:/admin/support/unread-count')) {
+    supportUnread.value = 0
+    return
+  }
+  try {
+    const response = await adminAPI.getSupportUnreadCount({ silent: true })
+    supportUnread.value = Number(
+      (response.data.data as { unread_conversations?: number } | undefined)?.unread_conversations ?? 0,
+    )
+  } catch {
+    // 角标轮询失败不打扰
+  }
+}
+
+const startSupportUnreadPolling = () => {
+  if (supportUnreadTimer !== null) {
+    clearInterval(supportUnreadTimer)
+  }
+  supportUnreadTimer = setInterval(() => {
+    void fetchSupportUnread()
+  }, SUPPORT_UNREAD_POLL_MS)
+}
+
+const fetchManualAwaitingCount = async () => {
+  if (!authStore.hasPermission('GET:/admin/orders')) {
+    manualAwaitingCount.value = 0
+    return
+  }
+  try {
+    const response = await adminAPI.getOrders({ status: 'fulfilling', page: 1, page_size: 50 })
+    manualAwaitingCount.value = countManualFulfillmentPrompts((response.data.data || []) as AdminOrder[])
+  } catch {
+    // 角标轮询失败不打扰
+  }
+}
+
+const startManualAwaitingPolling = () => {
+  if (manualAwaitingTimer !== null) {
+    clearInterval(manualAwaitingTimer)
+  }
+  manualAwaitingTimer = setInterval(() => {
+    void fetchManualAwaitingCount()
+  }, MANUAL_AWAITING_POLL_MS)
+}
+
+const unreadBadgeText = (count: number) => (count > 99 ? '99+' : String(count))
+
 const handleLogout = () => {
   authStore.logout()
   // 必须走 adminUrl()：后台可被挂到运行时任意 web.admin_path 前缀下，
@@ -733,10 +838,23 @@ onMounted(() => {
       siteUrl.value = url
     }
   }).catch(() => {})
+
+  void fetchSupportUnread()
+  startSupportUnreadPolling()
+  void fetchManualAwaitingCount()
+  startManualAwaitingPolling()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  if (supportUnreadTimer !== null) {
+    clearInterval(supportUnreadTimer)
+    supportUnreadTimer = null
+  }
+  if (manualAwaitingTimer !== null) {
+    clearInterval(manualAwaitingTimer)
+    manualAwaitingTimer = null
+  }
 })
 </script>
 
@@ -790,6 +908,12 @@ onBeforeUnmount(() => {
                 <div class="flex min-w-0 items-center gap-3">
                   <component :is="group.icon" class="h-4 w-4 shrink-0" />
                   <span class="truncate">{{ group.label }}</span>
+                  <span
+                    v-if="(group.id === 'support' && supportUnread > 0) || (group.id === 'orders' && manualAwaitingCount > 0)"
+                    class="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none text-destructive-foreground"
+                  >
+                    {{ unreadBadgeText(group.id === 'orders' ? manualAwaitingCount : supportUnread) }}
+                  </span>
                 </div>
                 <component
                   :is="isGroupExpanded(group.id) ? ChevronDown : ChevronRight"
@@ -806,6 +930,12 @@ onBeforeUnmount(() => {
                 >
                   <component v-if="item.icon" :is="item.icon" class="h-3.5 w-3.5 shrink-0" />
                   <span class="truncate">{{ item.label }}</span>
+                  <span
+                    v-if="(item.to === '/support' && supportUnread > 0) || (item.to === '/orders' && manualAwaitingCount > 0)"
+                    class="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none text-destructive-foreground"
+                  >
+                    {{ unreadBadgeText(item.to === '/orders' ? manualAwaitingCount : supportUnread) }}
+                  </span>
                 </RouterLink>
               </div>
             </div>
@@ -826,11 +956,15 @@ onBeforeUnmount(() => {
                 v-for="item in group.items"
                 :key="`collapsed-${group.id}-${item.to}`"
                 :to="item.to"
-                class="flex items-center justify-center rounded-lg p-2 transition-colors"
+                class="relative flex items-center justify-center rounded-lg p-2 transition-colors"
                 :class="isItemActive(item.to) ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/70'"
                 :title="item.label"
               >
                 <component v-if="item.icon" :is="item.icon" class="h-4 w-4 shrink-0" />
+                <span
+                  v-if="(item.to === '/support' && supportUnread > 0) || (item.to === '/orders' && manualAwaitingCount > 0)"
+                  class="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive"
+                />
               </RouterLink>
             </template>
           </template>
@@ -838,18 +972,7 @@ onBeforeUnmount(() => {
         <!-- Collapse toggle button -->
         <div class="border-t border-border">
           <div v-if="!sidebarCollapsed" class="px-6 py-3 text-[11px] text-muted-foreground space-y-1">
-            <p>© {{ new Date().getFullYear() }} Dujiao-Next <span v-if="appVersion" class="text-muted-foreground/70">{{ appVersion }}</span></p>
-            <a
-              href="https://github.com/dujiao-next"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center gap-1 underline-offset-2 hover:underline"
-            >
-              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 .5C5.648.5.5 5.648.5 12c0 5.084 3.292 9.4 7.86 10.922.575.106.784-.25.784-.556 0-.273-.01-1-.016-1.962-3.197.694-3.872-1.54-3.872-1.54-.522-1.326-1.274-1.678-1.274-1.678-1.042-.713.079-.699.079-.699 1.152.081 1.758 1.183 1.758 1.183 1.024 1.755 2.688 1.248 3.343.954.104-.742.401-1.248.73-1.535-2.552-.29-5.236-1.276-5.236-5.678 0-1.254.448-2.28 1.182-3.084-.118-.29-.512-1.457.112-3.04 0 0 .964-.308 3.158 1.178a10.98 10.98 0 0 1 2.876-.387c.976.004 1.96.132 2.878.387 2.192-1.486 3.154-1.178 3.154-1.178.626 1.583.232 2.75.114 3.04.736.804 1.18 1.83 1.18 3.084 0 4.413-2.688 5.384-5.248 5.668.412.354.78 1.052.78 2.12 0 1.53-.014 2.764-.014 3.14 0 .31.206.668.79.554C20.212 21.396 23.5 17.083 23.5 12 23.5 5.648 18.352.5 12 .5Z" />
-              </svg>
-              <span>https://github.com/dujiao-next</span>
-            </a>
+            <p>© {{ new Date().getFullYear() }} Keyvo <span v-if="appVersion" class="text-muted-foreground/70">{{ appVersion }}</span></p>
           </div>
           <button
             type="button"
@@ -906,6 +1029,12 @@ onBeforeUnmount(() => {
                 <div class="flex min-w-0 items-center gap-3">
                   <component :is="group.icon" class="h-4 w-4 shrink-0" />
                   <span class="truncate">{{ group.label }}</span>
+                  <span
+                    v-if="(group.id === 'support' && supportUnread > 0) || (group.id === 'orders' && manualAwaitingCount > 0)"
+                    class="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none text-destructive-foreground"
+                  >
+                    {{ unreadBadgeText(group.id === 'orders' ? manualAwaitingCount : supportUnread) }}
+                  </span>
                 </div>
                 <component
                   :is="isGroupExpanded(group.id) ? ChevronDown : ChevronRight"
@@ -922,6 +1051,12 @@ onBeforeUnmount(() => {
                 >
                   <component v-if="item.icon" :is="item.icon" class="h-3.5 w-3.5 shrink-0" />
                   <span class="truncate">{{ item.label }}</span>
+                  <span
+                    v-if="(item.to === '/support' && supportUnread > 0) || (item.to === '/orders' && manualAwaitingCount > 0)"
+                    class="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none text-destructive-foreground"
+                  >
+                    {{ unreadBadgeText(item.to === '/orders' ? manualAwaitingCount : supportUnread) }}
+                  </span>
                 </RouterLink>
               </div>
             </div>

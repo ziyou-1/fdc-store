@@ -34,6 +34,9 @@ type RechargeListFilter struct {
 	ProviderType string
 	ChannelType  string
 	Status       string
+	// CreditTarget 到账目标过滤。空值表示不限；
+	// 钱包侧的查询必须显式传 wallet，否则积分充值单会混进余额充值记录。
+	CreditTarget string
 	CreatedFrom  *time.Time
 	CreatedTo    *time.Time
 	PaidFrom     *time.Time

@@ -223,6 +223,10 @@ func (h *AdminRefundHandler) AdminRefundOrderToWallet(c *gin.Context) {
 		switch {
 		case errors.Is(err, ErrOrderNotFound):
 			ginutil.RespondError(c, response.CodeNotFound, "error.order_not_found", nil)
+		case errors.Is(err, ErrFreeClaimOrderRefundForbidden):
+			ginutil.RespondError(c, response.CodeBadRequest, "error.free_claim_order_refund_forbidden", nil)
+		case errors.Is(err, ErrPointsOrderCashRefundForbidden):
+			ginutil.RespondError(c, response.CodeBadRequest, "error.points_order_cash_refund_forbidden", nil)
 		case errors.Is(err, ErrOrderStatusInvalid):
 			ginutil.RespondError(c, response.CodeBadRequest, "error.order_status_invalid", nil)
 		case errors.Is(err, ErrOrderRefundExpired):
@@ -273,6 +277,10 @@ func (h *AdminRefundHandler) AdminManualRefundOrder(c *gin.Context) {
 		switch {
 		case errors.Is(err, ErrOrderNotFound):
 			ginutil.RespondError(c, response.CodeNotFound, "error.order_not_found", nil)
+		case errors.Is(err, ErrFreeClaimOrderRefundForbidden):
+			ginutil.RespondError(c, response.CodeBadRequest, "error.free_claim_order_refund_forbidden", nil)
+		case errors.Is(err, ErrPointsOrderCashRefundForbidden):
+			ginutil.RespondError(c, response.CodeBadRequest, "error.points_order_cash_refund_forbidden", nil)
 		case errors.Is(err, ErrOrderStatusInvalid):
 			ginutil.RespondError(c, response.CodeBadRequest, "error.order_status_invalid", nil)
 		case errors.Is(err, ErrOrderRefundExpired):
@@ -317,6 +325,10 @@ func (h *AdminRefundHandler) UpdateAdminOrderRefundPaymentFee(c *gin.Context) {
 		switch {
 		case errors.Is(err, ErrOrderNotFound):
 			ginutil.RespondError(c, response.CodeNotFound, "error.order_not_found", nil)
+		case errors.Is(err, ErrFreeClaimOrderRefundForbidden):
+			ginutil.RespondError(c, response.CodeBadRequest, "error.free_claim_order_refund_forbidden", nil)
+		case errors.Is(err, ErrPointsOrderCashRefundForbidden):
+			ginutil.RespondError(c, response.CodeBadRequest, "error.points_order_cash_refund_forbidden", nil)
 		case errors.Is(err, ErrOrderStatusInvalid):
 			ginutil.RespondError(c, response.CodeBadRequest, "error.order_status_invalid", nil)
 		default:

@@ -68,10 +68,9 @@
         <Badge
           class="hidden md:inline-flex"
           size="xs"
-          :variant="product.purchase_type === 'guest' ? 'warning' : 'success'"
+          variant="success"
         >
-          <UserPlus v-if="product.purchase_type === 'guest'" class="h-3 w-3" />
-          <Lock v-else class="h-3 w-3" />
+          <Lock class="h-3 w-3" />
           {{ getPurchaseTypeLabel(product.purchase_type) }}
         </Badge>
 
@@ -98,25 +97,32 @@
         <div class="flex flex-col">
           <span class="hidden md:block text-xs text-muted-foreground uppercase tracking-wider">{{ t('products.price') }}</span>
           <span
-            v-if="hasPromotionPrice(product)"
-            class="theme-price-sm theme-price-promotion"
-            :aria-label="t('products.promotionPriceAria', { price: formatPrice(getPromotionPriceAmount(product), siteCurrency) })"
+            v-if="hasPromo || isMemberPrice"
+            class="theme-price-sm"
+            :class="hasPromo && !isMemberPrice ? 'theme-price-promotion' : ''"
+            :aria-label="t(hasPromo && !isMemberPrice ? 'products.promotionPriceAria' : 'products.priceAria', { price: formatPrice(displayAmount, siteCurrency) })"
           >
-            {{ formatPrice(getPromotionPriceAmount(product), siteCurrency) }}
+            {{ formatPrice(displayAmount, siteCurrency) }}
           </span>
           <span
             v-else
             class="theme-price-sm"
-            :aria-label="t('products.priceAria', { price: formatPrice(product.price_amount, siteCurrency) })"
+            :aria-label="t('products.priceAria', { price: formatPrice(displayAmount, siteCurrency) })"
           >
-            {{ formatPrice(product.price_amount, siteCurrency) }}
+            {{ formatPrice(displayAmount, siteCurrency) }}
           </span>
-          <div v-if="hasPromotionPrice(product)" class="mt-0.5 flex flex-wrap items-center gap-1.5">
+          <span v-if="pointsPrice > 0" class="mt-0.5 text-[11px] font-medium text-muted-foreground">
+            {{ t('products.pointsPrice', { n: pointsPrice }) }}
+          </span>
+          <div v-if="hasPromo || isMemberPrice" class="mt-0.5 flex flex-wrap items-center gap-1.5">
             <span
               class="hidden md:inline text-xs text-muted-foreground opacity-80 line-through"
-              :aria-label="t('products.originalPriceAria', { price: formatPrice(product.price_amount, siteCurrency) })"
-            >{{ formatPrice(product.price_amount, siteCurrency) }}</span>
-            <Badge variant="danger" size="xs">
+              :aria-label="t('products.originalPriceAria', { price: formatPrice(listAmount, siteCurrency) })"
+            >{{ formatPrice(listAmount, siteCurrency) }}</span>
+            <Badge v-if="isMemberPrice" variant="accent" size="xs">
+              {{ t('products.memberPriceTag') }}
+            </Badge>
+            <Badge v-if="hasPromo" variant="danger" size="xs">
               {{ t('products.promotionTag') }}
             </Badge>
           </div>
@@ -164,9 +170,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
-import { ArrowRight, ChevronRight, Image as ImageIcon, Lock, Pencil, ShoppingCart, UserPlus, Zap } from 'lucide-vue-next'
+import { ArrowRight, ChevronRight, Image as ImageIcon, Lock, Pencil, ShoppingCart, Zap } from 'lucide-vue-next'
 import { getFirstImageUrl, getImageUrl } from '../utils/image'
-import { useLocalized, useProductLabels } from '../composables/useProduct'
+import { useListingDisplayPrice, useLocalized, useProductLabels } from '../composables/useProduct'
+import { pointsPriceOf } from '../utils/productPoints'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -189,7 +196,9 @@ defineEmits<{
 
 const { t } = useI18n()
 const { getLocalizedText, siteCurrency, formatPrice } = useLocalized()
-const { getPurchaseTypeLabel, getFulfillmentTypeLabel, getStockBadgeVariant, getStockStatusLabel, isSoldOut, hasPromotionPrice, getPromotionPriceAmount, hasPromotionRules, hasWholesalePrices } = useProductLabels()
+const { getPurchaseTypeLabel, getFulfillmentTypeLabel, getStockBadgeVariant, getStockStatusLabel, isSoldOut, hasPromotionRules, hasWholesalePrices } = useProductLabels()
+const { displayAmount, listAmount, isMemberPrice, hasPromo } = useListingDisplayPrice(() => props.product)
+const pointsPrice = computed(() => pointsPriceOf(props.product))
 
 const imageErrored = ref(false)
 const attemptIdx = ref(0)

@@ -3,7 +3,6 @@ package main
 import (
 	"reflect"
 	"regexp"
-	"slices"
 	"strings"
 	"testing"
 
@@ -24,30 +23,26 @@ func bannerLinks(banner string) []string {
 	return links
 }
 
-func TestWriteStartupBannerOmitsRetiredFrontendRepositories(t *testing.T) {
+func TestWriteStartupBannerCarriesNoExternalLinks(t *testing.T) {
 	var output strings.Builder
 	writeStartupBanner(&output)
 
 	banner := output.String()
-	for _, removed := range []string{
-		"https://github.com/dujiao-next/user",
-		"https://github.com/dujiao-next/admin",
-	} {
-		if strings.Contains(banner, removed) {
-			t.Errorf("startup banner still contains retired repository: %s", removed)
+
+	// 本项目已改名并去掉上游品牌，横幅不得再出现任何外链：
+	// 组织地址是主仓地址的前缀，所以用整 token 比较而不是子串匹配。
+	if links := bannerLinks(banner); len(links) != 0 {
+		t.Errorf("startup banner must not advertise external links, got %v", links)
+	}
+
+	for _, forbidden := range []string{"dujiao", "Dujiao", "DUJIAO", "t.me/"} {
+		if strings.Contains(banner, forbidden) {
+			t.Errorf("startup banner still mentions upstream branding: %s", forbidden)
 		}
 	}
 
-	// 用整 token 相等比较：组织地址是主仓地址的前缀，子串匹配挡不住"只剩主仓"的退化。
-	links := bannerLinks(banner)
-	for _, retained := range []string{
-		"https://github.com/dujiao-next",
-		"https://github.com/dujiao-next/dujiao-next",
-		"https://dujiao-next.com",
-	} {
-		if !slices.Contains(links, retained) {
-			t.Errorf("startup banner is missing retained repository: %s (got %v)", retained, links)
-		}
+	if !strings.Contains(banner, "Keyvo") {
+		t.Error("startup banner should announce the current product name")
 	}
 }
 

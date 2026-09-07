@@ -24,6 +24,7 @@ import {
 import { formatDate, formatMoney, getLocalizedText, hasPositiveAmount } from '@/utils/format'
 import { resolveSkuCodeFromSnapshot, resolveSkuSpecFromSnapshot } from '@/utils/sku'
 import { adminUrl } from '@/utils/adminBase'
+import { orderNeedsManualFulfillmentPrompt } from '@/utils/manualFulfillmentPrompt'
 
 const props = defineProps<{
   modelValue: boolean
@@ -83,6 +84,7 @@ const providerTypeLabel = (value?: string) => {
     bepusdt: t('admin.paymentChannels.providerTypes.bepusdt'),
     epusdt: t('admin.paymentChannels.providerTypes.epusdt'),
     tokenpay: t('admin.paymentChannels.providerTypes.tokenpay'),
+    payssion: t('admin.paymentChannels.providerTypes.payssion'),
     wallet: t('admin.paymentChannels.providerTypes.wallet'),
   }
   if (!value) return '-'
@@ -105,6 +107,9 @@ const channelTypeLabel = (value?: string) => {
     balance: t('admin.paymentChannels.channelTypes.balance'),
   }
   if (!value) return '-'
+  const key = `admin.paymentChannels.channelTypes.${value}`
+  const translated = t(key)
+  if (translated !== key) return translated
   return map[value] || value
 }
 
@@ -696,6 +701,12 @@ watch(
           {{ detailError }}
         </div>
         <div v-else-if="selectedOrder" class="space-y-6">
+          <div
+            v-if="orderNeedsManualFulfillmentPrompt(selectedOrder)"
+            class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+          >
+            {{ t('admin.orders.manualAwaitingDetail') }}
+          </div>
           <div class="grid grid-cols-1 gap-4 text-sm md:grid-cols-2 [&>*]:min-w-0">
             <Card class="min-w-0 rounded-lg border-border bg-background shadow-none">
               <CardContent class="p-3">
@@ -882,7 +893,7 @@ watch(
                         {{ tag }}
                       </span>
                     </div>
-                    <div v-if="manualSubmissionRows(item.manual_form_submission, item.manual_form_schema_snapshot).length" class="mt-3 rounded-lg border border-border bg-background p-3">
+                    <div v-if="manualSubmissionRows(item.manual_form_submission, item.manual_form_schema_snapshot).length" class="mt-3 rounded-lg border p-3" :class="orderNeedsManualFulfillmentPrompt(selectedOrder) ? 'border-amber-300 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-500/10' : 'border-border bg-background'">
                       <div class="text-xs font-semibold text-muted-foreground mb-2">{{ t('admin.orders.manualSubmissionTitle') }}</div>
                       <div class="space-y-1 text-xs text-muted-foreground">
                         <div v-for="row in manualSubmissionRows(item.manual_form_submission, item.manual_form_schema_snapshot)" :key="`${item.id}-${row.key}`" class="break-words">
@@ -975,7 +986,7 @@ watch(
                           </div>
                           <div class="mt-1 break-words text-xs text-muted-foreground">{{ t('admin.orders.itemSkuSpec') }}：{{ orderItemSkuSpecText(item) }}</div>
                         </div>
-                        <div v-if="manualSubmissionRows(item.manual_form_submission, item.manual_form_schema_snapshot).length" class="mt-3 rounded-lg border border-border bg-muted/20 p-3">
+                        <div v-if="manualSubmissionRows(item.manual_form_submission, item.manual_form_schema_snapshot).length" class="mt-3 rounded-lg border p-3" :class="orderNeedsManualFulfillmentPrompt(child) ? 'border-amber-300 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-500/10' : 'border-border bg-muted/20'">
                           <div class="text-xs font-semibold text-muted-foreground mb-2">{{ t('admin.orders.manualSubmissionTitle') }}</div>
                           <div class="space-y-1 text-xs text-muted-foreground">
                             <div v-for="row in manualSubmissionRows(item.manual_form_submission, item.manual_form_schema_snapshot)" :key="`${item.id}-${row.key}`" class="break-words">

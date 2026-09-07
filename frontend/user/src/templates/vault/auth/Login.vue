@@ -125,7 +125,7 @@
               <input v-model="rememberMe" type="checkbox" class="h-4 w-4 accent-[var(--ui-accent)]" />
               {{ t('auth.login.rememberMe') }}
             </label>
-            <RouterLink v-if="emailVerificationEnabled" to="/auth/forgot" class="font-medium text-muted-foreground transition-colors hover:text-primary">
+            <RouterLink v-if="showForgotPassword" to="/auth/forgot" class="font-medium text-muted-foreground transition-colors hover:text-primary">
               {{ t('auth.login.forgot') }}
             </RouterLink>
           </div>
@@ -213,7 +213,7 @@ const {
   error, info, formValidation,
   loginCaptchaEnabled, captchaProvider, captchaPayload, turnstileToken, turnstileSiteKey,
   imageCaptchaRef, turnstileRef, handleCaptchaConfigStale,
-  registrationEnabled, emailVerificationEnabled,
+  registrationEnabled, showForgotPassword,
   showTelegramWidget, telegramWidgetRef, showTelegramOidc, startTelegramOidc,
   showMiniAppLoginHint, attemptingMiniAppLogin, showTelegramMiniAppEntry, openTelegramMiniAppEntry,
   googleClientID, googleButtonLocale, googleIdentityUXMode, googleRedirectLoginURI,

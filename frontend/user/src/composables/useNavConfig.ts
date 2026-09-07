@@ -1,12 +1,13 @@
 import { computed, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-    Home, LayoutGrid, Newspaper, Bell, Info,
+    Home, LayoutGrid, Bell, HelpCircle, Info,
     Link2, FileText, Globe, Star, Heart, MessageCircle, Gift, Zap, Shield,
     BookOpen, Code, Phone, MapPin, Music, Camera,
 } from 'lucide-vue-next'
 import { useAppStore } from '../stores/app'
 import { getLocalizedText } from '../utils/resellerSiteConfig'
+import { isDisabledFeaturePath } from '../utils/disabledFeatures'
 
 /**
  * 站点导航配置（后台「设置 → 导航」写入的 nav_config）。
@@ -46,8 +47,8 @@ interface NavConfigRaw {
 }
 
 const builtinNavDefs: Record<string, { path: string; label: string; icon: Component }> = {
-    blog: { path: '/blog', label: 'nav.blog', icon: Newspaper },
     notice: { path: '/notice', label: 'nav.notice', icon: Bell },
+    faq: { path: '/faq', label: 'nav.faq', icon: HelpCircle },
     about: { path: '/about', label: 'nav.about', icon: Info },
 }
 
@@ -83,8 +84,8 @@ export const useNavConfig = () => {
     /** 列表模式下首页即商品列表，/products 与首页同页，导航里不再单独列一项 */
     const isListMode = computed(() => appStore.config?.template_mode === 'list')
 
-    const blogEnabled = computed(() => navConfig.value?.builtin?.blog !== false)
     const noticeEnabled = computed(() => navConfig.value?.builtin?.notice !== false)
+    const faqEnabled = computed(() => navConfig.value?.builtin?.faq !== false)
     const aboutEnabled = computed(() => navConfig.value?.builtin?.about !== false)
 
     /** 内置导航项（博客 / 公告 / 关于），受后台开关控制 */
@@ -120,7 +121,7 @@ export const useNavConfig = () => {
                     target: item.target === '_blank' ? '_blank' : '_self',
                 }
             })
-            .filter((item) => item.label && item.path)
+            .filter((item) => item.label && item.path && !isDisabledFeaturePath(item.path))
     })
 
     /** 首页 + 商品 + 内置 + 自定义，供顶栏主导航使用 */
@@ -141,8 +142,8 @@ export const useNavConfig = () => {
     return {
         navConfig,
         isListMode,
-        blogEnabled,
         noticeEnabled,
+        faqEnabled,
         aboutEnabled,
         builtinNavItems,
         customNavItems,

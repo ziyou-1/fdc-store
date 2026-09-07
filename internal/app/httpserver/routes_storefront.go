@@ -13,14 +13,18 @@ import (
 	categoryhttp "github.com/dujiao-next/internal/modules/catalog/category/transport/http"
 	producthttp "github.com/dujiao-next/internal/modules/catalog/product/transport/http"
 	contenttransport "github.com/dujiao-next/internal/modules/content/transport/http"
+	freeclaimtransport "github.com/dujiao-next/internal/modules/freeclaim/transport/http"
 	giftcardtransport "github.com/dujiao-next/internal/modules/giftcard/transport/http"
 	userauthtransport "github.com/dujiao-next/internal/modules/identity/userauth/transport/http"
 	memberleveltransport "github.com/dujiao-next/internal/modules/memberlevel/transport/http"
 	ordertransport "github.com/dujiao-next/internal/modules/order/transport/http"
 	paymenttransport "github.com/dujiao-next/internal/modules/payment/transport/http"
 	paymentcallbacktransport "github.com/dujiao-next/internal/modules/payment/transport/http/callback"
+	pointstransport "github.com/dujiao-next/internal/modules/points/transport/http"
 	resellertransport "github.com/dujiao-next/internal/modules/reseller/transport/http/user"
 	publicconfigtransport "github.com/dujiao-next/internal/modules/settings/transport/http/public"
+	supporttransport "github.com/dujiao-next/internal/modules/support/transport/http"
+	tokenstationtransport "github.com/dujiao-next/internal/modules/tokenstation/transport/http"
 	wallettransport "github.com/dujiao-next/internal/modules/wallet/transport/http"
 
 	"github.com/gin-gonic/gin"
@@ -79,23 +83,13 @@ func registerStorefrontRoutes(
 		captchatransport.RegisterPublicRoutes(public, captchatransport.NewPublicHandler(c.CaptchaService))
 		affiliatetransport.RegisterPublicRoutes(public, affiliateHandler)
 		memberleveltransport.RegisterPublicRoutes(public, publicMemberLevelHandler)
-	}
 
-	// 游客接口
-	guest := storefront.Group("/guest")
-	guestRead := guest.Group("")
-	guestRead.Use(middleware.RateLimitMiddleware(redisClient, guestReadRule, middleware.KeyByIP))
-	{
-		ordertransport.RegisterGuestPreviewRoute(guestRead, orderPreviewHandler)
-		ordertransport.RegisterGuestReadRoutes(guestRead, guestOrderHandler)
-		paymenttransport.RegisterGuestLatestRoute(guestRead, paymentLatestHandler)
-	}
-	guestWrite := guest.Group("")
-	guestWrite.Use(middleware.RateLimitMiddleware(redisClient, guestWriteRule, middleware.KeyByIP))
-	{
-		ordertransport.RegisterGuestCreateRoute(guestWrite, orderCreateHandler)
-		ordertransport.RegisterGuestCreateAndPayRoute(guestWrite, orderCreateHandler)
-		paymenttransport.RegisterGuestWriteRoutes(guestWrite, paymentWriteHandler)
+		// 免费领取的公开端点要对游客开放，但登录后必须能算出 claimed，
+		// 所以单独挂可选鉴权，而不是给整个 public 组增加一次 token 解析。
+		publicOptionalAuth := public.Group("")
+		publicOptionalAuth.Use(middleware.OptionalUserJWTMiddleware(cfg.UserJWT.SecretKey, c.UserStore))
+		freeclaimtransport.RegisterPublicRoutes(publicOptionalAuth, freeclaimtransport.NewUserHandler(c.FreeClaimService))
+		tokenstationtransport.RegisterPublicRoutes(public, tokenstationtransport.NewPublicHandler(c.TokenStationService))
 	}
 
 	// 用户认证接口
@@ -134,9 +128,17 @@ func registerStorefrontRoutes(
 		ordertransport.RegisterUserPaymentChannelsRoute(user, userOrderHandler)
 		ordertransport.RegisterUserReadRoutes(user, userOrderHandler)
 		ordertransport.RegisterUserCancelRoute(user, userOrderHandler)
+		ordertransport.RegisterUserManualFormRoutes(user, ordertransport.NewManualFormHandler(c.OrderService))
 		paymenttransport.RegisterUserWriteRoutes(user, paymentWriteHandler)
 		paymenttransport.RegisterUserLatestRoute(user, paymentLatestHandler)
 		wallettransport.RegisterUserRoutes(user, userWalletHandler)
+		pointstransport.RegisterUserRoutes(user, pointstransport.NewUserHandler(c.PointsService))
+		memberleveltransport.RegisterUserRoutes(user, memberleveltransport.NewUserHandler(c.MemberLevelService))
+		freeclaimtransport.RegisterUserRoutes(user, freeclaimtransport.NewUserHandler(c.FreeClaimService))
+		supporttransport.RegisterUserRoutes(user, supporttransport.NewUserHandler(
+			c.SupportService,
+			container.NewSupportAttachmentUploader(c.SupportUploadService),
+		))
 		giftcardtransport.RegisterUserRoutes(user, userGiftCardHandler)
 		affiliatetransport.RegisterUserRoutes(user, affiliateHandler)
 

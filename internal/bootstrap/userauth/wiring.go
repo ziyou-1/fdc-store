@@ -34,7 +34,7 @@ func New(c *container.Container) Handlers {
 			userEmailTransportAdapter{service: c.UserAuthService},
 		),
 		Password: userauthtransport.NewUserPasswordHandler(userPasswordTransportAdapter{
-			auth: c.UserAuthService, settings: c.SettingService,
+			auth: c.UserAuthService,
 		}),
 		Verify: userauthtransport.NewUserVerifyHandler(
 			verify,

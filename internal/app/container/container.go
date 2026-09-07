@@ -3,7 +3,6 @@ package container
 import (
 	"github.com/dujiao-next/internal/authz"
 	"github.com/dujiao-next/internal/config"
-	adproxyapp "github.com/dujiao-next/internal/modules/adproxy/application"
 	affiliateapp "github.com/dujiao-next/internal/modules/affiliate/application"
 	affiliatecontract "github.com/dujiao-next/internal/modules/affiliate/contract"
 	apicredentialapp "github.com/dujiao-next/internal/modules/apicredential/application"
@@ -33,6 +32,8 @@ import (
 	dashboardcontract "github.com/dujiao-next/internal/modules/dashboard/contract"
 	downstreamcallbackapp "github.com/dujiao-next/internal/modules/downstreamcallback/application"
 	downstreamcallbackcontract "github.com/dujiao-next/internal/modules/downstreamcallback/contract"
+	freeclaimapp "github.com/dujiao-next/internal/modules/freeclaim/application"
+	freeclaimgormstore "github.com/dujiao-next/internal/modules/freeclaim/infrastructure/gormstore"
 	fulfillmentapp "github.com/dujiao-next/internal/modules/fulfillment/application"
 	fulfillmentcontract "github.com/dujiao-next/internal/modules/fulfillment/contract"
 	giftcardapp "github.com/dujiao-next/internal/modules/giftcard/application"
@@ -60,6 +61,8 @@ import (
 	paymentapp "github.com/dujiao-next/internal/modules/payment/application"
 	paymentcontract "github.com/dujiao-next/internal/modules/payment/contract"
 	paymentprovider "github.com/dujiao-next/internal/modules/payment/infrastructure/gateway/provider"
+	pointsapp "github.com/dujiao-next/internal/modules/points/application"
+	pointsgormstore "github.com/dujiao-next/internal/modules/points/infrastructure/gormstore"
 	procurementapp "github.com/dujiao-next/internal/modules/procurement/application"
 	procurementgormstore "github.com/dujiao-next/internal/modules/procurement/infrastructure/gormstore"
 	promotionapp "github.com/dujiao-next/internal/modules/promotion/application"
@@ -73,8 +76,12 @@ import (
 	siteconnectionapp "github.com/dujiao-next/internal/modules/siteconnection/application"
 	siteconnectioncontract "github.com/dujiao-next/internal/modules/siteconnection/contract"
 	sitemapapp "github.com/dujiao-next/internal/modules/sitemap/application"
+	supportapp "github.com/dujiao-next/internal/modules/support/application"
+	supportgormstore "github.com/dujiao-next/internal/modules/support/infrastructure/gormstore"
 	broadcastapp "github.com/dujiao-next/internal/modules/telegram/broadcast/application"
 	broadcastcontract "github.com/dujiao-next/internal/modules/telegram/broadcast/contract"
+	tokenstationapp "github.com/dujiao-next/internal/modules/tokenstation/application"
+	tokenstationgormstore "github.com/dujiao-next/internal/modules/tokenstation/infrastructure/gormstore"
 	uploadapp "github.com/dujiao-next/internal/modules/upload/application"
 	walletapp "github.com/dujiao-next/internal/modules/wallet/application"
 	walletgormstore "github.com/dujiao-next/internal/modules/wallet/infrastructure/gormstore"
@@ -106,6 +113,10 @@ type Container struct {
 	CouponUsageRepo        *coupongormstore.UsageStore
 	PromotionRepo          *promotiongormstore.Store
 	WalletRepo             *walletgormstore.Store
+	PointsRepo             *pointsgormstore.Store
+	FreeClaimRepo          *freeclaimgormstore.Store
+	TokenStationRepo       *tokenstationgormstore.Store
+	SupportRepo            *supportgormstore.Store
 	CategoryRepo           categorycontract.Repository
 	SettingRepo            settingscontract.Store
 	UserLoginLogRepo       auditlogcontract.UserLoginRepository
@@ -153,6 +164,11 @@ type Container struct {
 	SitemapService                *sitemapapp.Service
 	CartService                   *cartapp.Service
 	WalletService                 *walletapp.Service
+	PointsService                 *pointsapp.Service
+	FreeClaimService              *freeclaimapp.Service
+	TokenStationService           *tokenstationapp.Service
+	SupportService                *supportapp.Service
+	SupportUploadService          *uploadapp.Service
 	OrderRefundService            *orderrefund.Service
 	OrderService                  *orderapp.OrderService
 	FulfillmentService            *fulfillmentapp.Service
@@ -187,7 +203,6 @@ type Container struct {
 	ChannelClientService          *channelclientapp.Service
 	TelegramBroadcastService      *broadcastapp.Service
 	MemberLevelService            *memberlevelapp.Service
-	AdProxyService                *adproxyapp.Service
 	OrderRiskControlService       *orderriskapp.Service
 	ComplianceService             *complianceapp.Service
 

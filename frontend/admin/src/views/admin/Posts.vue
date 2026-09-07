@@ -43,7 +43,13 @@ const router = useRouter()
 const loading = ref(false)
 const showModal = ref(false)
 const isEditing = ref(false)
-const currentTab = ref(route.params.type === 'notice' ? 'notice' : 'blog')
+// 允许从路由进入的文章类型；不在表内一律回落 blog。
+const POST_TABS = ['blog', 'notice', 'faq'] as const
+const resolveTab = (raw: unknown) => {
+  const value = String(raw || '')
+  return (POST_TABS as readonly string[]).includes(value) ? value : 'blog'
+}
+const currentTab = ref(resolveTab(route.params.type))
 const currentLang = ref('zh-CN')
 const submitting = ref(false)
 
@@ -59,6 +65,7 @@ const languages = computed(() => [
   { code: 'zh-CN', name: t('admin.common.lang.zhCN') },
   { code: 'zh-TW', name: t('admin.common.lang.zhTW') },
   { code: 'en-US', name: t('admin.common.lang.enUS') },
+  { code: 'id-ID', name: t('admin.common.lang.idID') },
 ])
 
 const posts = ref<AdminPost[]>([])
@@ -71,10 +78,10 @@ const pagination = reactive({
 })
 const form = reactive({
   id: 0,
-  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as Record<string, string>,
+  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as Record<string, string>,
   slug: '',
-  summary: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as Record<string, string>,
-  content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as Record<string, string>,
+  summary: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as Record<string, string>,
+  content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as Record<string, string>,
   type: 'blog',
   thumbnail: '',
   is_published: true,
@@ -252,10 +259,10 @@ const openCreateModal = () => {
   resetRelatedProductsState()
   Object.assign(form, {
     id: 0,
-    title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+    title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
     slug: '',
-    summary: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
-    content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+    summary: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
+    content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
     type: currentTab.value,
     thumbnail: '',
     is_published: true,
@@ -271,10 +278,10 @@ const openEditModal = (post: AdminPost) => {
   resetRelatedProductsState()
   Object.assign(form, {
     id: post.id,
-    title: post.title || { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+    title: post.title || { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
     slug: post.slug,
-    summary: post.summary || { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
-    content: post.content || { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+    summary: post.summary || { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
+    content: post.content || { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
     type: post.type,
     thumbnail: post.thumbnail,
     is_published: post.is_published,
@@ -347,8 +354,10 @@ onMounted(() => {
 watch(
   () => route.params.type,
   (type) => {
-    if (type === 'notice' || type === 'blog') {
-      currentTab.value = type
+    const value = String(type || '')
+    // 白名单漏项会导致从菜单点进来 tab 不切、列表还拉着上一个类型
+    if ((POST_TABS as readonly string[]).includes(value)) {
+      currentTab.value = value
     }
   },
 )
@@ -379,6 +388,7 @@ watch(
       <TabsList>
         <TabsTrigger value="blog">{{ t('admin.posts.tabs.blog') }}</TabsTrigger>
         <TabsTrigger value="notice">{{ t('admin.posts.tabs.notice') }}</TabsTrigger>
+        <TabsTrigger value="faq">{{ t('admin.posts.tabs.faq') }}</TabsTrigger>
       </TabsList>
     </Tabs>
 
@@ -507,6 +517,7 @@ watch(
                 <SelectContent>
                   <SelectItem value="blog">{{ t('admin.posts.form.typeBlog') }}</SelectItem>
                   <SelectItem value="notice">{{ t('admin.posts.form.typeNotice') }}</SelectItem>
+                  <SelectItem value="faq">{{ t('admin.posts.form.typeFaq') }}</SelectItem>
                 </SelectContent>
               </Select>
               <p v-if="errors.type" class="text-xs text-destructive mt-1">{{ errors.type }}</p>

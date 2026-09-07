@@ -2,6 +2,8 @@
   <div>
     <!-- 站长配置的横幅轮播（两种模式共用，顶部展示） -->
     <VaultBannerHero />
+    <FreeClaimCard class="mx-auto mt-6 w-full max-w-[1180px] px-4 sm:px-6" />
+    <TokenStationCard class="mx-auto mt-6 w-full max-w-[1180px] px-4 sm:px-6" />
 
     <!-- ==================== 列表模式 ==================== -->
     <template v-if="isListMode">
@@ -16,6 +18,7 @@
           />
 
           <main class="min-w-0">
+            <HomeNoticeStrip class="mb-4" />
             <!-- 搜索 -->
             <div class="relative mb-4">
               <Search class="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
@@ -25,7 +28,7 @@
                 :placeholder="t('products.searchBoxPlaceholder')"
                 :aria-label="t('products.searchLabel')"
               />
-              <button v-if="searchQuery" type="button" class="absolute right-2.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" :aria-label="t('blog.searchClear')" @click="clearSearch"><X class="h-3.5 w-3.5" /></button>
+              <button v-if="searchQuery" type="button" class="absolute right-2.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" :aria-label="t('common.searchClear')" @click="clearSearch"><X class="h-3.5 w-3.5" /></button>
             </div>
 
             <!-- 骨架 -->
@@ -137,12 +140,12 @@
             v-for="post in posts"
             :key="post.id"
             class="block h-full rounded-lg border bg-card p-[22px] transition hover:-translate-y-[3px] hover:border-hairline-strong hover:shadow-[var(--shadow)]"
-            :to="`/blog/${post.slug}`"
+            :to="`/posts/${post.slug}`"
           >
             <span class="text-[12.5px] font-semibold text-muted-foreground">{{ formatDate(post.published_at) }}</span>
             <h3 class="mt-2 line-clamp-2 text-[17px] font-bold">{{ getLocalizedText(post.title) }}</h3>
             <p class="mt-2 line-clamp-2 text-sm text-muted-foreground">{{ getLocalizedText(post.summary) }}</p>
-            <span class="mt-3.5 inline-flex items-center gap-1.5 text-sm font-bold text-primary">{{ t('blog.readMore') }} <ChevronRight class="h-4 w-4" /></span>
+            <span class="mt-3.5 inline-flex items-center gap-1.5 text-sm font-bold text-primary">{{ t('post.readMore') }} <ChevronRight class="h-4 w-4" /></span>
           </RouterLink>
         </div>
       </section>
@@ -182,6 +185,9 @@ import VaultProductCard from './components/VaultProductCard.vue'
 import VaultProductListItem from './components/VaultProductListItem.vue'
 import VaultCategorySidebar from './components/VaultCategorySidebar.vue'
 import VaultBannerHero from './components/VaultBannerHero.vue'
+import FreeClaimCard from '../../components/FreeClaimCard.vue'
+import HomeNoticeStrip from '../../components/HomeNoticeStrip.vue'
+import TokenStationCard from '../../components/TokenStationCard.vue'
 import ProductQuickBuy from '../../components/ProductQuickBuy.vue'
 import AnnouncementModal from '../../components/AnnouncementModal.vue'
 import { useAnnouncement, type HomeAnnouncement } from '../../composables/useAnnouncement'
@@ -255,9 +261,8 @@ const catColor = (idx: number) => catColors[idx % catColors.length]
 const catName = (cat: PublicCategory) => getLocalizedText(cat.name) || cat.slug || ''
 
 const navBuiltin = computed(() => (appStore.config?.nav_config as { builtin?: Record<string, boolean> } | undefined)?.builtin)
-const blogEnabled = computed(() => navBuiltin.value?.blog !== false)
 const noticeEnabled = computed(() => navBuiltin.value?.notice !== false)
-const latestVisible = computed(() => blogEnabled.value || noticeEnabled.value)
+const latestVisible = computed(() => noticeEnabled.value)
 
 const formatDate = (value: string) => (value ? new Date(value).toLocaleDateString() : '')
 
@@ -297,11 +302,18 @@ const loadCategories = async () => {
 const loadPosts = async () => {
   if (!latestVisible.value) return
   try {
-    const params: Record<string, unknown> = { page: 1, page_size: 3 }
-    if (blogEnabled.value && !noticeEnabled.value) params.type = 'blog'
-    if (!blogEnabled.value && noticeEnabled.value) params.type = 'notice'
-    const res = await postAPI.list(params)
-    posts.value = res.data.data || []
+    // 与 classic 壳同一口径：不带 type 会把 faq 混进来，而 FAQ 没有详情页
+    const wanted: string[] = []
+    if (noticeEnabled.value) wanted.push('notice')
+    const responses = await Promise.all(
+      wanted.map((type) => postAPI.list({ page: 1, page_size: 3, type })),
+    )
+    const merged = responses.flatMap((res) => res.data.data || [])
+    merged.sort(
+      (a: any, b: any) =>
+        new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime(),
+    )
+    posts.value = merged.slice(0, 3)
   } catch (err) {
     console.error('Failed to load posts:', err)
   }

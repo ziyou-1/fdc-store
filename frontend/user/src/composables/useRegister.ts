@@ -8,6 +8,7 @@ import type { CaptchaPayload } from '../api'
 import ImageCaptcha from '../components/captcha/ImageCaptcha.vue'
 import TurnstileCaptcha from '../components/captcha/TurnstileCaptcha.vue'
 import { useFormValidation, getPasswordStrength } from './useFormValidation'
+import { getAffiliateCode } from '../utils/affiliate'
 
 /**
  * 用户注册页共享逻辑（classic + vault 双模板共用）。
@@ -21,7 +22,7 @@ export function useRegister() {
 
   const brandSiteName = computed(() => {
     const siteName = String(appStore.config?.brand?.site_name || '').trim()
-    return siteName !== '' ? siteName : 'Dujiao-Next'
+    return siteName !== '' ? siteName : 'Keyvo'
   })
 
   const email = ref('')
@@ -30,6 +31,7 @@ export function useRegister() {
   const password = ref('')
   const showPassword = ref(false)
   const code = ref('')
+  const inviteCode = ref('')
   const agreed = ref(false)
 
   const passwordStrength = computed(() => getPasswordStrength(password.value))
@@ -209,6 +211,7 @@ export function useRegister() {
         password: password.value,
         code: emailVerificationEnabled.value ? code.value : '',
         agreement_accepted: agreed.value,
+        invite_code: inviteCode.value.trim() || undefined,
       })
       router.push('/me/orders')
     } catch (err: any) {
@@ -220,6 +223,7 @@ export function useRegister() {
   const handleRegister = debounceAsync(performRegister, 200)
 
   onMounted(async () => {
+    inviteCode.value = getAffiliateCode()
     await appStore.loadConfig(true)
   })
 
@@ -232,6 +236,7 @@ export function useRegister() {
     password,
     showPassword,
     code,
+    inviteCode,
     agreed,
     passwordStrength,
     error,

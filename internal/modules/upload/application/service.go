@@ -29,6 +29,7 @@ var allowedUploadScenes = map[string]struct{}{
 	"category": {},
 	"telegram": {},
 	"reseller": {},
+	"support":  {},
 }
 
 // Service 文件上传服务。
@@ -97,6 +98,10 @@ func (s *Service) SaveFileWithMeta(file *multipart.FileHeader, scene string) (*c
 	if ext == ".svg" && isSVGContent(buffer) {
 		contentType = "image/svg+xml"
 	}
+	// http.DetectContentType 只认 major brand 以 mp4 开头的 ISO-BMFF，
+	// iPhone 直出的 .mov（brand "qt  "）会落到 application/octet-stream。
+	// 这里按 ftyp box 补一次判定，是否放行仍由 AllowedTypes 白名单决定。
+	contentType = refineISOBMFFContentType(buffer, contentType)
 	if normalizedScene != "telegram" && len(s.policy.AllowedTypes) > 0 {
 		allowed := false
 		for _, t := range s.policy.AllowedTypes {
@@ -184,6 +189,23 @@ func normalizeUploadScene(raw string) string {
 		return value
 	}
 	return "common"
+}
+
+// refineISOBMFFContentType 在通用嗅探失败时，按 ISO 基础媒体文件格式的
+// ftyp box 补判 mp4/quicktime。仅在 current 为 application/octet-stream 时生效，
+// 不会覆盖已经识别成功的类型。
+func refineISOBMFFContentType(buffer []byte, current string) string {
+	if current != "application/octet-stream" {
+		return current
+	}
+	if len(buffer) < 12 || string(buffer[4:8]) != "ftyp" {
+		return current
+	}
+	brand := strings.ToLower(string(buffer[8:12]))
+	if strings.HasPrefix(brand, "qt") {
+		return "video/quicktime"
+	}
+	return "video/mp4"
 }
 
 func isAllowedExtension(ext string, allowed []string) bool {

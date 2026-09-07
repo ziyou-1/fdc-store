@@ -16,7 +16,7 @@ import SettingsNotificationTab from './components/SettingsNotificationTab.vue'
 const { t } = useI18n()
 const loading = ref(false)
 const notificationTabRef = ref<InstanceType<typeof SettingsNotificationTab>>()
-const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US'] as const
+const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const
 type SupportedLanguage = (typeof supportedLanguages)[number]
 
 const currentLang = ref<SupportedLanguage>('zh-CN')
@@ -34,6 +34,7 @@ const languages = computed(() => [
   { code: 'zh-CN' as SupportedLanguage, name: t('admin.common.lang.zhCN') },
   { code: 'zh-TW' as SupportedLanguage, name: t('admin.common.lang.zhTW') },
   { code: 'en-US' as SupportedLanguage, name: t('admin.common.lang.enUS') },
+  { code: 'id-ID' as SupportedLanguage, name: t('admin.common.lang.idID') },
 ])
 
 const createNotificationLocalizedTemplate = () => ({ title: '', body: '' })
@@ -41,6 +42,7 @@ const createNotificationSceneTemplate = () => ({
   'zh-CN': createNotificationLocalizedTemplate(),
   'zh-TW': createNotificationLocalizedTemplate(),
   'en-US': createNotificationLocalizedTemplate(),
+  'id-ID': createNotificationLocalizedTemplate(),
 })
 
 const notificationData = reactive({
@@ -124,7 +126,7 @@ const normalizeNotificationSceneTemplate = (raw: unknown) => {
   const fallback = createNotificationSceneTemplate()
   if (!raw || typeof raw !== 'object') return fallback
   const record = raw as Record<string, unknown>
-  ;(['zh-CN', 'zh-TW', 'en-US'] as const).forEach((lang) => {
+  ;(['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const).forEach((lang) => {
     const item = record[lang] as Record<string, unknown> | undefined
     if (!item || typeof item !== 'object') return
     fallback[lang].title = typeof item.title === 'string' ? item.title : ''

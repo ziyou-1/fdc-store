@@ -1,6 +1,6 @@
 {
   "common": {
-    "siteName": "Dujiao-Next",
+    "siteName": "Keyvo",
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",
@@ -25,7 +25,8 @@
       "badGateway": "Bad gateway",
       "serviceUnavailable": "Service unavailable",
       "networkError": "Network connection failed"
-    }
+    },
+    "searchClear": "Clear"
   },
   "errorBoundary": {
     "retry": "Retry",
@@ -47,8 +48,8 @@
   "nav": {
     "home": "Home",
     "products": "Products",
-    "blog": "Blog",
     "notice": "Notice",
+    "faq": "FAQ",
     "about": "About"
   },
   "vault": {
@@ -96,7 +97,7 @@
     "label": "Checkout progress"
   },
   "footer": {
-    "description": "Professional online studio providing quality products and services.",
+    "description": "Self-service digital goods store: AI subscriptions, game and software keys, token credits — delivered instantly.",
     "quickLinks": "Quick Links",
     "contact": "Contact Us",
     "rights": "All rights reserved",
@@ -112,7 +113,7 @@
   },
   "home": {
     "hero": {
-      "title": "Dujiao-Next",
+      "title": "Keyvo",
       "subtitle": "Professional Products and Services Provider",
       "cta": "Browse Products",
       "badge": "Next Gen Digital Store"
@@ -137,6 +138,9 @@
     "latest": {
       "title": "Latest Updates",
       "description": "Stay updated with our latest news and announcements"
+    },
+    "notice": {
+      "viewAll": "View all"
     }
   },
   "products": {
@@ -153,6 +157,7 @@
     "previous": "Previous",
     "next": "Next",
     "price": "Price",
+    "pointsPrice": "{n} points",
     "categoryLabel": "Category",
     "searchLabel": "Search",
     "searchPlaceholder": "Search products",
@@ -169,7 +174,8 @@
     },
     "fulfillmentType": {
       "manual": "Manual delivery",
-      "auto": "Auto fulfillment"
+      "auto": "Auto fulfillment",
+      "content": "Tutorial"
     },
     "filter": "Filter",
     "closeFilter": "Close filter",
@@ -198,6 +204,8 @@
     "loginToBuy": "Login to buy",
     "addToCart": "Add to cart",
     "buyNow": "Buy now",
+    "redeemWithPoints": "Redeem with points",
+    "redeeming": "Redeeming...",
     "categoryLabel": "Category",
     "fulfillmentLabel": "Fulfillment",
     "skuTitle": "Choose SKU",
@@ -225,32 +233,32 @@
     "stock": "Stock",
     "addToCart": "Add to Cart",
     "buyNow": "Buy Now",
+    "redeemWithPoints": "Redeem with points",
+    "redeeming": "Redeeming...",
     "loginToBuy": "Login to Buy",
     "soldOut": "Sold Out",
     "viewDetail": "View Details"
   },
   "productPurchase": {
     "label": "Purchase type",
-    "member": "Members only",
-    "guest": "Guest purchase"
+    "member": "Members only"
   },
-  "blog": {
-    "subtitle": "Latest articles and updates",
+  "post": {
     "readMore": "Read More",
     "empty": "No articles",
-    "searchPlaceholder": "Search article title...",
-    "searchClear": "Clear",
-    "noResults": "No articles match your search",
     "relatedProducts": "Related Products"
   },
-  "blogDetail": {
-    "backToBlog": "Back to Blog",
+  "postDetail": {
     "backToNotice": "Back to Notice",
     "notFound": "Article not found"
   },
   "notice": {
     "subtitle": "Important notices and announcements",
     "empty": "No notices"
+  },
+  "faq": {
+    "subtitle": "Common questions about buying, activating and support",
+    "empty": "No FAQs yet"
   },
   "announcement": {
     "close": "Close",
@@ -259,8 +267,8 @@
   },
   "about": {
     "title": "About Us",
-    "subtitle": "Learn about Dujiao-Next",
-    "introduction": "Dujiao-Next is a professional online studio dedicated to providing high-quality products and services to our customers. Innovation, professionalism, and efficiency are our core values, and we constantly pursue excellence to create value for our customers.",
+    "subtitle": "About Keyvo",
+    "introduction": "Keyvo is a self-service store for digital goods: AI subscription accounts, game and software keys, and token credits. Orders are delivered automatically or semi-automatically, with local payment methods, membership discounts, points and live support.",
     "ourServices": "Our Services",
     "service1": "Premium Product Recommendations & Sales",
     "service2": "Professional Pre-sales Consulting",
@@ -273,7 +281,6 @@
     "cart": "Cart",
     "login": "Login",
     "personalCenter": "Personal Center",
-    "guestOrders": "Guest Lookup",
     "logout": "Logout",
     "selectLanguage": "Select Language",
     "more": "More"
@@ -284,6 +291,7 @@
   "bottomNav": {
     "home": "Home",
     "products": "Products",
+    "notice": "Notice",
     "cart": "Cart",
     "me": "Me"
   },
@@ -299,7 +307,9 @@
       "affiliate": "Affiliate",
       "reseller": "Reseller Center",
       "giftCard": "Gift Card",
-      "api": "API Integration"
+      "api": "API Integration",
+      "points": "Points",
+      "membership": "Membership"
     },
     "common": {
       "loadFailed": "Failed to load personal center data, please try again later",
@@ -323,7 +333,30 @@
       "spendProgress": "Total Spent",
       "highestLevel": "Highest level reached",
       "defaultLevel": "Regular Member",
-      "noDiscount": "No discount"
+      "noDiscount": "No discount",
+      "buy": "Buy membership",
+      "expiresAt": "Active until {date}"
+    },
+    "membership": {
+      "title": "Membership plans",
+      "subtitle": "Buy a monthly, quarterly or yearly plan and get the matching store discount.",
+      "current": "Current membership",
+      "inactive": "No paid membership yet",
+      "expiresAt": "Active until {date}",
+      "discount": "{n}% of list price",
+      "buy": "Buy now",
+      "channel": "Payment channel",
+      "channelEmpty": "No payment channels available",
+      "channelLoadFailed": "Failed to load payment channels",
+      "channelRequired": "Choose a payment channel",
+      "scanToPay": "Scan to pay",
+      "loadFailed": "Failed to load membership plans",
+      "purchaseFailed": "Failed to start purchase",
+      "period": {
+        "month": "Monthly",
+        "quarter": "Quarterly",
+        "year": "Yearly"
+      }
     },
     "profile": {
       "title": "Profile",
@@ -987,6 +1020,68 @@
       "disabled": "API disabled.",
       "toggleFailed": "Operation failed, please try again later.",
       "cancel": "Cancel"
+    },
+    "points": {
+      "title": "My Points",
+      "subtitle": "Check your points balance, daily check-in and history.",
+      "balance": "Balance",
+      "totalEarned": "Total earned",
+      "totalSpent": "Total spent",
+      "checkinTitle": "Daily check-in",
+      "checkinHint": "Earn {points} points every day",
+      "streakDays": "{days}-day streak",
+      "checkin": "Check in",
+      "checkedIn": "Checked in today",
+      "checkinSuccess": "Checked in — {points} points earned, {days}-day streak",
+      "referralTitle": "Invite friends for points",
+      "referralHint": "You get {register} points when they register, plus {order} points on their first order",
+      "referralCode": "Invite code",
+      "referralCopyCode": "Copy code",
+      "referralCopyLink": "Copy invite link",
+      "referralCopied": "Copied",
+      "detailTitle": "Points history",
+      "empty": "No points activity yet.",
+      "rechargeTitle": "Buy points",
+      "rechargeSubtitle": "Points are credited once payment succeeds.",
+      "amount": "Amount",
+      "amountPlaceholder": "Enter an amount",
+      "estimated": "You will receive about {points} points",
+      "channel": "Payment method",
+      "channelEmpty": "Enter an amount to load available payment methods",
+      "remark": "Note",
+      "remarkPlaceholder": "Optional",
+      "rechargeSubmit": "Continue to payment",
+      "rechargeCreated": "Recharge order created",
+      "scanToPay": "Scan to pay",
+      "table": {
+        "createdAt": "Time",
+        "type": "Type",
+        "direction": "Direction",
+        "amount": "Change",
+        "balanceAfter": "Balance",
+        "remark": "Note"
+      },
+      "directions": {
+        "in": "Earned",
+        "out": "Spent"
+      },
+      "types": {
+        "checkin": "Check-in",
+        "referral_register": "Referral sign-up",
+        "referral_order": "Referral order",
+        "recharge": "Purchase",
+        "exchange": "Redemption",
+        "exchange_refund": "Redemption refund",
+        "admin_adjust": "Manual adjustment"
+      },
+      "errors": {
+        "loadFailed": "Failed to load points",
+        "checkinFailed": "Check-in failed",
+        "invalidAmount": "Enter a valid amount",
+        "channelRequired": "Select a payment method",
+        "rechargeFailed": "Could not start the payment",
+        "copyFailed": "Copy failed"
+      }
     }
   },
   "auth": {
@@ -1071,6 +1166,9 @@
       "emailDomainSelectHint": "Choose an email domain; the full email address is composed automatically",
       "passwordLabel": "Password",
       "passwordPlaceholder": "Set login password",
+      "inviteCodeLabel": "Invite code",
+      "inviteCodePlaceholder": "Optional",
+      "inviteCodeHint": "Same as the affiliate ID in the referral link. Leave blank if you do not have one.",
       "codeLabel": "Verification code",
       "codePlaceholder": "Enter email code",
       "sendCode": "Send code",
@@ -1158,17 +1256,10 @@
     "couponTitle": "Coupon",
     "couponPlaceholder": "Enter coupon code (optional)",
     "modeTitle": "Purchase Mode",
-    "guestPurchase": "Guest checkout",
     "memberPurchase": "Login to buy",
-    "guestEmailPlaceholder": "Email (for order lookup)",
-    "guestPasswordPlaceholder": "Order password",
-    "guestInstructions": {
-      "title": "Fill Instructions:",
-      "email": "Email: Please provide an email address that can receive emails. After payment, we could send product information and contact you through this email.",
-      "password": "Order Password: Please set a complex password and keep it safe. This password is used for you to query your purchased products through the \"Guest Order Lookup\" menu after purchase."
-    },
     "manualFormTitle": "Required information",
     "manualFormTip": "Manual-delivery information is collected per product. If multiple SKUs of the same product are purchased, fill it once only.",
+    "manualFormAfterPaymentHint": "Activation details (such as the email to activate) will be collected on the order page after payment. We process it within 24 hours.",
     "manualFormAppliesToSkuCount": "Applies to {count} selected SKUs",
     "manualFormSelectPlaceholder": "Please select",
     "manualFormFieldRequired": "{name} is required",
@@ -1198,12 +1289,12 @@
     "channelAmountMinHint": "This channel requires amount greater than {min}",
     "channelAmountMaxHint": "This channel requires amount less than {max}",
     "walletCoversAll": "Wallet balance covers the full amount",
+    "pointsCoversAll": "Points cover the full amount",
     "submitButton": "Place Order & Pay",
     "submitting": "Submitting...",
     "errors": {
       "emptyCart": "Your cart is empty",
-      "missingGuest": "Please enter email and order password",
-      "loginOrGuest": "Please login or use guest checkout",
+      "loginRequired": "Please sign in to place an order",
       "submitFailed": "Submit failed, please try again",
       "manualFormInvalid": "Please complete required information before submitting",
       "selectPayment": "Please select a payment method"
@@ -1233,6 +1324,10 @@
     "payableAmountLabel": "Amount due",
     "walletBalanceLabel": "Wallet balance",
     "useBalance": "Use wallet balance first",
+    "usePoints": "Pay with points",
+    "pointsBalanceLabel": "Points balance",
+    "pointsDeductLabel": "Points to deduct",
+    "pointsInsufficientHint": "Not enough points to redeem this order",
     "walletDeductLabel": "Wallet deduction",
     "onlinePayLabel": "Online payment",
     "walletOnlyHint": "Only wallet balance payment is accepted",
@@ -1296,6 +1391,7 @@
     "actionTitle": "Create Payment",
     "selectChannelError": "Please select a payment method",
     "walletPayOnly": "Full amount will be paid from wallet balance",
+    "pointsPayOnly": "Full amount will be paid with points",
     "submitButton": "Confirm payment",
     "submitting": "Processing...",
     "orderNotFound": "Order not found or failed to load",
@@ -1304,11 +1400,6 @@
     "redirecting": "Payment confirmed, redirecting to order detail...",
     "orderExpired": "Order expired, please place a new order",
     "orderCanceled": "Order canceled, payment is unavailable",
-    "guestAuthTitle": "Enter guest credentials",
-    "guestAuthHint": "Use the email and order password from checkout",
-    "guestAuthSubmit": "Save and continue",
-    "guestAuthRequired": "Please enter email and order password",
-    "guestAuthInvalid": "Credentials mismatch, please try again",
     "status": {
       "initiated": "Initiated",
       "pending": "Pending",
@@ -1636,6 +1727,8 @@
     "amountTotal": "Total amount",
     "amountWalletPaid": "Wallet paid",
     "amountOnlinePaid": "Online paid",
+    "amountPointsPaid": "Paid with points",
+    "amountFreeClaimPaid": "Covered by free claim",
     "amountRefunded": "Refunded amount",
     "amountMemberDiscount": "Member Discount",
     "amountWholesaleDiscount": "Wholesale discount",
@@ -1673,9 +1766,20 @@
     "fulfillmentType": "Type",
     "fulfillmentStatus": "Status",
     "instructionsTitle": "Usage instructions",
+    "accountLabel": "Account",
+    "passwordLabel": "Password",
+    "manualFormTitle": "Activation information",
+    "manualFormTip": "Please enter the email or details that need to be activated.",
+    "manualFormSla": "We will process this within {hours} hours after payment.",
+    "manualFormDeadline": "Deadline: {time}",
+    "manualFormSubmit": "Submit",
+    "manualFormSubmitting": "Submitting...",
+    "manualFormSubmitted": "Submitted. We will process it within the promised time.",
+    "manualFormSubmitFailed": "Submit failed, please try again",
     "fulfillmentTypes": {
       "manual": "Manual",
-      "auto": "Auto"
+      "auto": "Auto",
+      "content": "Tutorial"
     },
     "fulfillmentStatuses": {
       "pending": "Pending",
@@ -1688,40 +1792,36 @@
     "fulfillmentDownloading": "Downloading...",
     "fulfillmentTruncatedHint": "Showing first 100 items only. Please download for full content."
   },
-  "guestOrders": {
-    "title": "Guest Order Lookup",
-    "subtitle": "Enter email and order password to view orders",
-    "emailPlaceholder": "Email",
-    "passwordPlaceholder": "Order password",
-    "orderNoPlaceholder": "Order No (optional)",
-    "savedHint": "Saved email: {email}",
-    "clearSaved": "Clear saved info",
-    "tip": "Use the email and order password from checkout",
-    "search": "Search orders",
-    "searching": "Searching...",
-    "empty": "No order records",
-    "emptyOrderNo": "No matching order found",
-    "viewDetails": "View details",
-    "payNow": "Pay now",
-    "prevPage": "Prev",
-    "nextPage": "Next",
-    "pageInfo": "Page {page} / {total}",
+  "support": {
+    "title": "Live Support",
+    "close": "Close support window",
+    "placeholder": "Describe the issue you ran into…",
+    "send": "Send",
+    "attach": "Send an image or video",
+    "empty": "No messages yet. Tell us what went wrong.",
+    "you": "You",
+    "agent": "Support",
+    "imageAlt": "Support conversation attachment",
+    "closedHint": "This conversation was closed by support. Sending a new message reopens it.",
     "errors": {
-      "missing": "Please enter email and order password",
-      "notFound": "No matching order found, please verify inputs",
-      "searchFailed": "Search failed, please check info"
+      "attachmentTooLarge": "Attachment must not exceed {size}MB"
     }
   },
-  "guestOrderDetail": {
-    "title": "Guest Order Detail",
-    "subtitle": "Check order status and fulfillment",
-    "backSearch": "Back to lookup",
-    "notFound": "Order not found or info mismatch",
-    "authTitle": "Enter order credentials",
-    "authHint": "Use the email and order password from checkout",
-    "authRequired": "Please enter email and order password",
-    "authInvalid": "Credentials mismatch, please try again",
-    "authSubmit": "Save and search",
-    "authClear": "Clear saved info"
+  "freeClaim": {
+    "eyebrow": "Daily Free Claim",
+    "memberEyebrow": "Members-only free claim",
+    "memberOnlyHint": "Paid members can claim one item per day. The admin pool rotates by date.",
+    "free": "Free",
+    "oncePerDay": "Once per day",
+    "claimed": "Claimed today",
+    "claimNow": "Claim now",
+    "becomeMember": "Become a member to claim",
+    "loginToClaim": "Log in to claim",
+    "claimSuccess": "Claimed successfully",
+    "claimFailed": "Claim failed"
+  },
+  "tokenStation": {
+    "eyebrow": "Webpage token relay",
+    "open": "Open their site"
   }
 }

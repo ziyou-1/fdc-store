@@ -17,7 +17,6 @@
             <RouterLink to="/notice"><Bell /> {{ t('nav.notice') }}</RouterLink>
           </Button>
           <Button as-child variant="outline" size="sm" class="rounded-full">
-            <RouterLink to="/blog"><BookOpen /> {{ t('nav.blog') }}</RouterLink>
           </Button>
         </div>
       </div>
@@ -36,7 +35,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Bell, BookOpen, Frown, Home, Info, ShoppingBag } from 'lucide-vue-next'
+import { ArrowLeft, Bell, Frown, Home, Info, ShoppingBag } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'

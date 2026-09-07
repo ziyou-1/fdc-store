@@ -76,9 +76,8 @@
                 </h1>
 
                 <div class="mb-6 flex flex-wrap items-center gap-2">
-                  <Badge :variant="product.purchase_type === 'guest' ? 'warning' : 'success'">
-                    <UserPlus v-if="product.purchase_type === 'guest'" class="h-3 w-3" />
-                    <Lock v-else class="h-3 w-3" />
+                  <Badge variant="success">
+                    <Lock class="h-3 w-3" />
                     {{ getPurchaseTypeLabel(product.purchase_type) }}
                   </Badge>
 
@@ -165,6 +164,9 @@
                     <span class="theme-price-lg text-primary">
                       {{ formatPrice(selectedSku.price_amount, siteCurrency) }}
                     </span>
+                    <span v-if="canShowPointsRedeem" class="pb-1 text-sm font-medium text-muted-foreground">
+                      {{ t('products.pointsPrice', { n: selectedPointsPrice }) }}
+                    </span>
                   </div>
                   <!-- 未选 SKU，产品级有促销价 -->
                   <div v-else-if="hasPromotionPrice(product)" class="space-y-2">
@@ -184,6 +186,9 @@
                   <div v-else class="flex items-end gap-4">
                     <span class="theme-price-lg text-primary">
                       {{ formatPrice(product.price_amount, siteCurrency) }}
+                    </span>
+                    <span v-if="canShowPointsRedeem" class="pb-1 text-sm font-medium text-muted-foreground">
+                      {{ t('products.pointsPrice', { n: selectedPointsPrice }) }}
                     </span>
                   </div>
                 </div>
@@ -305,10 +310,19 @@
                     <Button variant="secondary" class="h-12 font-bold" :disabled="!canPurchase" @click="addToCart">
                       {{ t('productDetail.addToCart') }}
                     </Button>
-                    <Button class="h-12 font-bold" :disabled="!canPurchase" @click="buyNow">
+                    <Button class="h-12 font-bold" :disabled="!canPurchase || redeeming" @click="buyNow">
                       {{ t('productDetail.buyNow') }}
                     </Button>
                   </div>
+                  <Button
+                    v-if="canShowPointsRedeem"
+                    variant="outline"
+                    class="h-12 w-full font-bold"
+                    :disabled="!canPurchase || redeeming"
+                    @click="redeemWithPoints"
+                  >
+                    {{ redeeming ? t('productDetail.redeeming') : t('productDetail.redeemWithPoints') }}
+                  </Button>
                 </div>
 
               </div>
@@ -340,7 +354,7 @@
             <router-link
               v-for="rp in relatedPosts"
               :key="rp.id"
-              :to="`/blog/${rp.slug}`"
+              :to="`/posts/${rp.slug}`"
               class="group bg-card backdrop-blur-md border rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-0.5 transition-all flex flex-col"
             >
               <div v-if="rp.thumbnail" class="h-32 overflow-hidden relative">
@@ -413,7 +427,7 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Lock, Minus, Pencil, Plus, RotateCw, Tag, UserPlus, Zap } from 'lucide-vue-next'
+import { ArrowLeft, Lock, Minus, Pencil, Plus, RotateCw, Tag, Zap } from 'lucide-vue-next'
 import { getImageUrl } from '../utils/image'
 import { processHtmlForDisplay } from '../utils/content'
 import { useProductDetail } from '../composables/useProductDetail'
@@ -466,7 +480,8 @@ const {
   quantityEffectiveLimit, quantityEffectiveMin, handleQuantityInput,
   requiresLogin, requiresSKUSelection, canPurchase, cannotPurchaseReason,
   categoryName, images,
-  addToCart, buyNow, goLogin, loadProduct,
+  addToCart, buyNow, redeemWithPoints, goLogin, loadProduct,
+  selectedPointsPrice, canShowPointsRedeem, redeeming,
   mobileBarShowMemberPrice, mobileBarMemberPriceDisplay,
   mobileBarShowSkuPromotionPrice, mobileBarSkuPromotionPriceDisplay,
   mobileBarShowSkuPrice, mobileBarSkuPriceDisplay,

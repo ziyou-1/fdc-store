@@ -5,7 +5,7 @@ export const normalizeSkuId = (value: unknown) => {
   return integerValue > 0 ? integerValue : 0
 }
 
-const SUPPORTED_LOCALES = ['zh-CN', 'zh-TW', 'en-US'] as const
+const SUPPORTED_LOCALES = ['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const
 
 const normalizeText = (value: unknown) => String(value ?? '').trim()
 
@@ -21,6 +21,10 @@ const localeFallbacks = (locale?: string) => {
     case 'en':
     case 'en-us':
       return ['en-US', 'zh-CN', 'zh-TW']
+    case 'id':
+    case 'id-id':
+      // 印尼语缺文案时回退英文，比回退中文对印尼买家更可读
+      return ['id-ID', 'en-US', 'zh-CN']
     case 'zh':
     case 'zh-cn':
     default:

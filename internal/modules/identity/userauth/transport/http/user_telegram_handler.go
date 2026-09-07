@@ -39,8 +39,8 @@ type TelegramBindingResult struct {
 
 // UserTelegramService 是 Telegram widget/MiniApp 端点所需的最小端口。
 type UserTelegramService interface {
-	LoginWithTelegram(ctx context.Context, payload TelegramAuthPayload) (*AuthLoginResult, error)
-	LoginWithTelegramMiniApp(ctx context.Context, initData string) (*AuthLoginResult, error)
+	LoginWithTelegram(ctx context.Context, payload TelegramAuthPayload, inviteCode string) (*AuthLoginResult, error)
+	LoginWithTelegramMiniApp(ctx context.Context, initData, inviteCode string) (*AuthLoginResult, error)
 	GetTelegramBinding(userID uint) (*TelegramBindingResult, error)
 	BindTelegram(ctx context.Context, userID uint, payload TelegramAuthPayload) (*externalidentitydomain.Identity, error)
 	BindTelegramMiniApp(ctx context.Context, userID uint, initData string) (*externalidentitydomain.Identity, error)
@@ -62,19 +62,21 @@ func NewUserTelegramHandler(service UserTelegramService, recorder LoginRecorder)
 
 // UserTelegramLoginRequest Telegram 登录请求。
 type UserTelegramLoginRequest struct {
-	ID        int64  `json:"id" binding:"required"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Username  string `json:"username"`
-	PhotoURL  string `json:"photo_url"`
-	AuthDate  int64  `json:"auth_date" binding:"required"`
-	Hash      string `json:"hash" binding:"required"`
+	ID         int64  `json:"id" binding:"required"`
+	FirstName  string `json:"first_name"`
+	LastName   string `json:"last_name"`
+	Username   string `json:"username"`
+	PhotoURL   string `json:"photo_url"`
+	AuthDate   int64  `json:"auth_date" binding:"required"`
+	Hash       string `json:"hash" binding:"required"`
+	InviteCode string `json:"invite_code"`
 }
 
 // UserTelegramMiniAppAuthRequest Telegram Mini App 鉴权请求。
 type UserTelegramMiniAppAuthRequest struct {
 	InitData      string `json:"init_data"`
 	InitDataCamel string `json:"initData"`
+	InviteCode    string `json:"invite_code"`
 }
 
 // UserBindTelegramRequest 绑定 Telegram 请求。
@@ -96,7 +98,15 @@ func (r UserTelegramMiniAppAuthRequest) initData() string {
 }
 
 func (r UserTelegramLoginRequest) payload() TelegramAuthPayload {
-	return TelegramAuthPayload(r)
+	return TelegramAuthPayload{
+		ID:        r.ID,
+		FirstName: r.FirstName,
+		LastName:  r.LastName,
+		Username:  r.Username,
+		PhotoURL:  r.PhotoURL,
+		AuthDate:  r.AuthDate,
+		Hash:      r.Hash,
+	}
 }
 
 func (r UserBindTelegramRequest) payload() TelegramAuthPayload {
@@ -201,7 +211,7 @@ func (h *UserTelegramHandler) UserTelegramLogin(c *gin.Context) {
 		ginutil.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
 		return
 	}
-	res, err := h.service.LoginWithTelegram(c.Request.Context(), req.payload())
+	res, err := h.service.LoginWithTelegram(c.Request.Context(), req.payload(), req.InviteCode)
 	if err != nil {
 		h.respondTelegramLoginError(c, err)
 		return
@@ -217,7 +227,7 @@ func (h *UserTelegramHandler) UserTelegramMiniAppLogin(c *gin.Context) {
 		ginutil.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
 		return
 	}
-	res, err := h.service.LoginWithTelegramMiniApp(c.Request.Context(), req.initData())
+	res, err := h.service.LoginWithTelegramMiniApp(c.Request.Context(), req.initData(), req.InviteCode)
 	if err != nil {
 		h.respondTelegramLoginError(c, err)
 		return

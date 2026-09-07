@@ -177,6 +177,15 @@ const okpayConfig = reactive({
   display_name: '',
 })
 
+const payssionConfig = reactive({
+  api_key: '',
+  secret_key: '',
+  live_mode: true,
+  api_url: '',
+  target_currency: '',
+  exchange_rate: '',
+})
+
 const dujiaopayConfig = reactive({
   api_base_url: 'https://www.dujiaopay.com',
   api_key_id: '',
@@ -213,6 +222,24 @@ const okpayChannelOptions = [
   { value: 'trx', label: 'admin.paymentChannels.channelTypes.trx' },
 ]
 
+const payssionChannelOptions = [
+  { value: 'alipay_cn', label: 'admin.paymentChannels.channelTypes.alipay_cn' },
+  { value: 'touchngo_my', label: 'admin.paymentChannels.channelTypes.touchngo_my' },
+  { value: 'doku_id', label: 'admin.paymentChannels.channelTypes.doku_id' },
+  { value: 'gcash_ph', label: 'admin.paymentChannels.channelTypes.gcash_ph' },
+  { value: 'promptpay_th', label: 'admin.paymentChannels.channelTypes.promptpay_th' },
+  { value: 'picpay_br', label: 'admin.paymentChannels.channelTypes.picpay_br' },
+  { value: 'qris_id', label: 'admin.paymentChannels.channelTypes.qris_id' },
+  { value: 'ovo_id', label: 'admin.paymentChannels.channelTypes.ovo_id' },
+  { value: 'dana_id', label: 'admin.paymentChannels.channelTypes.dana_id' },
+  { value: 'linkaja_id', label: 'admin.paymentChannels.channelTypes.linkaja_id' },
+  { value: 'shopeepay_id', label: 'admin.paymentChannels.channelTypes.shopeepay_id' },
+  { value: 'atm_id', label: 'admin.paymentChannels.channelTypes.atm_id' },
+  { value: 'akulaku_id', label: 'admin.paymentChannels.channelTypes.akulaku_id' },
+  { value: 'creditcard_id', label: 'admin.paymentChannels.channelTypes.creditcard_id' },
+  { value: 'alfamart_id', label: 'admin.paymentChannels.channelTypes.alfamart_id' },
+]
+
 // DujiaoPay 的 token_id 由管理员手动填写（形如 tron-usdt），不在前端维护固定列表，
 // 上游新增链或代币时无需同步改代码。默认值仅用于新建渠道时的初始填充。
 const dujiaopayDefaultTokenID = 'tron-usdt'
@@ -229,7 +256,6 @@ const paymentTypeOptions = computed(() => [
 ])
 
 const paymentRoleOptions = computed(() => [
-  { value: 'guest', label: t('admin.paymentChannels.paymentRoles.guest') },
   { value: 'member', label: t('admin.paymentChannels.paymentRoles.member') },
 ])
 
@@ -252,6 +278,9 @@ const formChannelOptions = computed(() => {
   }
   if (form.provider_type === 'okpay') {
     return okpayChannelOptions
+  }
+  if (form.provider_type === 'payssion') {
+    return payssionChannelOptions
   }
   return channelOptions
 })
@@ -290,6 +319,9 @@ const interactionModeOptions = computed(() => {
       { value: 'qr', label: 'admin.paymentChannels.interactionModes.qr' },
       { value: 'redirect', label: 'admin.paymentChannels.interactionModes.redirect' },
     ]
+  }
+  if (form.provider_type === 'payssion') {
+    return [{ value: 'redirect', label: 'admin.paymentChannels.interactionModes.redirect' }]
   }
   if (form.provider_type === 'dujiaopay') {
     if (dujiaopayConfig.order_mode === 'cashier') {
@@ -461,6 +493,15 @@ const resetDujiaoPayConfig = () => {
   dujiaopayConfig.cancel_url = 'https://yourdomain.com/pay'
 }
 
+const resetPayssionConfig = () => {
+  payssionConfig.api_key = ''
+  payssionConfig.secret_key = ''
+  payssionConfig.live_mode = true
+  payssionConfig.api_url = ''
+  payssionConfig.target_currency = ''
+  payssionConfig.exchange_rate = ''
+}
+
 const resetAllConfigs = () => {
   resetEpayConfig()
   resetPaypalConfig()
@@ -472,6 +513,7 @@ const resetAllConfigs = () => {
   resetTokenpayConfig()
   resetOkpayConfig()
   resetDujiaoPayConfig()
+  resetPayssionConfig()
 }
 
 // --- Apply functions ---
@@ -606,6 +648,15 @@ const applyDujiaoPayConfig = (raw: Record<string, unknown>) => {
   dujiaopayConfig.fiat_currency = String(raw.fiat_currency || 'CNY').toUpperCase()
   dujiaopayConfig.success_url = String(raw.success_url || '')
   dujiaopayConfig.cancel_url = String(raw.cancel_url || '')
+}
+
+const applyPayssionConfig = (raw: Record<string, unknown>) => {
+  payssionConfig.api_key = String(raw.api_key || '')
+  payssionConfig.secret_key = String(raw.secret_key || '')
+  payssionConfig.live_mode = raw.live_mode !== false && String(raw.live_mode || 'true') !== 'false'
+  payssionConfig.api_url = String(raw.api_url || '')
+  payssionConfig.target_currency = String(raw.target_currency || '')
+  payssionConfig.exchange_rate = String(raw.exchange_rate || '')
 }
 
 // --- Build functions ---
@@ -820,6 +871,22 @@ const buildOkpayConfig = () => {
   return config
 }
 
+const buildPayssionConfig = () => {
+  const config: Record<string, unknown> = { live_mode: payssionConfig.live_mode }
+  const setIfNotEmpty = (key: string, value: string) => {
+    const trimmed = String(value || '').trim()
+    if (trimmed !== '') {
+      config[key] = trimmed
+    }
+  }
+  setIfNotEmpty('api_key', payssionConfig.api_key)
+  setIfNotEmpty('secret_key', payssionConfig.secret_key)
+  setIfNotEmpty('api_url', payssionConfig.api_url)
+  setIfNotEmpty('target_currency', payssionConfig.target_currency)
+  setIfNotEmpty('exchange_rate', payssionConfig.exchange_rate)
+  return config
+}
+
 const buildDujiaoPayConfig = () => {
   const config: Record<string, unknown> = {}
   const setIfNotEmpty = (key: string, value: string) => {
@@ -882,6 +949,11 @@ watch(
       const allowed = okpayChannelOptions.map((option) => option.value)
       if (!allowed.includes(form.channel_type)) {
         form.channel_type = allowed[0] || 'usdt'
+      }
+    } else if (value === 'payssion') {
+      const allowed = payssionChannelOptions.map((option) => option.value)
+      if (!allowed.includes(form.channel_type)) {
+        form.channel_type = allowed[0] || 'alipay_cn'
       }
     } else if (value === 'dujiaopay') {
       if (dujiaopayConfig.order_mode === 'cashier') {
@@ -1057,6 +1129,7 @@ watch(
           applyTokenpayConfig(channel.config_json)
           applyOkpayConfig(channel.config_json)
           applyDujiaoPayConfig(channel.config_json)
+          applyPayssionConfig(channel.config_json)
           if (channel.provider_type === 'okpay' && !String(form.channel_type || '').trim()) {
             form.channel_type = resolveOkpayChannelTypeFromConfig(channel.config_json)
           }
@@ -1181,6 +1254,13 @@ const handleSubmit = async () => {
       ...configJson,
       ...buildOkpayConfig(),
     }
+  } else if (form.provider_type === 'payssion') {
+    delete configJson.target_currency
+    delete configJson.exchange_rate
+    configJson = {
+      ...configJson,
+      ...buildPayssionConfig(),
+    }
   } else if (form.provider_type === 'dujiaopay') {
     // chain 一律删除，由后端按 token_id 重新推导，避免切换 token 后残留旧链；
     // allowed_methods 一律删除，build 在 cashier 且非空时重新写入，清空即保存为不限制
@@ -1279,6 +1359,7 @@ const closeModal = () => {
                 <SelectItem value="bepusdt">{{ t('admin.paymentChannels.providerTypes.bepusdt') }}</SelectItem>
                 <SelectItem value="epusdt">{{ t('admin.paymentChannels.providerTypes.epusdt') }}</SelectItem>
                 <SelectItem value="okpay">{{ t('admin.paymentChannels.providerTypes.okpay') }}</SelectItem>
+                <SelectItem value="payssion">{{ t('admin.paymentChannels.providerTypes.payssion') }}</SelectItem>
                 <SelectItem value="tokenpay">{{ t('admin.paymentChannels.providerTypes.tokenpay') }}</SelectItem>
               </SelectContent>
             </Select>
@@ -1836,6 +1917,37 @@ const closeModal = () => {
             </div>
           </div>
           <div class="mt-3 text-xs text-muted-foreground">{{ t('admin.paymentChannels.modal.okpayHint') }}</div>
+        </div>
+
+        <div v-if="form.provider_type === 'payssion'" class="min-w-0 rounded-xl border border-border bg-muted/20 p-4 overflow-hidden">
+          <div class="text-sm font-semibold text-foreground mb-3">{{ t('admin.paymentChannels.modal.payssionSection') }}</div>
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2 [&>*]:min-w-0">
+            <div class="min-w-0">
+              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.paymentChannels.modal.payssionApiKey') }}</label>
+              <Input v-model="payssionConfig.api_key" :placeholder="t('admin.paymentChannels.modal.payssionApiKeyPlaceholder')" />
+            </div>
+            <div class="min-w-0">
+              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.paymentChannels.modal.payssionSecretKey') }}</label>
+              <Input v-model="payssionConfig.secret_key" type="password" :placeholder="t('admin.paymentChannels.modal.payssionSecretKeyPlaceholder')" />
+            </div>
+            <div class="min-w-0 md:col-span-2 flex items-center justify-between rounded-lg border border-border px-3 py-2">
+              <Label class="text-xs text-muted-foreground">{{ t('admin.paymentChannels.modal.payssionLiveMode') }}</Label>
+              <Switch v-model="payssionConfig.live_mode" />
+            </div>
+            <div class="min-w-0">
+              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.paymentChannels.modal.payssionApiUrl') }}</label>
+              <Input v-model="payssionConfig.api_url" :placeholder="t('admin.paymentChannels.modal.payssionApiUrlPlaceholder')" />
+            </div>
+            <div class="min-w-0">
+              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.paymentChannels.modal.targetCurrency') }}</label>
+              <Input v-model="payssionConfig.target_currency" :placeholder="t('admin.paymentChannels.modal.targetCurrencyPlaceholder')" />
+            </div>
+            <div class="min-w-0">
+              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.paymentChannels.modal.exchangeRate') }}</label>
+              <Input v-model="payssionConfig.exchange_rate" :placeholder="t('admin.paymentChannels.modal.exchangeRatePlaceholder')" />
+            </div>
+          </div>
+          <div class="mt-3 text-xs text-muted-foreground">{{ t('admin.paymentChannels.modal.payssionHint') }}</div>
         </div>
 
         <div v-if="form.provider_type === 'dujiaopay'" class="min-w-0 rounded-xl border border-border bg-muted/20 p-4 overflow-hidden">

@@ -72,6 +72,11 @@ google_auth:
   # 后者依赖已启用且可用的 Redis 7（一次性状态通过 GETDEL 消费）。
   client_id: ""
 
+# 客服工作台：买家文本消息自动译成简体中文。空密钥不翻译。
+# 免费密钥以 :fx 结尾，会请求 api-free.deepl.com。
+deepl:
+  auth_key: ""
+
 redis:
   enabled: true
   host: 127.0.0.1

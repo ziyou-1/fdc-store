@@ -4,7 +4,9 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { adminAPI, type AdminWalletAccount, type AdminWalletTransaction } from '@/api/admin'
 import type { AdminUser, AdminOrder, AdminPayment, AdminMemberLevel, AdminUserOAuthIdentity } from '@/api/types'
+import { useAdminAuthStore } from '@/stores/auth'
 import IdCell from '@/components/IdCell.vue'
+import UserPointsSection from '@/views/admin/components/UserPointsSection.vue'
 import { BadgeCheck, Copy, BadgeAlert } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -33,7 +35,12 @@ import { formatDate, formatMoney, getLocalizedText } from '@/utils/format'
 
 const { t } = useI18n()
 const route = useRoute()
+const authStore = useAdminAuthStore()
 const userId = computed(() => Number(route.params.id))
+const canViewPoints = computed(() => authStore.hasPermission('GET:/admin/users/:id/points'))
+const canAdjustPoints = computed(() => authStore.hasPermission('POST:/admin/users/:id/points/adjust'))
+
+type UserDetailTab = 'orders' | 'payments' | 'coupons' | 'wallet' | 'points'
 
 interface UserDetailCouponUsage {
   id: number
@@ -49,13 +56,19 @@ interface UserDetailCouponUsage {
 const user = ref<(AdminUser & Record<string, unknown>) | null>(null)
 const userError = ref('')
 
-const activeTab = ref<'orders' | 'payments' | 'coupons' | 'wallet'>('orders')
-const tabs = computed<Array<{ key: 'orders' | 'payments' | 'coupons' | 'wallet'; label: string }>>(() => [
-  { key: 'orders', label: t('admin.userDetail.tabs.orders') },
-  { key: 'payments', label: t('admin.userDetail.tabs.payments') },
-  { key: 'coupons', label: t('admin.userDetail.tabs.coupons') },
-  { key: 'wallet', label: t('admin.userDetail.tabs.wallet') },
-])
+const activeTab = ref<UserDetailTab>('orders')
+const tabs = computed<Array<{ key: UserDetailTab; label: string }>>(() => {
+  const items: Array<{ key: UserDetailTab; label: string }> = [
+    { key: 'orders', label: t('admin.userDetail.tabs.orders') },
+    { key: 'payments', label: t('admin.userDetail.tabs.payments') },
+    { key: 'coupons', label: t('admin.userDetail.tabs.coupons') },
+    { key: 'wallet', label: t('admin.userDetail.tabs.wallet') },
+  ]
+  if (canViewPoints.value) {
+    items.push({ key: 'points', label: t('admin.userDetail.tabs.points') })
+  }
+  return items
+})
 
 const orders = ref<AdminOrder[]>([])
 const ordersLoading = ref(false)
@@ -274,7 +287,7 @@ const changeWalletPageSize = (size: number) => {
   fetchWalletTransactions(1)
 }
 
-const changeTab = (tab: 'orders' | 'payments' | 'coupons' | 'wallet') => {
+const changeTab = (tab: UserDetailTab) => {
   activeTab.value = tab
   if (tab === 'orders') {
     fetchOrders(ordersPagination.value.page)
@@ -282,7 +295,7 @@ const changeTab = (tab: 'orders' | 'payments' | 'coupons' | 'wallet') => {
     fetchPayments(paymentsPagination.value.page)
   } else if (tab === 'coupons') {
     fetchCoupons(couponsPagination.value.page)
-  } else {
+  } else if (tab === 'wallet') {
     walletError.value = ''
     walletSuccess.value = ''
     void loadWalletData(walletPagination.value.page)
@@ -1016,5 +1029,11 @@ watch(
         />
       </div>
     </div>
+
+    <UserPointsSection
+      v-if="activeTab === 'points' && canViewPoints"
+      :user-id="userId"
+      :can-adjust="canAdjustPoints"
+    />
   </div>
 </template>

@@ -105,6 +105,7 @@ const providerTypeLabel = (value?: string) => {
     epay: t('admin.paymentChannels.providerTypes.epay'),
     epusdt: t('admin.paymentChannels.providerTypes.epusdt'),
     tokenpay: t('admin.paymentChannels.providerTypes.tokenpay'),
+    payssion: t('admin.paymentChannels.providerTypes.payssion'),
     wallet: t('admin.paymentChannels.providerTypes.wallet'),
   }
   if (!value) return '-'
@@ -125,6 +126,9 @@ const channelTypeLabel = (value?: string) => {
     balance: t('admin.paymentChannels.channelTypes.balance'),
   }
   if (!value) return '-'
+  const key = `admin.paymentChannels.channelTypes.${value}`
+  const translated = t(key)
+  if (translated !== key) return translated
   return map[value] || value
 }
 

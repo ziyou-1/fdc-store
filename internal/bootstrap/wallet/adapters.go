@@ -56,6 +56,8 @@ func (a walletTransportAdapter) ListRechargeOrdersAdmin(filter wallettransport.A
 		ProviderType: filter.ProviderType,
 		ChannelType:  filter.ChannelType,
 		Status:       filter.Status,
+		// 后台"钱包充值记录"只看余额充值；积分充值有独立入口。
+		CreditTarget: constants.RechargeCreditTargetWallet,
 		CreatedFrom:  filter.CreatedFrom,
 		CreatedTo:    filter.CreatedTo,
 		PaidFrom:     filter.PaidFrom,

@@ -224,15 +224,10 @@ func TestUpdateSiteSettingNormalized(t *testing.T) {
 		t.Fatalf("stored brand.site_logo was lost: %v", storedBrand["site_logo"])
 	}
 
-	contact, ok := result["contact"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("invalid contact payload type: %T", result["contact"])
-	}
-	if contact["telegram"] != "https://t.me/demo" {
-		t.Fatalf("unexpected telegram: %v", contact["telegram"])
-	}
-	if contact["whatsapp"] != "" {
-		t.Fatalf("unexpected whatsapp: %v", contact["whatsapp"])
+	// 站点级 Telegram/WhatsApp 联系方式已下线：即便入参里带了 contact，
+	// 归一化后也不得再落库，否则运营会以为填了就能生效。
+	if _, exists := result["contact"]; exists {
+		t.Fatalf("contact must no longer be persisted, got %v", result["contact"])
 	}
 
 	seo, ok := result["seo"].(map[string]interface{})

@@ -86,6 +86,13 @@
             </div>
           </div>
 
+          <div
+            v-if="afterPaymentNotice"
+            class="rounded-2xl border border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/30 p-4 text-sm text-amber-800 dark:text-amber-300"
+          >
+            {{ t('checkout.manualFormAfterPaymentHint') }}
+          </div>
+
           <CheckoutManualForm
             :manual-form-products="manualFormProducts"
             v-model="manualFormData"
@@ -95,7 +102,7 @@
             :manual-field-error="manualFieldError"
           />
 
-          <div v-if="!isResellerTenant" class="rounded-2xl border bg-card text-card-foreground p-6">
+          <div v-if="!disabledFeatures.coupons && !isResellerTenant" class="rounded-2xl border bg-card text-card-foreground p-6">
             <h2 class="mb-4 text-lg font-bold text-foreground">{{ t('checkout.couponTitle') }}</h2>
             <Input
               v-model="couponCode"
@@ -110,62 +117,11 @@
             class="space-y-4 rounded-2xl border bg-card text-card-foreground p-6"
           >
             <h2 class="text-lg font-bold text-foreground">{{ t('checkout.modeTitle') }}</h2>
-            <div class="flex flex-wrap gap-3">
-              <Button
-                :variant="checkoutMode === 'guest' ? 'default' : 'secondary'"
-                @click="checkoutMode = 'guest'"
-              >
-                {{ t('checkout.guestPurchase') }}
-              </Button>
-              <Button as-child variant="secondary">
-                <router-link to="/auth/login">
-                  {{ t('checkout.memberPurchase') }}
-                </router-link>
-              </Button>
-            </div>
-
-            <div v-if="checkoutMode === 'guest'" class="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Input
-                v-model="guestEmail"
-                type="email"
-                class="h-11"
-                :placeholder="t('checkout.guestEmailPlaceholder')"
-              />
-              <Input
-                v-model="guestPassword"
-                type="password"
-                class="h-11"
-                :placeholder="t('checkout.guestPasswordPlaceholder')"
-              />
-            </div>
-
-            <div v-if="checkoutMode === 'guest' && guestCaptchaEnabled" class="space-y-2">
-              <p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{{ t('auth.common.captchaLabel') }}</p>
-              <ImageCaptcha
-                v-if="captchaProvider === 'image'"
-                ref="guestImageCaptchaRef"
-                v-model="guestCaptchaPayload"
-                :disabled="submitting"
-                @config-stale="handleGuestCaptchaConfigStale"
-              />
-              <TurnstileCaptcha
-                v-else-if="captchaProvider === 'turnstile'"
-                ref="guestTurnstileRef"
-                v-model="guestTurnstileToken"
-                :site-key="guestTurnstileSiteKey"
-              />
-            </div>
-
-            <div v-if="checkoutMode === 'guest'" class="mb-3 rounded-xl border border-success/40 bg-success/10 p-3 text-sm text-success">
-              <p class="font-semibold">{{ t('checkout.guestInstructions.title') }}</p>
-              <ul class="mt-2 space-y-1 list-disc pl-5">
-                <li>{{ t('checkout.guestInstructions.email') }}</li>
-                <li>{{ t('checkout.guestInstructions.password') }}</li>
-              </ul>
-            </div>
-            <p v-if="checkoutMode === 'guest' && guestEmail && !guestEmailValid" class="text-xs text-destructive">
-              {{ t('error.email_invalid') }}
-            </p>
+            <Button as-child>
+              <router-link to="/auth/login">
+                {{ t('checkout.memberPurchase') }}
+              </router-link>
+            </Button>
           </div>
         </div>
 
@@ -185,7 +141,7 @@
               <span class="font-mono text-foreground">{{ formatPrice(previewOriginal, previewCurrency) }}</span>
             </div>
             <template v-if="!isResellerTenant">
-              <div class="flex items-center justify-between">
+              <div v-if="!disabledFeatures.coupons" class="flex items-center justify-between">
                 <span>{{ t('checkout.previewCoupon') }}</span>
                 <span
                   class="font-mono"
@@ -194,7 +150,7 @@
                   {{ formatDiscountPrice(previewCoupon, previewCurrency) }}
                 </span>
               </div>
-              <div class="flex items-center justify-between">
+              <div v-if="!disabledFeatures.coupons" class="flex items-center justify-between">
                 <span>{{ t('checkout.previewPromotion') }}</span>
                 <span
                   class="font-mono"
@@ -203,7 +159,7 @@
                   {{ formatDiscountPrice(previewPromotion, previewCurrency) }}
                 </span>
               </div>
-              <div class="flex items-center justify-between">
+              <div v-if="!disabledFeatures.wholesale" class="flex items-center justify-between">
                 <span>{{ t('checkout.previewWholesale') }}</span>
                 <span
                   class="font-mono"
@@ -235,7 +191,7 @@
           </Alert>
 
           <!-- Payment Channel Selection -->
-          <div class="mb-4 border-t pt-4">
+          <div v-if="!skipPayment" class="mb-4 border-t pt-4">
             <h3 class="mb-3 text-sm font-bold text-foreground">{{ t('checkout.paymentMethod') }}</h3>
 
             <!-- Wallet Balance -->
@@ -248,7 +204,7 @@
                   </div>
                 </div>
                 <label class="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                  <input v-model="useBalance" type="checkbox" class="h-4 w-4 accent-primary" :disabled="walletOnlyPayment" />
+                  <input v-model="useBalance" type="checkbox" class="h-4 w-4 accent-primary" :disabled="walletOnlyPayment || usePoints" />
                   <span>{{ t('payment.useBalance') }}</span>
                 </label>
               </div>
@@ -261,6 +217,25 @@
                 <div v-if="walletOnlyPayment && expectedOnlinePayCents > 0" class="text-warning">
                   {{ t('payment.walletInsufficientHint') }}
                 </div>
+              </div>
+            </div>
+
+            <div v-if="showPointsOption" class="mb-3 rounded-lg border bg-secondary p-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-xs text-muted-foreground">{{ t('payment.pointsBalanceLabel') }}</div>
+                  <div class="mt-0.5 text-sm font-semibold text-foreground">
+                    {{ pointsLoading ? t('common.loading') : pointsBalance }}
+                  </div>
+                </div>
+                <label class="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                  <input v-model="usePoints" type="checkbox" class="h-4 w-4 accent-primary" :disabled="walletOnlyPayment || useBalance" />
+                  <span>{{ t('payment.usePoints') }}</span>
+                </label>
+              </div>
+              <div v-if="usePoints" class="mt-2 space-y-1 text-xs text-muted-foreground">
+                <div>{{ t('payment.pointsDeductLabel') }}：{{ previewPointsAmount }}</div>
+                <div v-if="pointsInsufficient" class="text-warning">{{ t('payment.pointsInsufficientHint') }}</div>
               </div>
             </div>
 
@@ -292,7 +267,7 @@
               </div>
             </template>
             <div v-if="!requiresOnlineChannel" class="text-xs text-success">
-              {{ t('checkout.walletCoversAll') }}
+              {{ usePoints ? t('checkout.pointsCoversAll') : t('checkout.walletCoversAll') }}
             </div>
           </div>
 
@@ -313,8 +288,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { pageAlertVariant, pageAlertToneClass } from '../utils/alerts'
-import ImageCaptcha from '../components/captcha/ImageCaptcha.vue'
-import TurnstileCaptcha from '../components/captcha/TurnstileCaptcha.vue'
 import CheckoutManualForm from '../components/checkout/CheckoutManualForm.vue'
 import EmptyState from '../components/EmptyState.vue'
 import SmartImage from '../components/SmartImage.vue'
@@ -323,6 +296,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useCheckout } from '../composables/useCheckout'
+import { disabledFeatures } from '../utils/disabledFeatures'
 
 const { t } = useI18n()
 
@@ -331,14 +305,12 @@ const {
   isBuyNowMode, cartItems, totalItems, cartItemKey, checkoutItemImage, itemSkuDisplay,
   itemStockExceeded, itemStockHint,
   checkoutItemCurrency, checkoutItemPriceParts, checkoutItemOriginalPriceParts, checkoutItemHasPriceDiscount,
-  manualFormProducts, manualFormData, submitAttempted, getManualFieldLabel, getManualFieldPlaceholder, manualFieldError,
+  afterPaymentNotice, manualFormProducts, manualFormData, submitAttempted, getManualFieldLabel, getManualFieldPlaceholder, manualFieldError,
   couponCode, isResellerTenant,
-  checkoutMode, guestEmail, guestPassword, guestEmailValid,
-  guestCaptchaEnabled, captchaProvider, guestCaptchaPayload, guestTurnstileToken, guestTurnstileSiteKey,
-  guestImageCaptchaRef, guestTurnstileRef, handleGuestCaptchaConfigStale,
   previewCurrency, previewOriginal, previewCoupon, previewPromotion, previewWholesale, previewMemberDiscount, previewTotal,
   previewLoading, couponRefreshing, previewStatusText, hasPositiveAmount, formatDiscountPrice, checkoutAlert,
-  showBalanceOption, walletLoading, walletBalance, useBalance, walletOnlyPayment,
+  showBalanceOption, showPointsOption, walletLoading, walletBalance, useBalance, usePoints,
+  pointsLoading, pointsBalance, previewPointsAmount, pointsInsufficient, skipPayment, walletOnlyPayment,
   expectedWalletPaidDisplay, expectedOnlinePayDisplay, expectedOnlinePayCents,
   requiresOnlineChannel, paymentChannels, selectedChannelId, isChannelDisabledForAmount, channelAmountLimitHint,
   handleSelectChannel, formatChannelFeeRate, formatChannelFixedFee,
@@ -347,6 +319,4 @@ const {
 
 // 这两个引用仅通过模板字符串 ref 绑定（刷新/重置逻辑在 composable 内），
 // vue-tsc 不将字符串模板 ref 计为使用，这里显式标记避免 noUnusedLocals 误报。
-void guestImageCaptchaRef
-void guestTurnstileRef
 </script>

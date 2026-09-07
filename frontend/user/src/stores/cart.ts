@@ -29,6 +29,7 @@ export interface CartItem {
     maxPurchaseQuantity?: number
     purchaseType?: string
     fulfillmentType?: string
+    manualFormTiming?: string
     manualFormSchema?: any
     paymentChannelIds?: number[]
 }
@@ -166,6 +167,7 @@ export const useCartStore = defineStore('cart', () => {
             existing.maxPurchaseQuantity = normalizedItem.maxPurchaseQuantity
             existing.purchaseType = normalizedItem.purchaseType
             existing.fulfillmentType = normalizedItem.fulfillmentType
+            existing.manualFormTiming = normalizedItem.manualFormTiming
             existing.manualFormSchema = normalizedItem.manualFormSchema
             existing.skuId = normalizedItem.skuId
             existing.skuCode = normalizedItem.skuCode

@@ -23,6 +23,7 @@ type Config struct {
 	Bootstrap    BootstrapConfig    `mapstructure:"bootstrap"`
 	TelegramAuth TelegramAuthConfig `mapstructure:"telegram_auth"`
 	GoogleAuth   GoogleAuthConfig   `mapstructure:"google_auth"`
+	DeepL        DeepLConfig        `mapstructure:"deepl"`
 	Redis        RedisConfig        `mapstructure:"redis"`
 	Queue        QueueConfig        `mapstructure:"queue"`
 	Upload       UploadConfig       `mapstructure:"upload"`
@@ -37,8 +38,9 @@ type Config struct {
 
 // AppConfig 应用级配置
 type AppConfig struct {
-	SecretKey  string `mapstructure:"secret_key"`  // 通用加密密钥（AES-256，用于加密存储敏感信息）
-	TOTPIssuer string `mapstructure:"totp_issuer"` // 2FA 验证器中显示的发行方名称（避免使用 & 等特殊字符，Google Authenticator 解析容错差）
+	SecretKey   string `mapstructure:"secret_key"`   // 通用加密密钥（AES-256，用于加密存储敏感信息）
+	TOTPIssuer  string `mapstructure:"totp_issuer"`  // 2FA 验证器中显示的发行方名称（避免使用 & 等特殊字符，Google Authenticator 解析容错差）
+	SkipPayment bool   `mapstructure:"skip_payment"` // 关闭在线支付：下单后直接记为已支付并履约
 }
 
 // ServerConfig 服务器配置
@@ -115,6 +117,11 @@ type TelegramAuthConfig struct {
 type GoogleAuthConfig struct {
 	Enabled  bool   `mapstructure:"enabled"`
 	ClientID string `mapstructure:"client_id"`
+}
+
+// DeepLConfig 客服工作台买家文本的自动翻译。auth_key 为空则不翻译。
+type DeepLConfig struct {
+	AuthKey string `mapstructure:"auth_key"`
 }
 
 // RedisConfig Redis 配置
@@ -205,11 +212,21 @@ type CaptchaTurnstileConfig struct {
 
 // UploadConfig 文件上传配置
 type UploadConfig struct {
+	MaxSize           int64               `mapstructure:"max_size"`
+	AllowedTypes      []string            `mapstructure:"allowed_types"`
+	AllowedExtensions []string            `mapstructure:"allowed_extensions"`
+	MaxWidth          int                 `mapstructure:"max_width"`
+	MaxHeight         int                 `mapstructure:"max_height"`
+	Support           SupportUploadConfig `mapstructure:"support"`
+}
+
+// SupportUploadConfig 在线客服附件上传配置。
+// 买家要能发图片和视频，白名单与体积上限都与后台素材库不同，
+// 因此单列一套策略，避免为了客服放开后台的上传口子。
+type SupportUploadConfig struct {
 	MaxSize           int64    `mapstructure:"max_size"`
 	AllowedTypes      []string `mapstructure:"allowed_types"`
 	AllowedExtensions []string `mapstructure:"allowed_extensions"`
-	MaxWidth          int      `mapstructure:"max_width"`
-	MaxHeight         int      `mapstructure:"max_height"`
 }
 
 // CORSConfig 跨域配置
@@ -313,7 +330,8 @@ func Load() *Config {
 
 	// 设置默认值（可选）
 	viper.SetDefault("app.secret_key", "change-me-32-byte-secret-key!!")
-	viper.SetDefault("app.totp_issuer", "Dujiao-Next")
+	viper.SetDefault("app.totp_issuer", "Keyvo")
+	viper.SetDefault("app.skip_payment", false)
 	viper.SetDefault("server.host", "0.0.0.0")
 	viper.SetDefault("server.port", "8080")
 	viper.SetDefault("server.mode", "debug")
@@ -344,6 +362,7 @@ func Load() *Config {
 	viper.SetDefault("telegram_auth.replay_ttl_seconds", 300)
 	viper.SetDefault("google_auth.enabled", false)
 	viper.SetDefault("google_auth.client_id", "")
+	viper.SetDefault("deepl.auth_key", "")
 	viper.SetDefault("redis.enabled", true)
 	viper.SetDefault("redis.host", "127.0.0.1")
 	viper.SetDefault("redis.port", 6379)
@@ -376,6 +395,28 @@ func Load() *Config {
 	})
 	viper.SetDefault("upload.max_width", 4096)
 	viper.SetDefault("upload.max_height", 4096)
+	// 客服附件：50MB 容得下一段手机录屏；不限宽高，
+	// 否则手机截图很容易被图片尺寸上限挡在咨询之外。
+	viper.SetDefault("upload.support.max_size", 52428800)
+	viper.SetDefault("upload.support.allowed_types", []string{
+		"image/jpeg",
+		"image/png",
+		"image/gif",
+		"image/webp",
+		"video/mp4",
+		"video/webm",
+		"video/quicktime",
+	})
+	viper.SetDefault("upload.support.allowed_extensions", []string{
+		".jpg",
+		".jpeg",
+		".png",
+		".gif",
+		".webp",
+		".mp4",
+		".webm",
+		".mov",
+	})
 	viper.SetDefault("cors.allowed_origins", DefaultCORSAllowedOrigins())
 	viper.SetDefault("cors.allowed_methods", DefaultCORSAllowedMethods())
 	viper.SetDefault("cors.allowed_headers", DefaultCORSAllowedHeaders())

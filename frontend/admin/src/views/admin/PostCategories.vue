@@ -31,9 +31,10 @@ const languages = computed(() => [
   { code: 'zh-CN', name: t('admin.common.lang.zhCN') },
   { code: 'zh-TW', name: t('admin.common.lang.zhTW') },
   { code: 'en-US', name: t('admin.common.lang.enUS') },
+  { code: 'id-ID', name: t('admin.common.lang.idID') },
 ])
 
-const defaultName = () => ({ 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as Record<string,string>)
+const defaultName = () => ({ 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as Record<string,string>)
 
 const form = reactive({
   id: 0,

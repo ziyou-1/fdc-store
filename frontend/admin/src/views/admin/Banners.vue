@@ -33,6 +33,7 @@ const languages = computed(() => [
   { code: 'zh-CN', name: t('admin.common.lang.zhCN') },
   { code: 'zh-TW', name: t('admin.common.lang.zhTW') },
   { code: 'en-US', name: t('admin.common.lang.enUS') },
+  { code: 'id-ID', name: t('admin.common.lang.idID') },
 ])
 
 const linkTypes = computed(() => [
@@ -68,8 +69,8 @@ const form = reactive({
   id: 0,
   name: '',
   position: 'home_hero',
-  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
-  subtitle: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
+  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as LocalizedText,
+  subtitle: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as LocalizedText,
   image: '',
   mobile_image: '',
   link_type: 'none',
@@ -173,8 +174,8 @@ const resetForm = () => {
     id: 0,
     name: '',
     position: 'home_hero',
-    title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
-    subtitle: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+    title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
+    subtitle: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
     image: '',
     mobile_image: '',
     link_type: 'none',

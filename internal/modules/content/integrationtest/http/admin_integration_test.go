@@ -92,14 +92,14 @@ func TestAdminContentHandlersSuccessContracts(t *testing.T) {
 
 	postRecorder := requestAdminContent(t, router, http.MethodPost, "/api/v1/admin/posts", `{
 		"slug":"admin-post",
-		"type":"blog",
+		"type":"notice",
 		"title":{"zh-CN":"Admin post"},
 		"is_published":true
 	}`)
 	if got := decodeAdminContentResponse(t, postRecorder); got.StatusCode != response.CodeOK {
 		t.Fatalf("create post should succeed: %#v", got)
 	}
-	listRecorder := requestAdminContent(t, router, http.MethodGet, "/api/v1/admin/posts?type=blog", "")
+	listRecorder := requestAdminContent(t, router, http.MethodGet, "/api/v1/admin/posts?type=notice", "")
 	var postList struct {
 		StatusCode int `json:"status_code"`
 		Data       []struct {
@@ -188,7 +188,7 @@ func TestAdminContentHandlersValidationAndDomainErrorContracts(t *testing.T) {
 
 	if _, err := posts.Create(context.Background(), contentapp.CreatePostInput{
 		Slug:      "duplicate",
-		Type:      "blog",
+		Type:      "notice",
 		TitleJSON: map[string]interface{}{"zh-CN": "duplicate"},
 	}); err != nil {
 		t.Fatalf("seed duplicate post: %v", err)
@@ -205,21 +205,21 @@ func TestAdminContentHandlersValidationAndDomainErrorContracts(t *testing.T) {
 			name:     "post bind validation",
 			method:   http.MethodPost,
 			path:     "/api/v1/admin/posts",
-			body:     `{"slug":"missing-title","type":"blog"}`,
+			body:     `{"slug":"missing-title","type":"notice"}`,
 			wantCode: response.CodeBadRequest,
 		},
 		{
 			name:     "duplicate post slug",
 			method:   http.MethodPost,
 			path:     "/api/v1/admin/posts",
-			body:     `{"slug":"duplicate","type":"blog","title":{"zh-CN":"duplicate"}}`,
+			body:     `{"slug":"duplicate","type":"notice","title":{"zh-CN":"duplicate"}}`,
 			wantCode: response.CodeBadRequest,
 		},
 		{
 			name:     "missing post update",
 			method:   http.MethodPut,
 			path:     "/api/v1/admin/posts/9999",
-			body:     `{"slug":"missing","type":"blog","title":{"zh-CN":"missing"}}`,
+			body:     `{"slug":"missing","type":"notice","title":{"zh-CN":"missing"}}`,
 			wantCode: response.CodeNotFound,
 		},
 		{

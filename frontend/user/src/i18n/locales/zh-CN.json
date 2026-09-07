@@ -1,6 +1,6 @@
 {
   "common": {
-    "siteName": "Dujiao-Next",
+    "siteName": "Keyvo",
     "loading": "加载中...",
     "error": "错误",
     "success": "成功",
@@ -25,7 +25,8 @@
       "badGateway": "网关错误",
       "serviceUnavailable": "服务不可用",
       "networkError": "网络连接失败"
-    }
+    },
+    "searchClear": "清除"
   },
   "errorBoundary": {
     "retry": "重试",
@@ -47,8 +48,8 @@
   "nav": {
     "home": "首页",
     "products": "商品中心",
-    "blog": "博客",
     "notice": "公告",
+    "faq": "常见问题",
     "about": "关于"
   },
   "vault": {
@@ -96,7 +97,7 @@
     "label": "购买流程进度"
   },
   "footer": {
-    "description": "专业的在线工作室，为您提供优质的产品和服务。",
+    "description": "虚拟商品自助商城：AI 订阅账号、游戏与软件卡密、Token 额度，下单即时到货。",
     "quickLinks": "快速链接",
     "contact": "联系我们",
     "rights": "保留所有权利",
@@ -112,7 +113,7 @@
   },
   "home": {
     "hero": {
-      "title": "Dujiao-Next · D&N",
+      "title": "Keyvo",
       "subtitle": "专业的产品与服务提供商",
       "cta": "浏览商品",
       "badge": "新一代数字商店"
@@ -137,6 +138,9 @@
     "latest": {
       "title": "最新动态",
       "description": "随时掌握我们的最新消息和公告"
+    },
+    "notice": {
+      "viewAll": "查看全部"
     }
   },
   "products": {
@@ -153,6 +157,7 @@
     "previous": "上一页",
     "next": "下一页",
     "price": "价格",
+    "pointsPrice": "{n} 积分可兑",
     "categoryLabel": "分类",
     "searchLabel": "搜索",
     "searchPlaceholder": "搜索商品名称",
@@ -169,7 +174,8 @@
     },
     "fulfillmentType": {
       "manual": "人工交付",
-      "auto": "自动交付"
+      "auto": "自动交付",
+      "content": "教程内容"
     },
     "filter": "筛选",
     "closeFilter": "关闭筛选",
@@ -187,23 +193,22 @@
     "viewDetails": "查看详情",
     "quickBuy": "购买"
   },
-  "blog": {
-    "subtitle": "最新文章和动态",
+  "post": {
     "readMore": "阅读更多",
     "empty": "暂无文章",
-    "searchPlaceholder": "搜索文章标题...",
-    "searchClear": "清除",
-    "noResults": "没有找到匹配的文章",
     "relatedProducts": "相关商品"
   },
-  "blogDetail": {
-    "backToBlog": "返回博客列表",
+  "postDetail": {
     "backToNotice": "返回公告列表",
     "notFound": "文章不存在"
   },
   "notice": {
     "subtitle": "重要公告和通知",
     "empty": "暂无公告"
+  },
+  "faq": {
+    "subtitle": "购买、激活与售后的常见疑问",
+    "empty": "暂无常见问题"
   },
   "announcement": {
     "close": "关闭",
@@ -212,8 +217,8 @@
   },
   "about": {
     "title": "关于我们",
-    "subtitle": "了解Dujiao-Next",
-    "introduction": "Dujiao-Next（D&N）是一家专业的在线工作室，致力于为客户提供优质的产品和服务。我们以创新、专业、高效为核心价值观，不断追求卓越，为客户创造价值。",
+    "subtitle": "了解 Keyvo",
+    "introduction": "Keyvo 是一家专注虚拟商品的自助商城，提供 AI 订阅账号、游戏与软件卡密、Token 中转额度。下单后系统自动或半自动交付，支持多种本地支付方式，配套会员折扣、积分与在线客服。",
     "ourServices": "我们的服务",
     "service1": "优质商品推荐与销售",
     "service2": "专业的售前咨询服务",
@@ -226,7 +231,6 @@
     "cart": "购物车",
     "login": "登录",
     "personalCenter": "个人中心",
-    "guestOrders": "游客查单",
     "logout": "退出",
     "selectLanguage": "选择语言",
     "more": "更多"
@@ -237,6 +241,7 @@
   "bottomNav": {
     "home": "首页",
     "products": "商品",
+    "notice": "公告",
     "cart": "购物车",
     "me": "我的"
   },
@@ -252,7 +257,9 @@
       "affiliate": "推广返利",
       "reseller": "分销中心",
       "giftCard": "礼品卡兑换",
-      "api": "API 对接"
+      "api": "API 对接",
+      "points": "我的积分",
+      "membership": "会员购买"
     },
     "common": {
       "loadFailed": "个人中心数据加载失败，请稍后重试",
@@ -276,7 +283,30 @@
       "spendProgress": "累计消费",
       "highestLevel": "已达最高等级",
       "defaultLevel": "普通会员",
-      "noDiscount": "无折扣"
+      "noDiscount": "无折扣",
+      "buy": "购买会员",
+      "expiresAt": "有效期至 {date}"
+    },
+    "membership": {
+      "title": "会员套餐",
+      "subtitle": "购买月卡、季卡或年卡，下单即享对应折扣。",
+      "current": "当前会员",
+      "inactive": "尚未开通付费会员",
+      "expiresAt": "有效期至 {date}",
+      "discount": "{n}折",
+      "buy": "立即购买",
+      "channel": "支付渠道",
+      "channelEmpty": "暂无可用支付渠道",
+      "channelLoadFailed": "支付渠道加载失败",
+      "channelRequired": "请选择支付渠道",
+      "scanToPay": "请扫码完成支付",
+      "loadFailed": "会员套餐加载失败",
+      "purchaseFailed": "发起购买失败",
+      "period": {
+        "month": "月度",
+        "quarter": "季度",
+        "year": "年度"
+      }
     },
     "profile": {
       "title": "资料设置",
@@ -940,6 +970,68 @@
       "disabled": "API 已禁用。",
       "toggleFailed": "操作失败，请稍后重试。",
       "cancel": "取消"
+    },
+    "points": {
+      "title": "我的积分",
+      "subtitle": "查看积分余额、签到领取与消费记录。",
+      "balance": "当前积分",
+      "totalEarned": "累计获得",
+      "totalSpent": "累计消耗",
+      "checkinTitle": "每日签到",
+      "checkinHint": "每日签到可得 {points} 积分",
+      "streakDays": "已连续签到 {days} 天",
+      "checkin": "立即签到",
+      "checkedIn": "今日已签到",
+      "checkinSuccess": "签到成功，获得 {points} 积分，已连续 {days} 天",
+      "referralTitle": "邀请好友赚积分",
+      "referralHint": "好友注册你得 {register} 积分，好友首单再得 {order} 积分",
+      "referralCode": "邀请码",
+      "referralCopyCode": "复制邀请码",
+      "referralCopyLink": "复制邀请链接",
+      "referralCopied": "已复制",
+      "detailTitle": "积分明细",
+      "empty": "还没有积分记录。",
+      "rechargeTitle": "积分充值",
+      "rechargeSubtitle": "支付成功后积分自动到账。",
+      "amount": "充值金额",
+      "amountPlaceholder": "请输入金额",
+      "estimated": "预计到账 {points} 积分",
+      "channel": "支付方式",
+      "channelEmpty": "请先填写金额以加载可用支付方式",
+      "remark": "备注",
+      "remarkPlaceholder": "选填",
+      "rechargeSubmit": "去支付",
+      "rechargeCreated": "充值订单已创建",
+      "scanToPay": "扫码支付",
+      "table": {
+        "createdAt": "时间",
+        "type": "类型",
+        "direction": "方向",
+        "amount": "变动",
+        "balanceAfter": "余额",
+        "remark": "备注"
+      },
+      "directions": {
+        "in": "获得",
+        "out": "消耗"
+      },
+      "types": {
+        "checkin": "签到",
+        "referral_register": "推广注册",
+        "referral_order": "推广订单",
+        "recharge": "充值",
+        "exchange": "积分兑换",
+        "exchange_refund": "兑换退回",
+        "admin_adjust": "人工调整"
+      },
+      "errors": {
+        "loadFailed": "积分信息加载失败",
+        "checkinFailed": "签到失败",
+        "invalidAmount": "请输入有效的充值金额",
+        "channelRequired": "请选择支付方式",
+        "rechargeFailed": "充值发起失败",
+        "copyFailed": "复制失败"
+      }
     }
   },
   "auth": {
@@ -1024,6 +1116,9 @@
       "emailDomainSelectHint": "请选择邮箱后缀，系统会自动组成完整邮箱",
       "passwordLabel": "密码",
       "passwordPlaceholder": "设置登录密码",
+      "inviteCodeLabel": "邀请码",
+      "inviteCodePlaceholder": "选填",
+      "inviteCodeHint": "与推广链接中的联盟 ID 相同。没有可留空。",
       "codeLabel": "验证码",
       "codePlaceholder": "输入邮箱验证码",
       "sendCode": "发送验证码",
@@ -1111,17 +1206,10 @@
     "couponTitle": "优惠券",
     "couponPlaceholder": "输入优惠券代码（可选）",
     "modeTitle": "购买方式",
-    "guestPurchase": "游客购买",
     "memberPurchase": "登录会员购买",
-    "guestEmailPlaceholder": "邮箱（用于查询订单）",
-    "guestPasswordPlaceholder": "订单密码",
-    "guestInstructions": {
-      "title": "填写说明：",
-      "email": "邮箱：请填写一个可接收邮件的邮箱，您在付款后我们可通过该邮箱向您发送商品信息并可通过该邮箱联系您",
-      "password": "订单密码：请自行设置一个复杂密码并妥善保管，该密码用于您在购买之后，通过“游客查单”菜单，查询您所购买的商品"
-    },
     "manualFormTitle": "交付信息填写",
     "manualFormTip": "人工交付信息按商品收集：同一商品购买多个 SKU 时仅需填写一次。",
+    "manualFormAfterPaymentHint": "需要激活的邮箱等信息将在付款后于订单详情填写，我们将在 24 小时内处理。",
     "manualFormAppliesToSkuCount": "适用于已选 {count} 个 SKU",
     "manualFormSelectPlaceholder": "请选择",
     "manualFormFieldRequired": "{name} 为必填项",
@@ -1151,12 +1239,12 @@
     "channelAmountMinHint": "该渠道需满足金额大于{min}",
     "channelAmountMaxHint": "该渠道需满足金额小于{max}",
     "walletCoversAll": "钱包余额足以支付全部金额",
+    "pointsCoversAll": "积分足以兑换全部金额",
     "submitButton": "提交订单并支付",
     "submitting": "提交中...",
     "errors": {
       "emptyCart": "购物车为空",
-      "missingGuest": "请输入邮箱与订单密码",
-      "loginOrGuest": "请先登录或使用游客购买",
+      "loginRequired": "请先登录后再下单",
       "submitFailed": "提交失败，请稍后重试",
       "manualFormInvalid": "请完善交付信息后再提交",
       "selectPayment": "请选择支付方式"
@@ -1186,6 +1274,10 @@
     "payableAmountLabel": "应付金额",
     "walletBalanceLabel": "钱包余额",
     "useBalance": "优先使用余额支付",
+    "usePoints": "使用积分兑换",
+    "pointsBalanceLabel": "积分余额",
+    "pointsDeductLabel": "本次扣除积分",
+    "pointsInsufficientHint": "积分不足，无法兑换此订单",
     "walletDeductLabel": "余额抵扣",
     "onlinePayLabel": "在线支付",
     "walletOnlyHint": "当前仅支持钱包余额支付",
@@ -1249,6 +1341,7 @@
     "actionTitle": "发起支付",
     "selectChannelError": "请选择支付方式",
     "walletPayOnly": "将使用钱包余额全额支付",
+    "pointsPayOnly": "将使用积分全额兑换",
     "submitButton": "确认支付",
     "submitting": "处理中...",
     "orderNotFound": "订单不存在或无法加载",
@@ -1257,11 +1350,6 @@
     "redirecting": "支付完成，正在跳转订单详情...",
     "orderExpired": "订单已过期，请重新下单后支付",
     "orderCanceled": "订单已取消，无法继续支付",
-    "guestAuthTitle": "补录游客凭据",
-    "guestAuthHint": "请输入下单时的邮箱与订单密码",
-    "guestAuthSubmit": "保存并继续",
-    "guestAuthRequired": "请填写邮箱与订单密码",
-    "guestAuthInvalid": "信息不匹配，请重新输入",
     "status": {
       "initiated": "已创建",
       "pending": "处理中",
@@ -1589,6 +1677,8 @@
     "amountTotal": "实付金额",
     "amountWalletPaid": "余额支付",
     "amountOnlinePaid": "在线支付",
+    "amountPointsPaid": "积分抵扣",
+    "amountFreeClaimPaid": "免费领取抵扣",
     "amountRefunded": "已退款金额",
     "amountMemberDiscount": "会员优惠",
     "amountWholesaleDiscount": "批发价优惠",
@@ -1626,9 +1716,20 @@
     "fulfillmentType": "类型",
     "fulfillmentStatus": "状态",
     "instructionsTitle": "使用说明",
+    "accountLabel": "账号",
+    "passwordLabel": "密码",
+    "manualFormTitle": "激活信息",
+    "manualFormTip": "请输入需要激活的邮箱或其他资料。",
+    "manualFormSla": "付款后我们将在 {hours} 小时内处理。",
+    "manualFormDeadline": "截止时间：{time}",
+    "manualFormSubmit": "提交",
+    "manualFormSubmitting": "提交中...",
+    "manualFormSubmitted": "已提交，我们将在承诺时限内处理。",
+    "manualFormSubmitFailed": "提交失败，请重试",
     "fulfillmentTypes": {
       "manual": "人工交付",
-      "auto": "自动交付"
+      "auto": "自动交付",
+      "content": "教程内容"
     },
     "fulfillmentStatuses": {
       "pending": "待交付",
@@ -1641,42 +1742,6 @@
     "fulfillmentDownloading": "下载中...",
     "fulfillmentTruncatedHint": "当前仅显示前 100 条预览，请下载获取完整交付内容"
   },
-  "guestOrders": {
-    "title": "游客订单查询",
-    "subtitle": "输入邮箱与订单密码查看历史订单",
-    "emailPlaceholder": "邮箱",
-    "passwordPlaceholder": "订单密码",
-    "orderNoPlaceholder": "订单号（可选）",
-    "savedHint": "已保存邮箱：{email}",
-    "clearSaved": "清除已保存信息",
-    "tip": "请输入下单时的邮箱与订单密码",
-    "search": "查询订单",
-    "searching": "查询中...",
-    "empty": "暂无订单记录",
-    "emptyOrderNo": "未找到匹配订单",
-    "viewDetails": "查看详情",
-    "payNow": "去支付",
-    "prevPage": "上一页",
-    "nextPage": "下一页",
-    "pageInfo": "第 {page} / {total} 页",
-    "errors": {
-      "missing": "请输入邮箱与订单密码",
-      "notFound": "未找到匹配订单，请检查输入信息",
-      "searchFailed": "查询失败，请检查信息"
-    }
-  },
-  "guestOrderDetail": {
-    "title": "游客订单详情",
-    "subtitle": "查看订单状态与交付信息",
-    "backSearch": "返回查询",
-    "notFound": "订单不存在或信息不匹配",
-    "authTitle": "补录订单凭据",
-    "authHint": "请填写下单时的邮箱与订单密码",
-    "authRequired": "请填写邮箱与订单密码",
-    "authInvalid": "信息不匹配，请重新输入",
-    "authSubmit": "保存并查询",
-    "authClear": "清除已保存信息"
-  },
   "productDetail": {
     "description": "商品描述",
     "details": "详细信息",
@@ -1688,6 +1753,8 @@
     "loginToBuy": "登录后购买",
     "addToCart": "加入购物车",
     "buyNow": "立即购买",
+    "redeemWithPoints": "积分兑换",
+    "redeeming": "兑换中...",
     "categoryLabel": "分类",
     "fulfillmentLabel": "交付方式",
     "skuTitle": "选择规格",
@@ -1715,13 +1782,46 @@
     "stock": "库存",
     "addToCart": "加入购物车",
     "buyNow": "立即购买",
+    "redeemWithPoints": "积分兑换",
+    "redeeming": "兑换中...",
     "loginToBuy": "登录后购买",
     "soldOut": "已售罄",
     "viewDetail": "查看详情"
   },
   "productPurchase": {
     "label": "购买身份",
-    "member": "会员购买",
-    "guest": "游客可购"
+    "member": "会员购买"
+  },
+  "support": {
+    "title": "在线客服",
+    "close": "关闭客服窗口",
+    "placeholder": "描述你遇到的问题…",
+    "send": "发送",
+    "attach": "发送图片或视频",
+    "empty": "还没有消息，把你遇到的问题发给我们吧。",
+    "you": "我",
+    "agent": "客服",
+    "imageAlt": "客服会话图片",
+    "closedHint": "该会话已由客服关闭，发送新消息会重新开启。",
+    "errors": {
+      "attachmentTooLarge": "附件不能超过 {size}MB"
+    }
+  },
+  "freeClaim": {
+    "eyebrow": "每日免费领取",
+    "memberEyebrow": "会员专享免费领取",
+    "memberOnlyHint": "仅付费会员每天可领一件，后台商品池按日轮换。",
+    "free": "免费",
+    "oncePerDay": "每天一次",
+    "claimed": "今日已领",
+    "claimNow": "立即领取",
+    "becomeMember": "开通会员后领取",
+    "loginToClaim": "登录后领取",
+    "claimSuccess": "领取成功",
+    "claimFailed": "领取失败"
+  },
+  "tokenStation": {
+    "eyebrow": "网页 Token 中转",
+    "open": "打开对方站点"
   }
 }

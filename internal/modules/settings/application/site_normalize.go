@@ -35,8 +35,11 @@ func normalizeSiteSetting(value map[string]interface{}) jsonmap.JSON {
 		normalized[key] = raw
 	}
 
+	// 站点级 Telegram/WhatsApp 联系方式已下线。归一化器会原样透传未知 key，
+	// 因此必须显式剔除，否则历史数据与新提交都会继续落库、让人以为还生效。
+	delete(normalized, "contact")
+
 	normalized["brand"] = normalizeSiteBrand(value["brand"])
-	normalized["contact"] = normalizeSiteContact(value["contact"])
 	normalized["seo"] = normalizeSiteLocalizedBlock(value["seo"], []string{"title", "keywords", "description"})
 	normalized["legal"] = normalizeSiteLocalizedBlock(value["legal"], []string{"terms", "privacy"})
 	normalized["about"] = normalizeSiteAbout(value["about"])
@@ -121,20 +124,6 @@ func normalizeSiteFooterLinks(raw interface{}) []interface{} {
 		}
 	}
 
-	return result
-}
-
-func normalizeSiteContact(raw interface{}) map[string]interface{} {
-	result := map[string]interface{}{
-		"telegram": "",
-		"whatsapp": "",
-	}
-	contactMap, ok := raw.(map[string]interface{})
-	if !ok {
-		return result
-	}
-	result["telegram"] = normalizeSettingText(contactMap["telegram"])
-	result["whatsapp"] = normalizeSettingText(contactMap["whatsapp"])
 	return result
 }
 
@@ -318,14 +307,16 @@ func normalizeStorefrontTemplate(raw interface{}) string {
 }
 
 func normalizeNavConfig(value map[string]interface{}) jsonmap.JSON {
-	// builtin: blog / notice / about 开关，默认 true
+	// builtin: blog / notice / faq / about 开关，默认 true。
+	// 两处 key 列表必须同步：默认 map 决定缺省值，遍历切片决定哪些 key 允许被覆盖，
+	// 只加一处会让该开关"能存进去但读不出来"或"读得到但存不进去"。
 	builtin := map[string]interface{}{
-		"blog":   true,
 		"notice": true,
+		"faq":    true,
 		"about":  true,
 	}
 	if builtinRaw, ok := value["builtin"].(map[string]interface{}); ok {
-		for _, key := range []string{"blog", "notice", "about"} {
+		for _, key := range []string{"notice", "faq", "about"} {
 			if raw, exists := builtinRaw[key]; exists {
 				builtin[key] = parseSettingBool(raw)
 			}

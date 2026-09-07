@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAdminAuthStore } from '@/stores/auth'
 import { ADMIN_BASE } from '@/utils/adminBase'
+import { isDisabledFeaturePath } from '@/utils/disabledFeatures'
 
 const routes = [
   {
@@ -134,10 +135,10 @@ const routes = [
       },
       {
         path: 'posts',
-        redirect: '/posts/blog',
+        redirect: '/posts/notice',
       },
       {
-        path: 'posts/:type(blog|notice)',
+        path: 'posts/:type(blog|notice|faq)',
         name: 'posts',
         component: () => import('@/views/admin/Posts.vue'),
         meta: { permission: 'GET:/admin/posts' },
@@ -173,10 +174,34 @@ const routes = [
         meta: { permission: 'GET:/admin/products' },
       },
       {
+        path: 'free-claim',
+        name: 'free-claim',
+        component: () => import('@/views/admin/FreeClaim.vue'),
+        meta: { permission: 'GET:/admin/free-claim/config' },
+      },
+      {
         path: 'member-levels',
         name: 'member-levels',
         component: () => import('@/views/admin/MemberLevels.vue'),
         meta: { permission: 'GET:/admin/member-levels' },
+      },
+      {
+        path: 'points-config',
+        name: 'points-config',
+        component: () => import('@/views/admin/PointsConfig.vue'),
+        meta: { permission: 'GET:/admin/points/config' },
+      },
+      {
+        path: 'support',
+        name: 'support',
+        component: () => import('@/views/admin/Support.vue'),
+        meta: { permission: 'GET:/admin/support/conversations' },
+      },
+      {
+        path: 'support-quick-replies',
+        name: 'support-quick-replies',
+        component: () => import('@/views/admin/SupportQuickReplies.vue'),
+        meta: { permission: 'GET:/admin/support/quick-replies' },
       },
       {
         path: 'settings',
@@ -292,6 +317,12 @@ const routes = [
         meta: { permission: 'GET:/admin/site-connections' },
       },
       {
+        path: 'token-stations',
+        name: 'token-stations',
+        component: () => import('@/views/admin/TokenStations.vue'),
+        meta: { permission: 'GET:/admin/token-stations' },
+      },
+      {
         path: 'product-mappings',
         name: 'product-mappings',
         component: () => import('@/views/admin/ProductMappings.vue'),
@@ -401,6 +432,10 @@ const PAYMENT_PROTECTED_ROUTE_NAMES = new Set<string>([
 
 router.beforeEach(async (to) => {
   const authStore = useAdminAuthStore()
+
+  if (isDisabledFeaturePath(to.path)) {
+    return { path: '/' }
+  }
 
   if (to.meta.requiresAuth && !authStore.token) {
     return { path: '/login' }

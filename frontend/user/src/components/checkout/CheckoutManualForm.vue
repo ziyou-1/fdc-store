@@ -1,10 +1,12 @@
 <template>
   <div
     v-if="manualFormProducts.length"
-    class="rounded-2xl border bg-card text-card-foreground p-6"
+    :class="embedded ? '' : 'rounded-2xl border bg-card text-card-foreground p-6'"
   >
-    <h2 class="mb-2 text-lg font-bold text-foreground">{{ t('checkout.manualFormTitle') }}</h2>
-    <p class="mb-4 text-xs text-muted-foreground">{{ t('checkout.manualFormTip') }}</p>
+    <template v-if="!embedded">
+      <h2 class="mb-2 text-lg font-bold text-foreground">{{ t('checkout.manualFormTitle') }}</h2>
+      <p class="mb-4 text-xs text-muted-foreground">{{ t('checkout.manualFormTip') }}</p>
+    </template>
     <div class="space-y-5">
       <div
         v-for="manualItem in manualFormProducts"
@@ -119,6 +121,7 @@ const props = defineProps<{
   manualFormProducts: ManualFormProduct[]
   modelValue: Record<string, Record<string, any>>
   submitAttempted: boolean
+  embedded?: boolean
   getManualFieldLabel: (field: ManualFormField) => string
   getManualFieldPlaceholder: (field: ManualFormField) => string
   manualFieldError: (itemKey: string, fieldKey: string) => string

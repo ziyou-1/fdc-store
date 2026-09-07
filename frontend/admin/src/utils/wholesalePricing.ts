@@ -54,6 +54,10 @@ const localeFallbacks = (locale?: string) => {
     case 'en':
     case 'en-us':
       return ['en-US', 'zh-CN', 'zh-TW']
+    case 'id':
+    case 'id-id':
+      // 印尼语缺文案时回退英文，比回退中文对印尼买家更可读
+      return ['id-ID', 'en-US', 'zh-CN']
     case 'zh':
     case 'zh-cn':
     default:

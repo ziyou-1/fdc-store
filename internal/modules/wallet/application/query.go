@@ -1,6 +1,7 @@
 package application
 
 import (
+	"github.com/dujiao-next/internal/constants"
 	"time"
 
 	walletcontract "github.com/dujiao-next/internal/modules/wallet/contract"
@@ -46,6 +47,7 @@ func (s *Service) ListUserRechargeOrders(userID uint, page, pageSize int, status
 	}
 	return s.repository.ListRechargeOrdersAdmin(walletcontract.RechargeListFilter{
 		Page: page, PageSize: pageSize, UserID: userID, Status: status, RechargeNo: rechargeNo,
+		CreditTarget: constants.RechargeCreditTargetWallet,
 	})
 }
 
@@ -53,7 +55,10 @@ func (s *Service) StatsUserRechargeOrders(userID uint, rechargeNo string) (map[s
 	if userID == 0 {
 		return nil, walletcontract.ErrAccountNotFound
 	}
-	return s.repository.StatsRechargeOrders(walletcontract.RechargeListFilter{UserID: userID, RechargeNo: rechargeNo})
+	return s.repository.StatsRechargeOrders(walletcontract.RechargeListFilter{
+		UserID: userID, RechargeNo: rechargeNo,
+		CreditTarget: constants.RechargeCreditTargetWallet,
+	})
 }
 
 func (s *Service) GetRechargeOrderByRechargeNo(userID uint, rechargeNo string) (*walletdomain.RechargeOrder, error) {

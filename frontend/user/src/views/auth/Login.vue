@@ -184,7 +184,7 @@
               {{ t('auth.login.rememberMe') }}
             </label>
             <router-link
-              v-if="emailVerificationEnabled"
+              v-if="showForgotPassword"
               to="/auth/forgot"
               class="font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
@@ -295,7 +295,7 @@ const {
   error, info, formValidation,
   loginCaptchaEnabled, captchaProvider, captchaPayload, turnstileToken, turnstileSiteKey,
   imageCaptchaRef, turnstileRef, handleCaptchaConfigStale,
-  registrationEnabled, emailVerificationEnabled,
+  registrationEnabled, showForgotPassword,
   showTelegramWidget, telegramWidgetRef, showTelegramOidc, startTelegramOidc,
   showMiniAppLoginHint, attemptingMiniAppLogin, showTelegramMiniAppEntry, openTelegramMiniAppEntry,
   googleClientID, googleButtonLocale, googleIdentityUXMode, googleRedirectLoginURI,

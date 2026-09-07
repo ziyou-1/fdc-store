@@ -7,6 +7,7 @@ package jsonmap
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 )
 
 // JSON is a JSON object with database/sql serialization support.
@@ -21,14 +22,22 @@ func (value JSON) Value() (driver.Value, error) {
 }
 
 // Scan implements sql.Scanner.
+//
+// 驱动对 JSON 列的返回类型不统一：应用自己写入时 Value() 交出 []byte（SQLite 落成
+// BLOB、读回仍是 []byte），但同一列若以 TEXT 形式存在（外部工具导入、旧迁移建成
+// TEXT），SQLite 读回的是 string。因此两种都必须接受——早先只认 []byte 且在不匹配时
+// 静默 return nil，会让整列 JSON 无声变空而不报任何错。
 func (value *JSON) Scan(source interface{}) error {
 	if source == nil {
 		*value = make(JSON)
 		return nil
 	}
-	bytes, ok := source.([]byte)
-	if !ok {
-		return nil
+	switch data := source.(type) {
+	case []byte:
+		return json.Unmarshal(data, value)
+	case string:
+		return json.Unmarshal([]byte(data), value)
+	default:
+		return fmt.Errorf("jsonmap: cannot scan %T into JSON", source)
 	}
-	return json.Unmarshal(bytes, value)
 }

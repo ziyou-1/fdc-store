@@ -14,7 +14,7 @@ import { notifyError, notifySuccess } from '@/utils/notify'
 
 const { t } = useI18n()
 
-const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US'] as const
+const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const
 type SupportedLanguage = (typeof supportedLanguages)[number]
 
 type NotificationLocalizedTemplate = { title: string; body: string }
@@ -80,11 +80,12 @@ const createNotificationSceneTemplate = (): NotificationSceneTemplate => ({
   'zh-CN': createNotificationLocalizedTemplate(),
   'zh-TW': createNotificationLocalizedTemplate(),
   'en-US': createNotificationLocalizedTemplate(),
+  'id-ID': createNotificationLocalizedTemplate(),
 })
 
 const deepCloneTemplate = (src: NotificationSceneTemplate): NotificationSceneTemplate => {
   const result = createNotificationSceneTemplate()
-  ;(['zh-CN', 'zh-TW', 'en-US'] as const).forEach((lang) => {
+  ;(['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const).forEach((lang) => {
     result[lang].title = src[lang]?.title || ''
     result[lang].body = src[lang]?.body || ''
   })

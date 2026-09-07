@@ -177,3 +177,27 @@ func TestCategoryServiceListSortOrderDescending(t *testing.T) {
 		t.Fatalf("expected high sort_order first, got %s then %s", rows[0].Slug, rows[1].Slug)
 	}
 }
+
+func TestEnsureDefaultCategoriesCreatesGamesSoftwareAIOnce(t *testing.T) {
+	svc, _ := newCategoryServiceForTest(t)
+	if err := svc.EnsureDefaultCategories(); err != nil {
+		t.Fatalf("ensure defaults: %v", err)
+	}
+	if err := svc.EnsureDefaultCategories(); err != nil {
+		t.Fatalf("ensure defaults again: %v", err)
+	}
+	rows, err := svc.List()
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 default categories, got %d", len(rows))
+	}
+	if rows[0].Slug != "games" || rows[1].Slug != "software" || rows[2].Slug != "ai" {
+		t.Fatalf("order = %s, %s, %s", rows[0].Slug, rows[1].Slug, rows[2].Slug)
+	}
+	name, _ := rows[0].NameJSON["zh-CN"].(string)
+	if name != "游戏" {
+		t.Fatalf("games zh-CN = %q", name)
+	}
+}

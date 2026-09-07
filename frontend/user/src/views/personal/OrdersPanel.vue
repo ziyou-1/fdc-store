@@ -197,8 +197,8 @@
         v-else-if="rechargeOrders.length === 0"
         icon="order"
         :description="t('orders.rechargeEmpty')"
-        :action-label="t('orders.rechargeEmptyAction')"
-        action-to="/me/wallet"
+        :action-label="disabledFeatures.buyerWallet ? undefined : t('orders.rechargeEmptyAction')"
+        :action-to="disabledFeatures.buyerWallet ? undefined : '/me/wallet'"
       />
 
       <div v-else class="space-y-4">
@@ -255,6 +255,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import EmptyState from '../../components/EmptyState.vue'
+import { disabledFeatures } from '../../utils/disabledFeatures'
 import PaginationNav from '../../components/PaginationNav.vue'
 import PanelHeading from '../../components/shared/PanelHeading.vue'
 import StatCard from '../../components/shared/StatCard.vue'

@@ -121,6 +121,13 @@ func (c *Container) initIdentityAndCatalogServices() {
 		MaxWidth:          c.Config.Upload.MaxWidth,
 		MaxHeight:         c.Config.Upload.MaxHeight,
 	}, uploadlocal.New("uploads"))
+	// 客服附件走独立实例：同一套存储，另一套白名单与体积上限。
+	// 不限宽高，手机截图不该被后台素材库的尺寸限制挡下。
+	c.SupportUploadService = uploadapp.NewService(uploadapp.Policy{
+		MaxSize:           c.Config.Upload.Support.MaxSize,
+		AllowedTypes:      c.Config.Upload.Support.AllowedTypes,
+		AllowedExtensions: c.Config.Upload.Support.AllowedExtensions,
+	}, uploadlocal.New("uploads"))
 	c.AffiliateService = affiliateapp.NewService(c.AffiliateRepo, c.UserStore, c.OrderStore, c.ProductRepo, c.SettingService)
 	productServices := catalogproductbootstrap.New(catalogproductbootstrap.Dependencies{
 		Products:          c.ProductRepo,

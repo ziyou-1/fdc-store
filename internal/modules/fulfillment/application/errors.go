@@ -12,6 +12,7 @@ var (
 	ErrFulfillmentExists       = errors.New("fulfillment exists")
 	ErrFulfillmentCreateFailed = errors.New("fulfillment create failed")
 	ErrFulfillmentNotAuto      = errors.New("fulfillment not auto")
+	ErrFulfillmentNotContent   = errors.New("fulfillment not content")
 	ErrOrderNotFound           = orderapp.ErrOrderNotFound
 	ErrOrderFetchFailed        = orderapp.ErrOrderFetchFailed
 	ErrOrderStatusInvalid      = orderapp.ErrOrderStatusInvalid

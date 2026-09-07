@@ -33,6 +33,10 @@ interface RequestOptions {
   headers?: Record<string, string>
   blob?: boolean
   data?: any
+  // 轮询失败不应打断工作台：跳过 toast，仍 reject 给调用方。
+  silent?: boolean
+  // 大文件上传必须显式放宽，默认 10s 不够传 50MB 视频。
+  timeout?: number
   [key: string]: any
 }
 
@@ -117,8 +121,15 @@ async function request(method: string, path: string, bodyOrOptions?: any, option
     headers['Content-Type'] = 'application/json'
   }
 
+  const notify = (message: string) => {
+    if (!opts.silent) {
+      notifyError(message)
+    }
+  }
+
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeout)
+  const effectiveTimeout = typeof opts.timeout === 'number' && opts.timeout > 0 ? opts.timeout : timeout
+  const timer = setTimeout(() => controller.abort(), effectiveTimeout)
 
   let response: Response
   try {
@@ -131,7 +142,7 @@ async function request(method: string, path: string, bodyOrOptions?: any, option
   } catch (err: any) {
     clearTimeout(timer)
     const message = t('common.api.networkError')
-    notifyError(message)
+    notify(message)
     return Promise.reject(createNotifiedError(message))
   } finally {
     clearTimeout(timer)
@@ -149,13 +160,13 @@ async function request(method: string, path: string, bodyOrOptions?: any, option
       if (response.status === 401 && !isLoginEndpoint(path)) {
         redirectToLogin()
       }
-      notifyError(message)
+      notify(message)
       return Promise.reject(createNotifiedError(message))
     }
     if (contentType.includes('application/json')) {
       const fallbackMessage = t('common.api.requestFailed')
       const message = await readBlobErrorMessage(blob, fallbackMessage)
-      notifyError(message)
+      notify(message)
       return Promise.reject(createNotifiedError(message))
     }
     return { data: blob, headers: responseHeadersToObject(response.headers) }
@@ -172,11 +183,11 @@ async function request(method: string, path: string, bodyOrOptions?: any, option
       if (status === 401 && !isLoginEndpoint(path)) {
         redirectToLogin()
       }
-      notifyError(message)
+      notify(message)
       return Promise.reject(createNotifiedError(message))
     }
     const message = t('common.api.responseMissing')
-    notifyError(message)
+    notify(message)
     return Promise.reject(createNotifiedError(message))
   }
 
@@ -187,7 +198,7 @@ async function request(method: string, path: string, bodyOrOptions?: any, option
     if (status === 401 && !isLoginEndpoint(path)) {
       redirectToLogin()
     }
-    notifyError(message)
+    notify(message)
     return Promise.reject(createNotifiedError(message))
   }
 
@@ -196,7 +207,7 @@ async function request(method: string, path: string, bodyOrOptions?: any, option
     const fallbackMessage = t('common.api.requestFailed')
     const message = data.msg || fallbackMessage
     if (data.status_code === 401 && !isLoginEndpoint(path)) {
-      notifyError(message)
+      notify(message)
       redirectToLogin()
       return Promise.reject(createNotifiedError(message))
     }
@@ -204,7 +215,7 @@ async function request(method: string, path: string, bodyOrOptions?: any, option
     if (message === 'compliance_required' || message === 'compliance_required_by_super_admin') {
       return Promise.reject(createNotifiedError(message))
     }
-    notifyError(message)
+    notify(message)
     return Promise.reject(createNotifiedError(message))
   }
 

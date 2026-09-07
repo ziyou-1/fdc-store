@@ -7,11 +7,12 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { notifyError, notifySuccess } from '@/utils/notify'
+import { disabledFeatures } from '@/utils/disabledFeatures'
 
 const { t } = useI18n()
 
 const MAX_CUSTOM_ITEMS = 10
-const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US'] as const
+const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US', 'id-ID'] as const
 type SupportedLanguage = (typeof supportedLanguages)[number]
 
 const presetIcons = [
@@ -65,7 +66,7 @@ const form = reactive({
 
 const createEmptyItem = (): CustomNavItem => ({
   id: Date.now(),
-  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
   link_type: 'internal',
   url: '',
   target: '_self',
@@ -102,6 +103,7 @@ const fetchNavConfig = async () => {
             'zh-CN': ((item.title as Record<string, string>)?.['zh-CN']) || '',
             'zh-TW': ((item.title as Record<string, string>)?.['zh-TW']) || '',
             'en-US': ((item.title as Record<string, string>)?.['en-US']) || '',
+            'id-ID': ((item.title as Record<string, string>)?.['id-ID']) || '',
           },
           link_type: item.link_type === 'external' ? 'external' : 'internal',
           url: (item.url as string) || '',
@@ -125,7 +127,7 @@ const save = async () => {
     const payload = {
       key: 'nav_config',
       value: {
-        builtin: { ...form.builtin },
+        builtin: { ...form.builtin, blog: disabledFeatures.blog ? false : form.builtin.blog },
         custom_items: form.customItems.map((item) => ({
           id: item.id,
           title: { ...item.title },
@@ -164,7 +166,7 @@ defineExpose({ save, submitting })
         <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.navigation.builtin.subtitle') }}</p>
       </div>
       <div class="divide-y divide-border px-6">
-        <div class="flex items-center justify-between py-4">
+        <div v-if="!disabledFeatures.blog" class="flex items-center justify-between py-4">
           <Label class="text-sm font-medium">{{ t('admin.settings.navigation.builtin.blog') }}</Label>
           <Switch v-model="form.builtin.blog" />
         </div>

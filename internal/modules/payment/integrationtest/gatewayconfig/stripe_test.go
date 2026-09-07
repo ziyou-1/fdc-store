@@ -41,6 +41,7 @@ func TestValidateChannelStripeInvalidInteractionMode(t *testing.T) {
 		ProviderType:    constants.PaymentProviderOfficial,
 		ChannelType:     constants.PaymentChannelTypeStripe,
 		InteractionMode: constants.PaymentInteractionQR,
+		IsActive:        true, // 网关面校验只对启用中的渠道生效
 		FeeRate:         money.FromDecimal(decimal.Zero),
 		ConfigJSON: jsonmap.JSON{
 			"secret_key":           "sk_test_123456",

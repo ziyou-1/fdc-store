@@ -7,10 +7,13 @@ import {
   isResellerSiteSeoConfigured,
   normalizeFooterLinksForForm,
   canEditResellerSiteConfig,
+  resellerLocales,
 } from '../src/utils/resellerSiteConfig.ts'
 
 test('blank localized text includes all supported storefront locales', () => {
-  assert.deepEqual(blankLocalizedText(), { 'zh-CN': '', 'zh-TW': '', 'en-US': '' })
+  const blank = blankLocalizedText()
+  assert.deepEqual(Object.keys(blank).sort(), [...resellerLocales].sort())
+  assert.ok(Object.values(blank).every((v) => v === ''))
 })
 
 test('localized text fallback follows current locale then zh-CN then first non-empty', () => {
@@ -23,7 +26,7 @@ test('localized text fallback follows current locale then zh-CN then first non-e
 test('footer links normalize missing localized names', () => {
   assert.deepEqual(
     normalizeFooterLinksForForm([{ name: { 'zh-CN': '客服' }, url: 'https://example.test' }]),
-    [{ name: { 'zh-CN': '客服', 'zh-TW': '', 'en-US': '' }, url: 'https://example.test' }],
+    [{ name: { ...blankLocalizedText(), 'zh-CN': '客服' }, url: 'https://example.test' }],
   )
 })
 

@@ -79,6 +79,19 @@
           </div>
         </div>
 
+        <OrderPendingManualForm
+          v-model="pendingManualFormData"
+          :manual-form-products="pendingManualForms"
+          :submit-attempted="pendingManualSubmitAttempted"
+          :submitting="pendingManualSubmitting"
+          :sla-hours="pendingManualSlaHours"
+          :deadline="formatDate(order.manual_form_deadline)"
+          :get-manual-field-label="getPendingManualFieldLabel"
+          :get-manual-field-placeholder="getPendingManualFieldPlaceholder"
+          :manual-field-error="pendingManualFieldError"
+          @submit="submitPendingManualForm"
+        />
+
         <div class="rounded-2xl border bg-card shadow-sm p-6">
           <h2 class="text-lg font-bold mb-4">{{ t('orderDetail.amountTitle') }}</h2>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -109,6 +122,16 @@
             <div v-if="hasAmount(order.online_paid_amount)" class="border rounded-xl p-4">
               <div class="text-xs text-muted-foreground">{{ t('orderDetail.amountOnlinePaid') }}</div>
               <div class="text-foreground font-mono mt-1">{{ formatMoney(order.online_paid_amount,
+                order.currency) }}</div>
+            </div>
+            <div v-if="hasAmount(order.points_paid_amount)" class="border rounded-xl p-4">
+              <div class="text-xs text-muted-foreground">{{ t('orderDetail.amountPointsPaid') }}</div>
+              <div class="text-foreground font-mono mt-1">{{ formatMoney(order.points_paid_amount,
+                order.currency) }}</div>
+            </div>
+            <div v-if="hasAmount(order.free_claim_paid_amount)" class="border rounded-xl p-4">
+              <div class="text-xs text-muted-foreground">{{ t('orderDetail.amountFreeClaimPaid') }}</div>
+              <div class="text-foreground font-mono mt-1">{{ formatMoney(order.free_claim_paid_amount,
                 order.currency) }}</div>
             </div>
             <div v-if="hasAmount(order.refunded_amount)" class="border rounded-xl p-4">
@@ -350,6 +373,14 @@
                     </div>
                     <div class="border rounded-xl p-4 text-sm text-muted-foreground whitespace-pre-wrap break-all overflow-hidden max-h-48 overflow-y-auto">{{ child.fulfillment.payload }}</div>
                   </div>
+                  <div v-else-if="fulfillmentCredentialView(child.fulfillment).credentials.length"
+                    class="mt-3 border rounded-xl p-4 text-sm text-muted-foreground space-y-2 break-all overflow-hidden">
+                    <div v-for="(row, index) in fulfillmentCredentialView(child.fulfillment).credentials" :key="`child-cred-${child.id}-${index}`" class="space-y-1">
+                      <div>{{ t('orderDetail.accountLabel') }}：<span class="font-medium text-foreground">{{ row.account }}</span></div>
+                      <div>{{ t('orderDetail.passwordLabel') }}：<span class="font-medium text-foreground">{{ row.password }}</span></div>
+                    </div>
+                    <div v-for="(line, index) in fulfillmentCredentialView(child.fulfillment).extraLines" :key="`child-cred-extra-${child.id}-${index}`">{{ line }}</div>
+                  </div>
                   <div v-else-if="fulfillmentDeliveryLines(child.fulfillment).length"
                     class="mt-3 border rounded-xl p-4 text-sm text-muted-foreground space-y-1 break-all overflow-hidden">
                     <div v-for="(line, index) in fulfillmentDeliveryLines(child.fulfillment)" :key="`child-fulfillment-${child.id}-${index}`">{{ line }}</div>
@@ -366,7 +397,7 @@
                         <Info class="w-4 h-4" :stroke-width="2" />
                         {{ t('orderDetail.instructionsTitle') }}
                       </div>
-                      <div class="prose prose-sm max-w-none dark:prose-invert text-muted-foreground break-words" v-html="block.html"></div>
+                      <div class="prose prose-sm max-w-none dark:prose-invert text-muted-foreground break-words [&_video]:max-w-full [&_video]:rounded-lg" v-html="block.html"></div>
                     </div>
                   </div>
                 </div>
@@ -409,6 +440,14 @@
             </div>
             <div class="border rounded-xl p-4 text-sm text-muted-foreground whitespace-pre-wrap break-all overflow-hidden max-h-64 overflow-y-auto">{{ order.fulfillment.payload }}</div>
           </div>
+          <div v-else-if="fulfillmentCredentialView(order.fulfillment).credentials.length"
+            class="mt-4 border rounded-xl p-4 text-sm text-muted-foreground space-y-2 break-all overflow-hidden">
+            <div v-for="(row, index) in fulfillmentCredentialView(order.fulfillment).credentials" :key="`order-cred-${index}`" class="space-y-1">
+              <div>{{ t('orderDetail.accountLabel') }}：<span class="font-medium text-foreground">{{ row.account }}</span></div>
+              <div>{{ t('orderDetail.passwordLabel') }}：<span class="font-medium text-foreground">{{ row.password }}</span></div>
+            </div>
+            <div v-for="(line, index) in fulfillmentCredentialView(order.fulfillment).extraLines" :key="`order-cred-extra-${index}`">{{ line }}</div>
+          </div>
           <div v-else-if="fulfillmentDeliveryLines(order.fulfillment).length"
             class="mt-4 border rounded-xl p-4 text-sm text-muted-foreground space-y-1 break-all overflow-hidden">
             <div v-for="(line, index) in fulfillmentDeliveryLines(order.fulfillment)" :key="`fulfillment-${order.order_no || 'order'}-${index}`">{{ line }}</div>
@@ -425,12 +464,13 @@
                 <Info class="w-4 h-4" :stroke-width="2" />
                 {{ t('orderDetail.instructionsTitle') }}
               </div>
-              <div class="prose prose-sm max-w-none dark:prose-invert text-muted-foreground break-words" v-html="block.html"></div>
+              <div class="prose prose-sm max-w-none dark:prose-invert text-muted-foreground break-words [&_video]:max-w-full [&_video]:rounded-lg" v-html="block.html"></div>
             </div>
           </div>
         </div>
       </div>
     </div>
+    <ContentTutorialDialog v-model:open="contentTutorialOpen" :blocks="contentTutorialBlocks" />
   </div>
 </template>
 
@@ -443,6 +483,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import EmptyState from '../components/EmptyState.vue'
 import BreadcrumbNav from '../components/BreadcrumbNav.vue'
 import SmartImage from '../components/SmartImage.vue'
+import OrderPendingManualForm from '../components/order/OrderPendingManualForm.vue'
+import ContentTutorialDialog from '../components/order/ContentTutorialDialog.vue'
 import { useOrderDetail } from '../composables/useOrderDetail'
 
 const { t } = useI18n()
@@ -454,7 +496,11 @@ const {
   refundReasonText, showRefundRecordsCard, refundRecords, showTimeCard,
   orderItemImage, orderItemSkuText, manualSubmissionRows,
   hasItemDiscount, formatItemDiscountTotal, formatItemPaidAmount, resolvedChildStatus,
-  fulfillmentDeliveryLines, instructionBlocks, isFulfillmentTruncated,
+  fulfillmentDeliveryLines, fulfillmentCredentialView, instructionBlocks, isFulfillmentTruncated,
   fulfillmentCopied, handleCopyFulfillment, fulfillmentDownloading, handleDownloadFulfillment,
+  contentTutorialBlocks, contentTutorialOpen,
+  pendingManualForms, pendingManualFormData, pendingManualSubmitAttempted, pendingManualSubmitting,
+  pendingManualSlaHours, getPendingManualFieldLabel, getPendingManualFieldPlaceholder,
+  pendingManualFieldError, submitPendingManualForm,
 } = useOrderDetail()
 </script>

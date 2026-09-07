@@ -20,6 +20,8 @@
             {{ cartCount > 99 ? '99+' : cartCount }}
           </span>
         </div>
+        <!-- Notice -->
+        <Bell v-else-if="item.icon === 'notice'" class="w-5 h-5" />
         <!-- Me -->
         <User v-else-if="item.icon === 'me'" class="w-5 h-5" />
         <span>{{ t(item.label) }}</span>
@@ -32,16 +34,18 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Home, LayoutGrid, ShoppingCart, User } from 'lucide-vue-next'
+import { Bell, Home, LayoutGrid, ShoppingCart, User } from 'lucide-vue-next'
 import { useCartStore } from '../stores/cart'
 import { useUserAuthStore } from '../stores/userAuth'
 import { useAppStore } from '../stores/app'
+import { useNavConfig } from '../composables/useNavConfig'
 
 const route = useRoute()
 const { t } = useI18n()
 const cartStore = useCartStore()
 const userAuthStore = useUserAuthStore()
 const appStore = useAppStore()
+const { noticeEnabled } = useNavConfig()
 
 const cartCount = computed(() => cartStore.totalItems)
 const isListMode = computed(() => appStore.config?.template_mode === 'list')
@@ -50,6 +54,7 @@ const navItems = computed(() => {
   const items = [
     { path: '/', icon: 'home', label: 'bottomNav.home' },
     ...(!isListMode.value ? [{ path: '/products', icon: 'products', label: 'bottomNav.products' }] : []),
+    ...(noticeEnabled.value ? [{ path: '/notice', icon: 'notice', label: 'bottomNav.notice' }] : []),
     { path: '/cart', icon: 'cart', label: 'bottomNav.cart' },
     { path: userAuthStore.isAuthenticated ? '/me' : '/auth/login', icon: 'me', label: 'bottomNav.me' },
   ]

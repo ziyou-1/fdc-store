@@ -15,6 +15,7 @@ import (
 	coupongormstore "github.com/dujiao-next/internal/modules/coupon/infrastructure/gormstore"
 	dashboardgormstore "github.com/dujiao-next/internal/modules/dashboard/infrastructure/gormstore"
 	downstreamcallbackgormstore "github.com/dujiao-next/internal/modules/downstreamcallback/infrastructure/gormstore"
+	freeclaimgormstore "github.com/dujiao-next/internal/modules/freeclaim/infrastructure/gormstore"
 	fulfillmentgormstore "github.com/dujiao-next/internal/modules/fulfillment/infrastructure/gormstore"
 	giftcardgormstore "github.com/dujiao-next/internal/modules/giftcard/infrastructure/gormstore"
 	adminstore "github.com/dujiao-next/internal/modules/identity/admin/infrastructure/gormstore"
@@ -25,13 +26,16 @@ import (
 	notificationgormstore "github.com/dujiao-next/internal/modules/notification/infrastructure/gormstore"
 	ordergormstore "github.com/dujiao-next/internal/modules/order/infrastructure/gormstore"
 	paymentgormstore "github.com/dujiao-next/internal/modules/payment/infrastructure/gormstore"
+	pointsgormstore "github.com/dujiao-next/internal/modules/points/infrastructure/gormstore"
 	procurementgormstore "github.com/dujiao-next/internal/modules/procurement/infrastructure/gormstore"
 	promotiongormstore "github.com/dujiao-next/internal/modules/promotion/infrastructure/gormstore"
 	reconciliationgormstore "github.com/dujiao-next/internal/modules/reconciliation/infrastructure/gormstore"
 	resellergormstore "github.com/dujiao-next/internal/modules/reseller/infrastructure/gormstore"
 	settingsstore "github.com/dujiao-next/internal/modules/settings/infrastructure/gormstore"
 	siteconnectiongormstore "github.com/dujiao-next/internal/modules/siteconnection/infrastructure/gormstore"
+	supportgormstore "github.com/dujiao-next/internal/modules/support/infrastructure/gormstore"
 	broadcaststore "github.com/dujiao-next/internal/modules/telegram/broadcast/infrastructure/gormstore"
+	tokenstationgormstore "github.com/dujiao-next/internal/modules/tokenstation/infrastructure/gormstore"
 	walletgormstore "github.com/dujiao-next/internal/modules/wallet/infrastructure/gormstore"
 	"github.com/dujiao-next/internal/platform/database/gormdb"
 )
@@ -60,6 +64,10 @@ func (c *Container) initRepositories() error {
 	c.CouponUsageRepo = coupongormstore.NewUsageStore(db)
 	c.PromotionRepo = promotiongormstore.New(db)
 	c.WalletRepo = walletgormstore.New(db)
+	c.PointsRepo = pointsgormstore.New(db)
+	c.FreeClaimRepo = freeclaimgormstore.New(db)
+	c.TokenStationRepo = tokenstationgormstore.New(db)
+	c.SupportRepo = supportgormstore.New(db)
 	c.CategoryRepo = categorygormstore.NewCategoryStore(db)
 	c.SettingRepo = settingsstore.New(db)
 	c.UserLoginLogRepo = auditloggormstore.NewUserLoginStore(db)

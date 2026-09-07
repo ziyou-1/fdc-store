@@ -404,3 +404,55 @@ func TestLoginWithTelegramAssignsDefaultMemberLevel(t *testing.T) {
 		t.Fatalf("persisted user member level = %d, want %d (被零值覆盖)", persisted.MemberLevelID, defaultLevel.ID)
 	}
 }
+
+type staticInviterResolver struct{ userID uint }
+
+func (r staticInviterResolver) ResolveInviterUserID(code string) (uint, error) {
+	if code == "INVITE1" {
+		return r.userID, nil
+	}
+	return 0, nil
+}
+
+type recordingReferralRewarder struct {
+	inviter uint
+	invitee uint
+	calls   int
+}
+
+func (r *recordingReferralRewarder) AwardReferralRegister(inviterUserID, inviteeUserID uint) error {
+	r.calls++
+	r.inviter = inviterUserID
+	r.invitee = inviteeUserID
+	return nil
+}
+
+func TestLoginVerifiedTelegramAppliesInviteCode(t *testing.T) {
+	svc, _, db := setupTelegramOAuthTestService(t)
+	now := time.Now()
+	inviter := &userdomain.User{
+		Email: "tg-inviter@example.com", PasswordHash: "not-used", DisplayName: "Inviter",
+		Status: constants.UserStatusActive, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := db.Create(inviter).Error; err != nil {
+		t.Fatalf("create inviter: %v", err)
+	}
+	rewarder := &recordingReferralRewarder{}
+	svc.SetReferralServices(staticInviterResolver{userID: inviter.ID}, rewarder)
+
+	res, err := svc.LoginVerifiedTelegram(&telegramauthapp.IdentityVerified{
+		Provider:       constants.UserOAuthProviderTelegram,
+		ProviderUserID: "30001",
+		Username:       "tg_invitee",
+		AuthAt:         time.Now(),
+	}, "INVITE1")
+	if err != nil || res == nil || res.User == nil {
+		t.Fatalf("login = %+v err=%v", res, err)
+	}
+	if res.User.InviterUserID == nil || *res.User.InviterUserID != inviter.ID {
+		t.Fatalf("inviter = %v, want %d", res.User.InviterUserID, inviter.ID)
+	}
+	if rewarder.calls != 1 || rewarder.inviter != inviter.ID || rewarder.invitee != res.User.ID {
+		t.Fatalf("award = %+v", rewarder)
+	}
+}

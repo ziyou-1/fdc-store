@@ -10,6 +10,7 @@ import (
 	paymentdomain "github.com/dujiao-next/internal/modules/payment/domain"
 
 	orderapp "github.com/dujiao-next/internal/modules/order/application"
+	pointscontract "github.com/dujiao-next/internal/modules/points/contract"
 
 	orderdomain "github.com/dujiao-next/internal/modules/order/domain"
 	settingsapp "github.com/dujiao-next/internal/modules/settings/application"
@@ -23,9 +24,12 @@ import (
 
 // CreatePaymentInput 创建支付请求
 type CreatePaymentInput struct {
-	OrderID          uint
-	ChannelID        uint
-	UseBalance       bool
+	OrderID    uint
+	ChannelID  uint
+	UseBalance bool
+	UsePoints  bool
+	// UseFreeClaim 非空表示这是一次每日免费领取的结算。
+	UseFreeClaim     *orderapp.FreeClaimIntent
 	ClientIP         string
 	Context          context.Context
 	ReturnBizType    string
@@ -42,6 +46,12 @@ type CreatePaymentResult struct {
 	OrderPaid        bool
 	WalletPaidAmount money.Amount
 	OnlinePayAmount  money.Amount
+	PointsPaidAmount money.Amount
+	PointsUsed       int64
+}
+
+func skipPaymentApplies(skipConfigured, usePoints, useFreeClaim bool) bool {
+	return skipConfigured && !usePoints && !useFreeClaim
 }
 
 func hasProviderResult(payment *paymentdomain.Payment) bool {
@@ -68,18 +78,58 @@ func (s *PaymentService) CreatePayment(input CreatePaymentInput) (*CreatePayment
 	feeRate := decimal.Zero
 	reusedPending := false
 	orderPaidByWallet := false
+	pointsUsed := int64(0)
 	now := time.Now()
 	feeConfig := settingsapp.DefaultPaymentFeeConfig()
 	if s.settingService != nil {
 		feeConfig = s.settingService.GetPaymentFeeConfig()
 	}
 
+	// skip_payment 是现金成交捷径，不能盖掉积分兑换或免费领取：
+	// 兑换必须真扣积分；领取必须写入当日记录，否则"每天一次"会失效。
+	skipPayment := skipPaymentApplies(s.skipPayment, input.UsePoints, input.UseFreeClaim != nil)
+	if skipPayment {
+		input.ChannelID = 0
+		input.UseBalance = false
+	}
+
 	// 在事务外查询设置，避免 SQLite 单连接池下自锁
-	walletOnly := s.settingService != nil && s.settingService.GetWalletOnlyPayment()
+	walletOnly := !skipPayment && s.settingService != nil && s.settingService.GetWalletOnlyPayment()
 	if walletOnly {
 		input.UseBalance = true
 		if input.ChannelID != 0 {
 			return nil, walletcontract.ErrOnlyPaymentRequired
+		}
+	}
+
+	// 积分兑换：配置同样在事务外读取。积分与余额、在线渠道三者互斥，
+	// 且必须整单全额抵扣——这条约束换来两个结果：抵扣后应付在线额恒为 0，
+	// 于是一定走下方同事务的合成支付分支；以及 ChannelID 必为 0，
+	// 从而绕不开也进不去上面那条"复用旧 pending 支付"的短路。
+	// 免费领取与其它 tender 互斥：整单由系统结算，不接受任何用户付款方式。
+	if input.UseFreeClaim != nil &&
+		(input.UseBalance || input.UsePoints || input.ChannelID != 0 || walletOnly) {
+		return nil, orderapp.ErrPointsTenderExclusive
+	}
+
+	var pointsPolicy orderapp.PointsExchangePolicy
+	if input.UsePoints {
+		if s.pointsSvc == nil {
+			return nil, pointscontract.ErrExchangeDisabled
+		}
+		pointsConfig, cfgErr := s.pointsSvc.GetConfig()
+		if cfgErr != nil {
+			return nil, cfgErr
+		}
+		if !pointsConfig.ExchangeEnabled {
+			return nil, pointscontract.ErrExchangeDisabled
+		}
+		if input.UseBalance || walletOnly || input.ChannelID != 0 {
+			return nil, orderapp.ErrPointsTenderExclusive
+		}
+		pointsPolicy = orderapp.PointsExchangePolicy{
+			DailyLimit:    pointsConfig.ExchangeDailyLimit,
+			SKUDailyLimit: pointsConfig.ExchangeSKUDailyLimit,
 		}
 	}
 
@@ -165,16 +215,54 @@ func (s *PaymentService) CreatePayment(input CreatePaymentInput) (*CreatePayment
 			}
 		}
 
-		onlineAmount := normalizeOrderAmount(lockedOrder.TotalAmount.Decimal.Sub(lockedOrder.WalletPaidAmount.Decimal))
+		if input.UsePoints {
+			used, pointsErr := orderapp.ApplyOrderPoints(s.pointsSvc, tx, &lockedOrder, pointsPolicy)
+			if pointsErr != nil {
+				return pointsErr
+			}
+			pointsUsed = used
+		}
+
+		if input.UseFreeClaim != nil {
+			if err := orderapp.ApplyFreeClaim(tx, &lockedOrder, *input.UseFreeClaim); err != nil {
+				return err
+			}
+		}
+
+		onlineAmount := orderapp.ResolveOnlinePayableAmount(&lockedOrder)
+		if skipPayment {
+			onlineAmount = decimal.Zero
+		}
 		if onlineAmount.LessThanOrEqual(decimal.Zero) {
 			walletPaidAmount := normalizeOrderAmount(lockedOrder.WalletPaidAmount.Decimal)
+			// 绝不复用 wallet 的 provider/channel type：否则后台、对账与报表
+			// 会把积分兑换单当成余额支付。Amount 取钱包实付额，积分单为 0，
+			// 因此不会给以 payments.amount 为口径的 GMV 凭空加一笔现金。
+			syntheticProviderType := constants.PaymentProviderWallet
+			syntheticChannelType := constants.PaymentChannelTypeBalance
+			syntheticInteraction := constants.PaymentInteractionBalance
+			if lockedOrder.PointsPaidAmount.Decimal.GreaterThan(decimal.Zero) {
+				syntheticProviderType = constants.PaymentProviderPoints
+				syntheticChannelType = constants.PaymentChannelTypePoints
+				syntheticInteraction = constants.PaymentInteractionPoints
+			}
+			if lockedOrder.FreeClaimPaidAmount.Decimal.GreaterThan(decimal.Zero) {
+				syntheticProviderType = constants.PaymentProviderFreeClaim
+				syntheticChannelType = constants.PaymentChannelTypeFreeClaim
+				syntheticInteraction = constants.PaymentInteractionFreeClaim
+			}
+			if skipPayment {
+				syntheticProviderType = constants.PaymentProviderSkipPayment
+				syntheticChannelType = constants.PaymentChannelTypeSkipPayment
+				syntheticInteraction = constants.PaymentInteractionSkipPayment
+			}
 			paidAt := time.Now()
 			payment = &paymentdomain.Payment{
 				OrderID:         lockedOrder.ID,
 				ChannelID:       0,
-				ProviderType:    constants.PaymentProviderWallet,
-				ChannelType:     constants.PaymentChannelTypeBalance,
-				InteractionMode: constants.PaymentInteractionBalance,
+				ProviderType:    syntheticProviderType,
+				ChannelType:     syntheticChannelType,
+				InteractionMode: syntheticInteraction,
 				Amount:          money.FromDecimal(walletPaidAmount),
 				FeeRate:         money.FromDecimal(decimal.Zero),
 				FixedFee:        money.FromDecimal(decimal.Zero),
@@ -275,6 +363,8 @@ func (s *PaymentService) CreatePayment(input CreatePaymentInput) (*CreatePayment
 			Channel:          channel,
 			WalletPaidAmount: order.WalletPaidAmount,
 			OnlinePayAmount:  order.OnlinePaidAmount,
+			PointsPaidAmount: order.PointsPaidAmount,
+			PointsUsed:       pointsUsed,
 		}, nil
 	}
 

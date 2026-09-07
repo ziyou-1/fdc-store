@@ -23,6 +23,10 @@ const (
 	TaskAffiliateConfirmCommissions = constants.TaskAffiliateConfirmCommissions
 	// TaskResellerConfirmLedger 分销商账务到期确认任务
 	TaskResellerConfirmLedger = constants.TaskResellerConfirmLedger
+	// TaskMembershipExpire 付费会员到期清档任务
+	TaskMembershipExpire = constants.TaskMembershipExpire
+	// TaskMembershipExpiryReminder 付费会员到期前提醒任务
+	TaskMembershipExpiryReminder = constants.TaskMembershipExpiryReminder
 	// TaskUpstreamSyncStock 上游库存同步任务
 	TaskUpstreamSyncStock = constants.TaskUpstreamSyncStock
 	// TaskProcurementSubmit 采购提交任务
@@ -138,6 +142,16 @@ func NewAffiliateConfirmCommissionsTask() *asynq.Task {
 // NewResellerConfirmLedgerTask 创建分销商账务到期确认任务。
 func NewResellerConfirmLedgerTask() *asynq.Task {
 	return asynq.NewTask(TaskResellerConfirmLedger, nil)
+}
+
+// NewMembershipExpireTask 创建付费会员到期清档任务。
+func NewMembershipExpireTask() *asynq.Task {
+	return asynq.NewTask(TaskMembershipExpire, nil)
+}
+
+// NewMembershipExpiryReminderTask 创建付费会员到期前提醒任务。
+func NewMembershipExpiryReminderTask() *asynq.Task {
+	return asynq.NewTask(TaskMembershipExpiryReminder, nil)
 }
 
 // NewUpstreamSyncStockTask 创建上游库存同步任务

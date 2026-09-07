@@ -1,6 +1,6 @@
 {
   "common": {
-    "siteName": "Dujiao-Next",
+    "siteName": "Keyvo",
     "loading": "載入中...",
     "error": "錯誤",
     "success": "成功",
@@ -25,7 +25,8 @@
       "badGateway": "閘道錯誤",
       "serviceUnavailable": "服務不可用",
       "networkError": "網路連線失敗"
-    }
+    },
+    "searchClear": "清除"
   },
   "errorBoundary": {
     "retry": "重試",
@@ -47,8 +48,8 @@
   "nav": {
     "home": "首頁",
     "products": "商品中心",
-    "blog": "部落格",
     "notice": "公告",
+    "faq": "常見問題",
     "about": "關於"
   },
   "vault": {
@@ -96,7 +97,7 @@
     "label": "購買流程進度"
   },
   "footer": {
-    "description": "專業的線上工作室，為您提供優質的產品和服務。",
+    "description": "虛擬商品自助商城：AI 訂閱帳號、遊戲與軟體卡密、Token 額度，下單即時到貨。",
     "quickLinks": "快速連結",
     "contact": "聯絡我們",
     "rights": "保留所有權利",
@@ -112,7 +113,7 @@
   },
   "home": {
     "hero": {
-      "title": "Dujiao-Next · D&N",
+      "title": "Keyvo",
       "subtitle": "專業的產品與服務提供商",
       "cta": "瀏覽商品",
       "badge": "新一代數位商店"
@@ -137,6 +138,9 @@
     "latest": {
       "title": "最新動態",
       "description": "隨時掌握我們的最新消息和公告"
+    },
+    "notice": {
+      "viewAll": "查看全部"
     }
   },
   "products": {
@@ -153,6 +157,7 @@
     "previous": "上一頁",
     "next": "下一頁",
     "price": "價格",
+    "pointsPrice": "{n} 積分可兌",
     "categoryLabel": "分類",
     "searchLabel": "搜尋",
     "searchPlaceholder": "搜尋商品名稱",
@@ -169,7 +174,8 @@
     },
     "fulfillmentType": {
       "manual": "人工交付",
-      "auto": "自動交付"
+      "auto": "自動交付",
+      "content": "教程內容"
     },
     "filter": "篩選",
     "closeFilter": "關閉篩選",
@@ -198,6 +204,8 @@
     "loginToBuy": "登入後購買",
     "addToCart": "加入購物車",
     "buyNow": "立即購買",
+    "redeemWithPoints": "積分兌換",
+    "redeeming": "兌換中...",
     "categoryLabel": "分類",
     "fulfillmentLabel": "交付方式",
     "skuTitle": "選擇規格",
@@ -225,32 +233,32 @@
     "stock": "庫存",
     "addToCart": "加入購物車",
     "buyNow": "立即購買",
+    "redeemWithPoints": "積分兌換",
+    "redeeming": "兌換中...",
     "loginToBuy": "登入後購買",
     "soldOut": "已售罄",
     "viewDetail": "查看詳情"
   },
   "productPurchase": {
     "label": "購買身份",
-    "member": "會員購買",
-    "guest": "遊客可購"
+    "member": "會員購買"
   },
-  "blog": {
-    "subtitle": "最新文章和動態",
+  "post": {
     "readMore": "閱讀更多",
     "empty": "暫無文章",
-    "searchPlaceholder": "搜尋文章標題...",
-    "searchClear": "清除",
-    "noResults": "沒有找到符合的文章",
     "relatedProducts": "相關商品"
   },
-  "blogDetail": {
-    "backToBlog": "返回部落格列表",
+  "postDetail": {
     "backToNotice": "返回公告列表",
     "notFound": "文章不存在"
   },
   "notice": {
     "subtitle": "重要公告和通知",
     "empty": "暫無公告"
+  },
+  "faq": {
+    "subtitle": "購買、啟用與售後的常見疑問",
+    "empty": "暫無常見問題"
   },
   "announcement": {
     "close": "關閉",
@@ -259,8 +267,8 @@
   },
   "about": {
     "title": "關於我們",
-    "subtitle": "了解Dujiao-Next",
-    "introduction": "Dujiao-Next（D&N）是一家專業的線上工作室，致力於為客戶提供優質的產品和服務。我們以創新、專業、高效為核心價值觀，不斷追求卓越，為客戶創造價值。",
+    "subtitle": "了解 Keyvo",
+    "introduction": "Keyvo 是一家專注虛擬商品的自助商城，提供 AI 訂閱帳號、遊戲與軟體卡密、Token 中轉額度。下單後系統自動或半自動交付，支援多種本地付款方式，配套會員折扣、積分與線上客服。",
     "ourServices": "我們的服務",
     "service1": "優質商品推薦與銷售",
     "service2": "專業的售前諮詢服務",
@@ -273,7 +281,6 @@
     "cart": "購物車",
     "login": "登入",
     "personalCenter": "個人中心",
-    "guestOrders": "遊客查單",
     "logout": "退出",
     "selectLanguage": "選擇語言",
     "more": "更多"
@@ -284,6 +291,7 @@
   "bottomNav": {
     "home": "首頁",
     "products": "商品",
+    "notice": "公告",
     "cart": "購物車",
     "me": "我的"
   },
@@ -299,7 +307,9 @@
       "affiliate": "推廣返利",
       "reseller": "分銷中心",
       "giftCard": "禮品卡兌換",
-      "api": "API 對接"
+      "api": "API 對接",
+      "points": "我的積分",
+      "membership": "會員購買"
     },
     "common": {
       "loadFailed": "個人中心資料載入失敗，請稍後重試",
@@ -323,7 +333,30 @@
       "spendProgress": "累計消費",
       "highestLevel": "已達最高等級",
       "defaultLevel": "普通會員",
-      "noDiscount": "無折扣"
+      "noDiscount": "無折扣",
+      "buy": "購買會員",
+      "expiresAt": "有效期至 {date}"
+    },
+    "membership": {
+      "title": "會員套餐",
+      "subtitle": "購買月卡、季卡或年卡，下單即享對應折扣。",
+      "current": "目前會員",
+      "inactive": "尚未開通付費會員",
+      "expiresAt": "有效期至 {date}",
+      "discount": "{n}折",
+      "buy": "立即購買",
+      "channel": "支付渠道",
+      "channelEmpty": "暫無可用支付渠道",
+      "channelLoadFailed": "支付渠道載入失敗",
+      "channelRequired": "請選擇支付渠道",
+      "scanToPay": "請掃碼完成支付",
+      "loadFailed": "會員套餐載入失敗",
+      "purchaseFailed": "發起購買失敗",
+      "period": {
+        "month": "月度",
+        "quarter": "季度",
+        "year": "年度"
+      }
     },
     "profile": {
       "title": "資料設定",
@@ -987,6 +1020,68 @@
       "disabled": "API 已停用。",
       "toggleFailed": "操作失敗，請稍後重試。",
       "cancel": "取消"
+    },
+    "points": {
+      "title": "我的積分",
+      "subtitle": "查看積分餘額、簽到領取與消費紀錄。",
+      "balance": "目前積分",
+      "totalEarned": "累計獲得",
+      "totalSpent": "累計消耗",
+      "checkinTitle": "每日簽到",
+      "checkinHint": "每日簽到可得 {points} 積分",
+      "streakDays": "已連續簽到 {days} 天",
+      "checkin": "立即簽到",
+      "checkedIn": "今日已簽到",
+      "checkinSuccess": "簽到成功，獲得 {points} 積分，已連續 {days} 天",
+      "referralTitle": "邀請好友賺積分",
+      "referralHint": "好友註冊你得 {register} 積分，好友首單再得 {order} 積分",
+      "referralCode": "邀請碼",
+      "referralCopyCode": "複製邀請碼",
+      "referralCopyLink": "複製邀請連結",
+      "referralCopied": "已複製",
+      "detailTitle": "積分明細",
+      "empty": "還沒有積分紀錄。",
+      "rechargeTitle": "積分儲值",
+      "rechargeSubtitle": "付款成功後積分自動入帳。",
+      "amount": "儲值金額",
+      "amountPlaceholder": "請輸入金額",
+      "estimated": "預計入帳 {points} 積分",
+      "channel": "付款方式",
+      "channelEmpty": "請先填寫金額以載入可用付款方式",
+      "remark": "備註",
+      "remarkPlaceholder": "選填",
+      "rechargeSubmit": "前往付款",
+      "rechargeCreated": "儲值訂單已建立",
+      "scanToPay": "掃碼付款",
+      "table": {
+        "createdAt": "時間",
+        "type": "類型",
+        "direction": "方向",
+        "amount": "變動",
+        "balanceAfter": "餘額",
+        "remark": "備註"
+      },
+      "directions": {
+        "in": "獲得",
+        "out": "消耗"
+      },
+      "types": {
+        "checkin": "簽到",
+        "referral_register": "推廣註冊",
+        "referral_order": "推廣訂單",
+        "recharge": "儲值",
+        "exchange": "積分兌換",
+        "exchange_refund": "兌換退回",
+        "admin_adjust": "人工調整"
+      },
+      "errors": {
+        "loadFailed": "積分資訊載入失敗",
+        "checkinFailed": "簽到失敗",
+        "invalidAmount": "請輸入有效的儲值金額",
+        "channelRequired": "請選擇付款方式",
+        "rechargeFailed": "儲值發起失敗",
+        "copyFailed": "複製失敗"
+      }
     }
   },
   "auth": {
@@ -1071,6 +1166,9 @@
       "emailDomainSelectHint": "請選擇信箱後綴，系統會自動組成完整信箱",
       "passwordLabel": "密碼",
       "passwordPlaceholder": "設定登入密碼",
+      "inviteCodeLabel": "邀請碼",
+      "inviteCodePlaceholder": "選填",
+      "inviteCodeHint": "與推廣連結中的聯盟 ID 相同。沒有可留空。",
       "codeLabel": "驗證碼",
       "codePlaceholder": "輸入信箱驗證碼",
       "sendCode": "發送驗證碼",
@@ -1158,17 +1256,10 @@
     "couponTitle": "優惠券",
     "couponPlaceholder": "輸入優惠券代碼（可選）",
     "modeTitle": "購買方式",
-    "guestPurchase": "遊客購買",
     "memberPurchase": "登入會員購買",
-    "guestEmailPlaceholder": "信箱（用於查詢訂單）",
-    "guestPasswordPlaceholder": "訂單密碼",
-    "guestInstructions": {
-      "title": "填寫說明：",
-      "email": "信箱：請填寫一個可接收郵件的信箱，您在付款後我們可通過該信箱向您發送商品資訊並可通過該信箱聯絡您",
-      "password": "訂單密碼：請自行設置一個複雜密碼並妥善保管，該密碼用於您在購買之後，通過“遊客查單”菜單，查詢您所購買的商品"
-    },
     "manualFormTitle": "交付資訊填寫",
     "manualFormTip": "人工交付資訊按商品收集：同一商品購買多個 SKU 時僅需填寫一次。",
+    "manualFormAfterPaymentHint": "需要啟用的信箱等資訊將在付款後於訂單詳情填寫，我們將在 24 小時內處理。",
     "manualFormAppliesToSkuCount": "適用於已選 {count} 個 SKU",
     "manualFormSelectPlaceholder": "請選擇",
     "manualFormFieldRequired": "{name} 為必填項",
@@ -1198,12 +1289,12 @@
     "channelAmountMinHint": "該渠道需滿足金額大於{min}",
     "channelAmountMaxHint": "該渠道需滿足金額小於{max}",
     "walletCoversAll": "錢包餘額足以支付全部金額",
+    "pointsCoversAll": "積分足以兌換全部金額",
     "submitButton": "提交訂單並支付",
     "submitting": "提交中...",
     "errors": {
       "emptyCart": "購物車為空",
-      "missingGuest": "請輸入信箱與訂單密碼",
-      "loginOrGuest": "請先登入或使用遊客購買",
+      "loginRequired": "請先登入後再下單",
       "submitFailed": "提交失敗，請稍後重試",
       "manualFormInvalid": "請先完善交付資訊再提交",
       "selectPayment": "請選擇支付方式"
@@ -1233,6 +1324,10 @@
     "payableAmountLabel": "應付金額",
     "walletBalanceLabel": "錢包餘額",
     "useBalance": "優先使用餘額支付",
+    "usePoints": "使用積分兌換",
+    "pointsBalanceLabel": "積分餘額",
+    "pointsDeductLabel": "本次扣除積分",
+    "pointsInsufficientHint": "積分不足，無法兌換此訂單",
     "walletDeductLabel": "餘額抵扣",
     "onlinePayLabel": "線上支付",
     "walletOnlyHint": "目前僅支援錢包餘額支付",
@@ -1296,6 +1391,7 @@
     "actionTitle": "發起支付",
     "selectChannelError": "請選擇支付方式",
     "walletPayOnly": "將使用錢包餘額全額支付",
+    "pointsPayOnly": "將使用積分全額兌換",
     "submitButton": "確認支付",
     "submitting": "處理中...",
     "orderNotFound": "訂單不存在或無法載入",
@@ -1304,11 +1400,6 @@
     "redirecting": "支付完成，正在跳轉訂單詳情...",
     "orderExpired": "訂單已過期，請重新下單後支付",
     "orderCanceled": "訂單已取消，無法繼續支付",
-    "guestAuthTitle": "補錄遊客憑據",
-    "guestAuthHint": "請輸入下單時的信箱與訂單密碼",
-    "guestAuthSubmit": "保存並繼續",
-    "guestAuthRequired": "請填寫信箱與訂單密碼",
-    "guestAuthInvalid": "資訊不匹配，請重新輸入",
     "status": {
       "initiated": "已建立",
       "pending": "處理中",
@@ -1636,6 +1727,8 @@
     "amountTotal": "實付金額",
     "amountWalletPaid": "餘額支付",
     "amountOnlinePaid": "線上支付",
+    "amountPointsPaid": "積分折抵",
+    "amountFreeClaimPaid": "免費領取折抵",
     "amountRefunded": "已退款金額",
     "amountMemberDiscount": "會員優惠",
     "amountWholesaleDiscount": "批發價優惠",
@@ -1673,9 +1766,20 @@
     "fulfillmentType": "類型",
     "fulfillmentStatus": "狀態",
     "instructionsTitle": "使用說明",
+    "accountLabel": "帳號",
+    "passwordLabel": "密碼",
+    "manualFormTitle": "啟用資訊",
+    "manualFormTip": "請輸入需要啟用的信箱或其他資料。",
+    "manualFormSla": "付款後我們將在 {hours} 小時內處理。",
+    "manualFormDeadline": "截止時間：{time}",
+    "manualFormSubmit": "提交",
+    "manualFormSubmitting": "提交中...",
+    "manualFormSubmitted": "已提交，我們將在承諾時限內處理。",
+    "manualFormSubmitFailed": "提交失敗，請重試",
     "fulfillmentTypes": {
       "manual": "人工交付",
-      "auto": "自動交付"
+      "auto": "自動交付",
+      "content": "教程內容"
     },
     "fulfillmentStatuses": {
       "pending": "待交付",
@@ -1688,40 +1792,36 @@
     "fulfillmentDownloading": "下載中...",
     "fulfillmentTruncatedHint": "當前僅顯示前 100 條預覽，請下載獲取完整交付內容"
   },
-  "guestOrders": {
-    "title": "遊客訂單查詢",
-    "subtitle": "輸入信箱與訂單密碼查看歷史訂單",
-    "emailPlaceholder": "信箱",
-    "passwordPlaceholder": "訂單密碼",
-    "orderNoPlaceholder": "訂單號（可選）",
-    "savedHint": "已保存信箱：{email}",
-    "clearSaved": "清除已保存資訊",
-    "tip": "請輸入下單時的信箱與訂單密碼",
-    "search": "查詢訂單",
-    "searching": "查詢中...",
-    "empty": "暫無訂單紀錄",
-    "emptyOrderNo": "未找到匹配訂單",
-    "viewDetails": "查看詳情",
-    "payNow": "去支付",
-    "prevPage": "上一頁",
-    "nextPage": "下一頁",
-    "pageInfo": "第 {page} / {total} 頁",
+  "support": {
+    "title": "線上客服",
+    "close": "關閉客服視窗",
+    "placeholder": "描述你遇到的問題…",
+    "send": "傳送",
+    "attach": "傳送圖片或影片",
+    "empty": "還沒有訊息，把你遇到的問題傳給我們吧。",
+    "you": "我",
+    "agent": "客服",
+    "imageAlt": "客服對話圖片",
+    "closedHint": "該對話已由客服關閉，傳送新訊息會重新開啟。",
     "errors": {
-      "missing": "請輸入信箱與訂單密碼",
-      "notFound": "未找到匹配訂單，請檢查輸入資訊",
-      "searchFailed": "查詢失敗，請檢查資訊"
+      "attachmentTooLarge": "附件不能超過 {size}MB"
     }
   },
-  "guestOrderDetail": {
-    "title": "遊客訂單詳情",
-    "subtitle": "查看訂單狀態與交付資訊",
-    "backSearch": "返回查詢",
-    "notFound": "訂單不存在或資訊不匹配",
-    "authTitle": "補錄訂單憑據",
-    "authHint": "請填寫下單時的信箱與訂單密碼",
-    "authRequired": "請填寫信箱與訂單密碼",
-    "authInvalid": "資訊不匹配，請重新輸入",
-    "authSubmit": "保存並查詢",
-    "authClear": "清除已保存資訊"
+  "freeClaim": {
+    "eyebrow": "每日免費領取",
+    "memberEyebrow": "會員專享免費領取",
+    "memberOnlyHint": "僅付費會員每天可領一件，後台商品池按日輪換。",
+    "free": "免費",
+    "oncePerDay": "每天一次",
+    "claimed": "今日已領",
+    "claimNow": "立即領取",
+    "becomeMember": "開通會員後領取",
+    "loginToClaim": "登入後領取",
+    "claimSuccess": "領取成功",
+    "claimFailed": "領取失敗"
+  },
+  "tokenStation": {
+    "eyebrow": "網頁 Token 中轉",
+    "open": "打開對方站點"
   }
 }

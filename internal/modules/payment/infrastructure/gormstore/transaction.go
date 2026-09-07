@@ -3,6 +3,8 @@ package gormstore
 import (
 	"strings"
 
+	usercontract "github.com/dujiao-next/internal/modules/identity/user/contract"
+	userstore "github.com/dujiao-next/internal/modules/identity/user/infrastructure/gormstore"
 	ordercontract "github.com/dujiao-next/internal/modules/order/contract"
 	ordergormstore "github.com/dujiao-next/internal/modules/order/infrastructure/gormstore"
 	paymentcontract "github.com/dujiao-next/internal/modules/payment/contract"
@@ -40,6 +42,10 @@ func (tx transaction) Payments() paymentcontract.Store {
 
 func (tx transaction) PaymentChannels() paymentcontract.ChannelStore {
 	return NewChannelStore(tx.db)
+}
+
+func (tx transaction) Users() usercontract.Store {
+	return userstore.New(tx.db)
 }
 
 func (s *Store) WithinTransaction(fn func(paymentcontract.Transaction) error) error {

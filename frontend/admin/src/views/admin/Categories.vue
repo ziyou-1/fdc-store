@@ -32,12 +32,13 @@ const languages = computed(() => [
   { code: 'zh-CN', name: t('admin.common.lang.zhCN') },
   { code: 'zh-TW', name: t('admin.common.lang.zhTW') },
   { code: 'en-US', name: t('admin.common.lang.enUS') },
+  { code: 'id-ID', name: t('admin.common.lang.idID') },
 ])
 
 const form = reactive({
   id: 0,
   parent_id: 0,
-  name: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
+  name: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' } as LocalizedText,
   slug: '',
   icon: '',
   sort_order: 0,
@@ -104,7 +105,7 @@ const openCreateModal = () => {
   Object.assign(form, {
     id: 0,
     parent_id: 0,
-    name: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
+    name: { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' },
     slug: '',
     icon: '',
     sort_order: 0,
@@ -116,7 +117,7 @@ const openEditModal = (category: AdminCategory) => {
   isEditing.value = true
   currentLang.value = 'zh-CN'
 
-  const defaultName = { 'zh-CN': '', 'zh-TW': '', 'en-US': '' }
+  const defaultName = { 'zh-CN': '', 'zh-TW': '', 'en-US': '', 'id-ID': '' }
   const name = { ...defaultName, ...(category.name || {}) }
 
   Object.assign(form, {

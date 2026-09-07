@@ -38,7 +38,6 @@ func (e WeakPasswordError) Args() []interface{} { return e.args }
 
 // UserPasswordService 是密码重置/改密端点所需的最小端口。
 type UserPasswordService interface {
-	GetEmailVerificationEnabled(defaultValue bool) (bool, error)
 	ResetPassword(email, code, newPassword string) error
 	ChangePassword(userID uint, oldPassword, newPassword string) error
 }
@@ -62,18 +61,8 @@ type UserResetPasswordRequest struct {
 	NewPassword string `json:"new_password" binding:"required"`
 }
 
-// UserForgotPassword 忘记密码重置。
+// UserForgotPassword 忘记密码重置。注册「邮箱验证」开关不关闭这条路径。
 func (h *UserPasswordHandler) UserForgotPassword(c *gin.Context) {
-	emailVerificationEnabled, err := h.service.GetEmailVerificationEnabled(true)
-	if err != nil {
-		ginutil.RespondError(c, response.CodeInternal, "error.reset_failed", err)
-		return
-	}
-	if !emailVerificationEnabled {
-		ginutil.RespondError(c, response.CodeForbidden, "error.password_reset_disabled", nil)
-		return
-	}
-
 	var req UserResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		ginutil.RespondBindError(c, err)

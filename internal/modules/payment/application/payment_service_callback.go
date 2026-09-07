@@ -283,7 +283,9 @@ func (s *PaymentService) applyPaymentUpdate(payment *paymentdomain.Payment, orde
 		// 金额守恒：一笔支付只有覆盖订单当前的在线应付额才允许履约。
 		// 混合支付切换渠道会退回余额并抬高在线应付额，而旧链接在网关侧依然可付，
 		// 缺少这道校验就能用旧链接的小额付款换到整单商品。
-		requiredOnlineAmount := normalizeOrderAmount(lockedOrder.TotalAmount.Decimal.Sub(lockedOrder.WalletPaidAmount.Decimal))
+		// 必须扣掉全部内部 tender（余额 + 积分），否则积分订单的在线回调会被判少付，
+		// 钱被转进钱包且订单不履约。
+		requiredOnlineAmount := orderapp.ResolveOnlinePayableAmount(lockedOrder)
 		coveredOnlineAmount := paymentCoveredOrderAmount(lockedPayment, input.Amount.Decimal)
 		underpaid := status == constants.PaymentStatusSuccess && orderOpen &&
 			coveredOnlineAmount.LessThan(requiredOnlineAmount)
@@ -434,7 +436,9 @@ func (s *PaymentService) markOrderPaid(tx paymentcontract.Transaction, order *or
 		productSKURepo = tx.ProductSKUs()
 	}
 
-	onlineAmount := normalizeOrderAmount(order.TotalAmount.Decimal.Sub(order.WalletPaidAmount.Decimal))
+	// markOrderPaid 有两个调用点：在线回调与 CreatePayment 的合成支付分支。
+	// 积分订单走后者，若这里不扣掉积分抵扣额，会把全额写成"在线实付"。
+	onlineAmount := orderapp.ResolveOnlinePayableAmount(order)
 	orderUpdates := map[string]interface{}{
 		"paid_at":            now,
 		"online_paid_amount": money.FromDecimal(onlineAmount),

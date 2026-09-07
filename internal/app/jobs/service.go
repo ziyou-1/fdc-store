@@ -61,6 +61,29 @@ func registerPeriodicTasks(scheduler *asynq.Scheduler, consumer *jobconsumer.Con
 			logger.Infow("scheduler_register_affiliate_confirm_ok", "entry_id", entryID)
 		}
 	}
+	if consumer.MemberLevelService != nil {
+		// 每小时清一次即可：折扣是否生效由 MembershipActive 实时判定，
+		// 这个任务只负责把过期档位从库里清掉，不影响计价正确性。
+		task := queue.NewMembershipExpireTask()
+		entryID, err := scheduler.Register("@every 1h", task, asynq.Queue(queue.DefaultQueue))
+		if err != nil {
+			logger.Warnw("scheduler_register_membership_expire_failed", "error", err)
+		} else {
+			logger.Infow("scheduler_register_membership_expire_ok", "entry_id", entryID)
+		}
+	}
+	if consumer.MemberLevelService != nil {
+		// 到期前提醒同样每小时扫一次。窗口取满 7 天而不是 1 小时切片：
+		// worker 停机数小时后，落在停机窗口里的会员仍会在下一轮被扫到，
+		// 不会永久漏发；重复发送由抢占式幂等挡住。
+		task := queue.NewMembershipExpiryReminderTask()
+		entryID, err := scheduler.Register("@every 1h", task, asynq.Queue(queue.DefaultQueue))
+		if err != nil {
+			logger.Warnw("scheduler_register_membership_reminder_failed", "error", err)
+		} else {
+			logger.Infow("scheduler_register_membership_reminder_ok", "entry_id", entryID)
+		}
+	}
 	if consumer.ResellerAccountingLedger != nil {
 		task := queue.NewResellerConfirmLedgerTask()
 		entryID, err := scheduler.Register("@every 1m", task, asynq.Queue(queue.DefaultQueue))

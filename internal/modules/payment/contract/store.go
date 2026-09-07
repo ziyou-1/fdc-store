@@ -3,6 +3,7 @@ package contract
 import (
 	"time"
 
+	usercontract "github.com/dujiao-next/internal/modules/identity/user/contract"
 	ordercontract "github.com/dujiao-next/internal/modules/order/contract"
 	paymentdomain "github.com/dujiao-next/internal/modules/payment/domain"
 )
@@ -41,4 +42,5 @@ type Transaction interface {
 	ordercontract.Transaction
 	Payments() Store
 	PaymentChannels() ChannelStore
+	Users() usercontract.Store
 }

@@ -33,6 +33,7 @@ export interface AdminProductSKU {
   spec_values: Record<string, string>
   price_amount: number
   cost_price_amount: number
+  points_price: number
   manual_stock_total: number
   manual_stock_locked: number
   manual_stock_sold: number
@@ -61,6 +62,7 @@ export interface AdminProduct {
   content: LocalizedText
   price_amount: number
   cost_price_amount: number
+  points_price: number
   wholesale_prices?: AdminWholesalePrice[]
   images: string[]
   tags: string[]
@@ -69,6 +71,8 @@ export interface AdminProduct {
   max_purchase_quantity: number
   stock_display_mode: string
   fulfillment_type: string
+  manual_form_timing?: string
+  instructions?: LocalizedText
   manual_form_schema: Record<string, unknown> | null
   manual_stock_total: number
   manual_stock_locked: number
@@ -304,6 +308,16 @@ export interface AdminMemberLevelPrice {
   price_amount: number
   created_at: string
   updated_at: string
+}
+
+export interface AdminMembershipPlan {
+  period: string
+  price: number | string
+  discount_rate: number
+  duration_days: number
+  name: LocalizedText
+  description: LocalizedText
+  is_active: boolean
 }
 
 // --- Promotion ---
@@ -1216,4 +1230,141 @@ export interface AdminResellerOperationsFinance {
     negative_balance_accounts: number
     frozen_balance_accounts: number
   }>
+}
+
+// --- 每日免费领取 ---
+
+// AdminFreeClaimConfig min_member_level_id 为 0 表示不限等级。
+export interface AdminFreeClaimConfig {
+  enabled: boolean
+  member_only: boolean
+  min_member_level_id: number
+}
+
+// AdminFreeClaimPoolItem 后端只返回 ID，不带商品名，
+// 页面需要自行用商品列表/详情解析出可读名称。
+export interface AdminFreeClaimPoolItem {
+  id: number
+  product_id: number
+  sku_id: number
+  is_active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminTokenStation {
+  id: number
+  name: string
+  base_url: string
+  created_at: string
+  updated_at: string
+}
+
+// --- 积分 ---
+
+// AdminPointsConfig PUT 是全量覆盖，漏传字段会被写成零值。
+// referral_first_order_min_amount 是法币字符串，其余积分数值是整数。
+export interface AdminPointsConfig {
+  checkin_enabled: boolean
+  checkin_points: number
+  referral_register_points: number
+  referral_first_order_points: number
+  recharge_points_per_unit: number
+  exchange_enabled: boolean
+  exchange_daily_limit: number
+  exchange_sku_daily_limit: number
+  recharge_enabled: boolean
+  referral_enabled: boolean
+  referral_daily_limit: number
+  referral_first_order_min_amount: string
+}
+
+export interface AdminPointsAccount {
+  balance: number
+  total_earned: number
+  total_spent: number
+}
+
+export interface AdminPointsTransaction {
+  id: number
+  type: string
+  direction: string
+  amount: number
+  balance_after: number
+  remark: string
+  created_at: string
+}
+
+export interface AdminPointsAdjustPayload {
+  delta: number
+  remark: string
+}
+
+export interface AdminSupportConversation {
+  id: number
+  user_id: number
+  status: string
+  last_message_at?: string | null
+  last_message_preview: string
+  unread_for_agent: number
+  unread_for_user: number
+  created_at: string
+  updated_at: string
+  user_email?: string
+}
+
+export interface AdminSupportMessage {
+  id: number
+  conversation_id: number
+  sender_type: string
+  sender_id: number
+  content_type: string
+  content: string
+  translation?: string
+  media_url: string
+  created_at: string
+}
+
+export interface AdminSupportSendMessagePayload {
+  content_type?: string
+  content?: string
+  media_url?: string
+}
+
+export interface AdminSupportMessageListResult {
+  conversation: AdminSupportConversation
+  messages: AdminSupportMessage[]
+  total: number
+}
+
+export interface AdminSupportUnreadCount {
+  unread_conversations: number
+}
+
+export interface AdminSupportStatusPayload {
+  status: string
+}
+
+export interface AdminSupportQuickReply {
+  id: number
+  title: string
+  content: string
+  is_active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminSupportQuickReplyPayload {
+  title: string
+  content: string
+  is_active: boolean
+  sort_order: number
+}
+
+export interface AdminSupportAttachmentResult {
+  media_url: string
+  mime_type: string
+  content_type: string
 }

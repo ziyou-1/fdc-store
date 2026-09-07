@@ -54,6 +54,10 @@ func (a publicConfigSettingsAdapter) GetWalletOnlyPayment() bool {
 	return a.settings != nil && a.settings.GetWalletOnlyPayment()
 }
 
+func (a publicConfigSettingsAdapter) GetSkipPayment() bool {
+	return a.cfg != nil && a.cfg.App.SkipPayment
+}
+
 func (a publicConfigSettingsAdapter) GetAffiliateSettingMap() (map[string]interface{}, error) {
 	setting, err := a.settings.GetAffiliateSetting()
 	if err != nil {

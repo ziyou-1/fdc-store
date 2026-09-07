@@ -103,7 +103,7 @@ func newResellerFieldError(field string) error {
 
 func normalizeResellerLocalizedText(raw LocalizedTextInput, max int) jsonmap.JSON {
 	out := jsonmap.JSON{}
-	for _, lang := range []string{"zh-CN", "zh-TW", "en-US"} {
+	for _, lang := range constants.SupportedLocales {
 		out[lang] = trimLimit(raw[lang], max)
 	}
 	return out
@@ -223,8 +223,8 @@ func normalizeResellerFooterLinks(input []ResellerFooterLinkInput) (jsonmap.JSON
 }
 
 func normalizeResellerNavConfig(input ResellerNavConfigInput) (jsonmap.JSON, error) {
-	builtin := jsonmap.JSON{"blog": true, "notice": true, "about": true}
-	for _, key := range []string{"blog", "notice", "about"} {
+	builtin := jsonmap.JSON{"notice": true, "about": true}
+	for _, key := range []string{"notice", "about"} {
 		if value, ok := input.Builtin[key]; ok {
 			builtin[key] = value
 		}
@@ -485,17 +485,6 @@ func applyResellerSiteConfigToPublicConfig(out map[string]interface{}, cfg *rese
 		brand["site_icon"] = cfg.Favicon
 	}
 	out["brand"] = brand
-
-	contact, _ := out["contact"].(map[string]interface{})
-	if contact == nil {
-		contact = map[string]interface{}{}
-	}
-	for _, key := range []string{"telegram", "whatsapp", "email", "support_url"} {
-		if value, ok := cfg.SupportJSON[key].(string); ok && strings.TrimSpace(value) != "" {
-			contact[key] = value
-		}
-	}
-	out["contact"] = contact
 
 	if len(cfg.SEOJSON) > 0 {
 		out["seo"] = cfg.SEOJSON

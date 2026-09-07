@@ -32,6 +32,13 @@ type CreateWalletRechargePaymentInput struct {
 	ClientIP      string
 	Context       context.Context
 	RequestScheme string
+	// CreditTarget 空值按 wallet 处理，保持既有调用方行为不变。
+	CreditTarget           string
+	PointsAmount           int64
+	PointsPerUnit          int64
+	MembershipPeriod       string
+	MembershipDurationDays int
+	MembershipDiscountRate money.Amount
 }
 
 // CreateWalletRechargePaymentResult 创建钱包充值支付结果
@@ -42,6 +49,28 @@ type CreateWalletRechargePaymentResult struct {
 
 // CreateWalletRechargePayment 创建钱包充值支付单
 func (s *PaymentService) CreateWalletRechargePayment(input CreateWalletRechargePaymentInput) (*CreateWalletRechargePaymentResult, error) {
+	// 到账目标归一化：空值按余额处理，保证既有调用方行为不变。
+	creditTarget := strings.TrimSpace(input.CreditTarget)
+	if creditTarget == "" {
+		creditTarget = constants.RechargeCreditTargetWallet
+	}
+	if creditTarget != constants.RechargeCreditTargetWallet &&
+		creditTarget != constants.RechargeCreditTargetPoints &&
+		creditTarget != constants.RechargeCreditTargetMembership {
+		return nil, ErrPaymentInvalid
+	}
+	// 积分充值必须在建单时就带上快照：回调到账时绝不重读配置，
+	// 否则换算比例中途被改会让用户拿到与下单时不一致的积分。
+	if creditTarget == constants.RechargeCreditTargetPoints &&
+		(input.PointsAmount <= 0 || input.PointsPerUnit <= 0) {
+		return nil, ErrPaymentInvalid
+	}
+	if creditTarget == constants.RechargeCreditTargetMembership &&
+		(strings.TrimSpace(input.MembershipPeriod) == "" || input.MembershipDurationDays <= 0 ||
+			input.MembershipDiscountRate.Decimal.LessThanOrEqual(decimal.Zero) ||
+			input.MembershipDiscountRate.Decimal.GreaterThanOrEqual(decimal.NewFromInt(100))) {
+		return nil, ErrPaymentInvalid
+	}
 	if input.UserID == 0 || input.ChannelID == 0 {
 		return nil, ErrPaymentInvalid
 	}
@@ -136,7 +165,13 @@ func (s *PaymentService) CreateWalletRechargePayment(input CreateWalletRechargeP
 		rechargeRepo := tx.Wallets().Wallets()
 		remark := strings.TrimSpace(input.Remark)
 		if remark == "" {
-			remark = "余额充值"
+			if creditTarget == constants.RechargeCreditTargetPoints {
+				remark = "积分充值"
+			} else if creditTarget == constants.RechargeCreditTargetMembership {
+				remark = "会员购买"
+			} else {
+				remark = "余额充值"
+			}
 		}
 		recharge = &walletdomain.RechargeOrder{
 			RechargeNo:      rechargeNo,
@@ -153,6 +188,12 @@ func (s *PaymentService) CreateWalletRechargePayment(input CreateWalletRechargeP
 			Currency:        currency,
 			Status:          constants.WalletRechargeStatusPending,
 			Remark:          remark,
+			CreditTarget:           creditTarget,
+			PointsAmount:           input.PointsAmount,
+			PointsPerUnit:          input.PointsPerUnit,
+			MembershipPeriod:       strings.TrimSpace(input.MembershipPeriod),
+			MembershipDurationDays: input.MembershipDurationDays,
+			MembershipDiscountRate: input.MembershipDiscountRate,
 			CreatedAt:       now,
 			UpdatedAt:       now,
 		}
@@ -168,6 +209,16 @@ func (s *PaymentService) CreateWalletRechargePayment(input CreateWalletRechargeP
 		return nil, ErrPaymentCreateFailed
 	}
 
+	// 前端回跳需要区分余额充值与积分充值两条落地页。
+	// 这里用局部变量而不是抽小函数：payment_service_recharge.go 的函数名清单
+	// 被 payment_service_structure_test.go 精确钉死，新增函数会直接打红 CI。
+	returnBizType := "recharge"
+	if creditTarget == constants.RechargeCreditTargetPoints {
+		returnBizType = "points_recharge"
+	} else if creditTarget == constants.RechargeCreditTargetMembership {
+		returnBizType = "membership"
+	}
+
 	// 复用支付网关下单逻辑，使用充值单号作为业务单号。
 	virtualOrder := &orderdomain.Order{
 		OrderNo: recharge.RechargeNo,
@@ -177,7 +228,7 @@ func (s *PaymentService) CreateWalletRechargePayment(input CreateWalletRechargeP
 		ChannelID:        input.ChannelID,
 		ClientIP:         input.ClientIP,
 		Context:          input.Context,
-		ReturnBizType:    "recharge",
+		ReturnBizType:    returnBizType,
 		ReturnBusinessNo: recharge.RechargeNo,
 		RequestScheme:    input.RequestScheme,
 	}, virtualOrder, channel, payment); err != nil {

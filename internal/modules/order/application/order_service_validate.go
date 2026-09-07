@@ -12,6 +12,7 @@ import (
 	"github.com/dujiao-next/internal/constants"
 	productdomain "github.com/dujiao-next/internal/modules/catalog/product/domain"
 	"github.com/dujiao-next/internal/modules/catalog/product/manualform"
+	userdomain "github.com/dujiao-next/internal/modules/identity/user/domain"
 	couponapp "github.com/dujiao-next/internal/modules/coupon/application"
 	couponcontract "github.com/dujiao-next/internal/modules/coupon/contract"
 	coupondomain "github.com/dujiao-next/internal/modules/coupon/domain"
@@ -48,6 +49,8 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 	}
 
 	var plans []childOrderPlan
+	pointsAmount := int64(0)
+	pointsEligible := true
 	var orderItems []orderdomain.OrderItem
 	originalAmount := decimal.Zero
 	memberDiscountAmount := decimal.Zero
@@ -68,13 +71,14 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 	}
 
 	// 解析用户会员等级
+	var orderUser *userdomain.User
 	var userMemberLevelID uint
 	var memberLevelIDSnapshot *uint
 	if !resellerOrder && input.UserID > 0 && s.userRepo != nil {
-		user, _ := s.userRepo.GetByID(input.UserID)
-		if user != nil && user.MemberLevelID > 0 {
-			userMemberLevelID = user.MemberLevelID
-			lid := user.MemberLevelID
+		orderUser, _ = s.userRepo.GetByID(input.UserID)
+		if orderUser != nil && orderUser.MemberLevelID > 0 {
+			userMemberLevelID = orderUser.MemberLevelID
+			lid := orderUser.MemberLevelID
 			memberLevelIDSnapshot = &lid
 		}
 	}
@@ -115,6 +119,16 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 
 		productCurrency := currency
 		basePrice := sku.PriceAmount.Decimal.Round(2)
+
+		// 积分价纯累加：积分不参与定价，只在支付阶段整单抵扣一个正常的现金 TotalAmount。
+		// 因此下方两道 0 元守卫与券的判定条件都不受影响。
+		itemPoints := int64(0)
+		if sku.PointsPrice > 0 {
+			itemPoints = sku.PointsPrice * int64(item.Quantity)
+			pointsAmount += itemPoints
+		} else {
+			pointsEligible = false
+		}
 
 		// 1. 计算活动价
 		priceCarrier := *product
@@ -163,8 +177,8 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 
 		// 3. 在已命中的商品级优惠单价基础上应用会员价。
 		itemMemberDiscount := decimal.Zero
-		if !resellerOrder && userMemberLevelID > 0 && s.memberLevelService != nil {
-			memberUnitPrice, _ := s.memberLevelService.ResolveMemberPrice(userMemberLevelID, product.ID, sku.ID, unitPriceAmount)
+		if !resellerOrder && orderUser != nil && s.memberLevelService != nil {
+			memberUnitPrice, _ := s.memberLevelService.ResolveMemberPriceForUser(orderUser, product.ID, sku.ID, unitPriceAmount)
 			if memberUnitPrice.LessThan(unitPriceAmount) {
 				itemMemberDiscount = unitPriceAmount.Sub(memberUnitPrice).
 					Mul(decimal.NewFromInt(int64(item.Quantity))).
@@ -190,7 +204,10 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 		if fulfillmentType == "" {
 			fulfillmentType = constants.FulfillmentTypeManual
 		}
-		if fulfillmentType != constants.FulfillmentTypeManual && fulfillmentType != constants.FulfillmentTypeAuto && fulfillmentType != constants.FulfillmentTypeUpstream {
+		if fulfillmentType != constants.FulfillmentTypeManual &&
+			fulfillmentType != constants.FulfillmentTypeAuto &&
+			fulfillmentType != constants.FulfillmentTypeUpstream &&
+			fulfillmentType != constants.FulfillmentTypeContent {
 			return nil, ErrFulfillmentInvalid
 		}
 		if fulfillmentType == constants.FulfillmentTypeManual &&
@@ -206,8 +223,21 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 
 		manualSchemaSnapshot := jsonmap.JSON{}
 		manualSubmission := jsonmap.JSON{}
-		if !input.SkipManualFormCheck && (fulfillmentType == constants.FulfillmentTypeManual ||
-			(fulfillmentType == constants.FulfillmentTypeUpstream && len(product.ManualFormSchemaJSON) > 0)) {
+		// 表单采集时机为 after_payment 时，下单只固化表单结构快照，
+		// 提交值留到支付成功后由买家在订单详情补填。
+		deferManualForm := fulfillmentType == constants.FulfillmentTypeManual &&
+			len(product.ManualFormSchemaJSON) > 0 &&
+			productdomain.NormalizeManualFormTiming(product.ManualFormTiming) == constants.ManualFormTimingAfterPayment &&
+			input.UserID > 0
+		switch {
+		case deferManualForm:
+			normalizedSchema, err := manualform.NormalizeSchema(product.ManualFormSchemaJSON)
+			if err != nil {
+				return nil, err
+			}
+			manualSchemaSnapshot = normalizedSchema
+		case !input.SkipManualFormCheck && (fulfillmentType == constants.FulfillmentTypeManual ||
+			(fulfillmentType == constants.FulfillmentTypeUpstream && len(product.ManualFormSchemaJSON) > 0)):
 			submission := resolveManualFormSubmission(manualFormData, product.ID, sku.ID)
 			normalizedSchema, normalizedSubmission, err := manualform.ValidateAndNormalize(product.ManualFormSchemaJSON, submission)
 			if err != nil {
@@ -260,6 +290,8 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 			CreatedAt:                    now,
 			UpdatedAt:                    now,
 		}
+		orderItem.PointsUnitPrice = sku.PointsPrice
+		orderItem.PointsTotal = itemPoints
 		orderItems = append(orderItems, orderItem)
 		plans = append(plans, childOrderPlan{
 			Product:           product,
@@ -270,6 +302,7 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 			PromotionDiscount: promotionDiscount,
 			WholesaleDiscount: wholesaleDiscount,
 			Currency:          productCurrency,
+			PointsAmount:      itemPoints,
 		})
 	}
 	if currency == "" {
@@ -338,6 +371,11 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 		return nil, ErrInvalidOrderAmount
 	}
 
+	// 任一条目未配置积分价，或分销订单，整单不可积分兑换。
+	if !pointsEligible || resellerOrder {
+		pointsAmount = 0
+	}
+
 	return &orderBuildResult{
 		Plans:                   plans,
 		OrderItems:              orderItems,
@@ -348,6 +386,7 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 		DiscountAmount:          discountAmount,
 		TotalAmount:             totalAmount,
 		Currency:                currency,
+		PointsAmount:            pointsAmount,
 		OrderPromotionID:        orderPromotionID,
 		MemberLevelID:           memberLevelIDSnapshot,
 		AppliedCoupon:           appliedCoupon,

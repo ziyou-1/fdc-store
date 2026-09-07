@@ -13,14 +13,16 @@ import (
 
 // LoginWithTelegramInput Telegram 登录输入
 type LoginWithTelegramInput struct {
-	Payload telegramauthapp.LoginPayload
-	Context context.Context
+	Payload    telegramauthapp.LoginPayload
+	InviteCode string
+	Context    context.Context
 }
 
 // LoginWithTelegramMiniAppInput Telegram Mini App 登录输入
 type LoginWithTelegramMiniAppInput struct {
-	InitData string
-	Context  context.Context
+	InitData   string
+	InviteCode string
+	Context    context.Context
 }
 
 // LoginWithTelegram Telegram 登录（已启用 2FA 的账号会返回挑战 token，不直接发 JWT）
@@ -36,7 +38,7 @@ func (s *Service) LoginWithTelegram(input LoginWithTelegramInput) (*UserLoginRes
 	if err != nil {
 		return nil, err
 	}
-	return s.LoginVerifiedTelegram(verified)
+	return s.loginVerifiedTelegram(verified, input.InviteCode)
 }
 
 // LoginWithTelegramMiniApp Telegram Mini App 登录（已启用 2FA 的账号会返回挑战 token，不直接发 JWT）
@@ -52,12 +54,20 @@ func (s *Service) LoginWithTelegramMiniApp(input LoginWithTelegramMiniAppInput) 
 	if err != nil {
 		return nil, err
 	}
-	return s.LoginVerifiedTelegram(verified)
+	return s.loginVerifiedTelegram(verified, input.InviteCode)
 }
 
 // LoginVerifiedTelegram completes a login after a trusted Telegram verifier
 // has authenticated and normalized the upstream identity.
-func (s *Service) LoginVerifiedTelegram(verified *telegramauthapp.IdentityVerified) (*UserLoginResult, error) {
+func (s *Service) LoginVerifiedTelegram(verified *telegramauthapp.IdentityVerified, inviteCode ...string) (*UserLoginResult, error) {
+	code := ""
+	if len(inviteCode) > 0 {
+		code = inviteCode[0]
+	}
+	return s.loginVerifiedTelegram(verified, code)
+}
+
+func (s *Service) loginVerifiedTelegram(verified *telegramauthapp.IdentityVerified, inviteCode string) (*UserLoginResult, error) {
 	identity, err := s.getTelegramIdentityByVerifiedID(verified)
 	if err != nil {
 		return nil, err
@@ -81,7 +91,7 @@ func (s *Service) LoginVerifiedTelegram(verified *telegramauthapp.IdentityVerifi
 			}
 		}
 	} else {
-		user, err = s.findOrCreateTelegramUser(verified)
+		user, err = s.findOrCreateTelegramUser(verified, inviteCode)
 		if err != nil {
 			return nil, err
 		}

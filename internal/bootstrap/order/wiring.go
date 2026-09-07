@@ -46,6 +46,7 @@ func New(c *container.Container) Handlers {
 			orderUserPaymentChannelAdapter{payments: c.PaymentService},
 			orderGuestCreateCaptchaAdapter{captcha: c.CaptchaService},
 			orderPaymentCreatorAdapter{payments: c.PaymentService},
+			c.Config != nil && c.Config.App.SkipPayment,
 		),
 	}
 }

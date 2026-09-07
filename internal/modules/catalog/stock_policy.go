@@ -137,10 +137,15 @@ func StockRange(quantity int64) (string, *int, *int) {
 
 // StockQuantity 按交付类型选择已经计算完成的可用库存。
 func StockQuantity(fulfillmentType string, autoStockAvailable int64, manualStockAvailable int) int64 {
-	if strings.TrimSpace(fulfillmentType) == constants.FulfillmentTypeAuto {
+	switch strings.TrimSpace(fulfillmentType) {
+	case constants.FulfillmentTypeAuto:
 		return autoStockAvailable
+	case constants.FulfillmentTypeContent:
+		// 纯内容交付没有库存概念，恒为不限量，避免被判定为售罄。
+		return int64(constants.ManualStockUnlimited)
+	default:
+		return int64(manualStockAvailable)
 	}
-	return int64(manualStockAvailable)
 }
 
 // MaskStockInt 在非精确展示模式中隐藏真实库存数量，同时保留售罄/有货/无限语义。

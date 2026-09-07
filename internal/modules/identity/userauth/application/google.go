@@ -30,6 +30,7 @@ const (
 // LoginWithGoogleInput is the credential submitted by Google Identity Services.
 type LoginWithGoogleInput struct {
 	Credential string
+	InviteCode string
 	Context    context.Context
 }
 
@@ -62,16 +63,20 @@ func (s *Service) LoginWithGoogle(input LoginWithGoogleInput) (*UserLoginResult,
 	if err != nil {
 		return nil, err
 	}
-	return s.loginVerifiedGoogle(ctx, verified)
+	return s.loginVerifiedGoogle(ctx, verified, input.InviteCode)
 }
 
 // LoginVerifiedGoogle completes login after the dedicated Google verifier has
 // authenticated and normalized the credential.
-func (s *Service) LoginVerifiedGoogle(verified *googleauthapp.VerifiedIdentity) (*UserLoginResult, error) {
-	return s.loginVerifiedGoogle(context.Background(), verified)
+func (s *Service) LoginVerifiedGoogle(verified *googleauthapp.VerifiedIdentity, inviteCode ...string) (*UserLoginResult, error) {
+	code := ""
+	if len(inviteCode) > 0 {
+		code = inviteCode[0]
+	}
+	return s.loginVerifiedGoogle(context.Background(), verified, code)
 }
 
-func (s *Service) loginVerifiedGoogle(ctx context.Context, verified *googleauthapp.VerifiedIdentity) (*UserLoginResult, error) {
+func (s *Service) loginVerifiedGoogle(ctx context.Context, verified *googleauthapp.VerifiedIdentity, inviteCode string) (*UserLoginResult, error) {
 	if s == nil || s.userOAuthIdentityRepo == nil || s.authUnitOfWork == nil {
 		return nil, googleauthapp.ErrGoogleAuthConfigInvalid
 	}
@@ -120,6 +125,7 @@ func (s *Service) loginVerifiedGoogle(ctx context.Context, verified *googleautha
 			userBefore,
 			registration,
 			registrationLoaded,
+			inviteCode,
 		)
 		if txErr != nil {
 			if errors.Is(txErr, errGoogleLoginMappingChanged) && attempt == 0 {
@@ -170,6 +176,9 @@ func (s *Service) loginVerifiedGoogle(ctx context.Context, verified *googleautha
 				user = refreshed
 			}
 		}
+		if createdUser {
+			s.awardReferralOnRegister(user.InviterUserID, user.ID)
+		}
 		return s.completeExternalLogin(user, constants.LoginLogSourceGoogle)
 	}
 	return nil, errGoogleLoginMappingChanged
@@ -182,6 +191,7 @@ func (s *Service) loginGoogleTransaction(
 	userBefore *userdomain.User,
 	registration googleRegistrationSnapshot,
 	registrationLoaded bool,
+	inviteCode string,
 ) (resolvedUser *userdomain.User, createdUser bool, resultErr error) {
 	resultErr = s.authUnitOfWork.WithinTransaction(ctx, func(tx AuthTransaction) error {
 		if identityBefore != nil {
@@ -255,7 +265,7 @@ func (s *Service) loginGoogleTransaction(
 			if err = settingsapp.CheckRegistrationEmailDomainAllowed(verified.Email, registration.EmailDomain); err != nil {
 				return err
 			}
-			user, err = newGoogleUser(verified)
+			user, err = newGoogleUser(verified, s.resolveInviterUserID(inviteCode))
 			if err != nil {
 				return err
 			}
@@ -336,7 +346,7 @@ func (s *Service) loadGoogleRegistrationSnapshot() (googleRegistrationSnapshot, 
 	return snapshot, nil
 }
 
-func newGoogleUser(verified *googleauthapp.VerifiedIdentity) (*userdomain.User, error) {
+func newGoogleUser(verified *googleauthapp.VerifiedIdentity, inviterUserID *uint) (*userdomain.User, error) {
 	passwordHash, err := generateGooglePlaceholderPassword()
 	if err != nil {
 		return nil, err
@@ -353,6 +363,7 @@ func newGoogleUser(verified *googleauthapp.VerifiedIdentity) (*userdomain.User, 
 		DisplayName:           displayName,
 		Status:                constants.UserStatusActive,
 		EmailVerifiedAt:       &now,
+		InviterUserID:         inviterUserID,
 		CreatedAt:             now,
 		UpdatedAt:             now,
 	}, nil

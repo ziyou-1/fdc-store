@@ -10,9 +10,11 @@ import (
 
 // Service 会员等级服务
 type Service struct {
-	levelRepo memberlevelcontract.LevelRepository
-	priceRepo memberlevelcontract.PriceRepository
-	userRepo  memberlevelcontract.UserRepository
+	levelRepo       memberlevelcontract.LevelRepository
+	priceRepo       memberlevelcontract.PriceRepository
+	userRepo        memberlevelcontract.UserRepository
+	planRepo        memberlevelcontract.PlanRepository
+	purchaseCreator memberlevelcontract.PurchasePaymentCreator
 }
 
 // NewService 创建会员等级服务
@@ -160,16 +162,7 @@ func (s *Service) ResolveMemberPrice(levelID, productID, skuID uint, basePrice d
 		return basePrice, decimal.Zero
 	}
 
-	// 使用等级折扣率
-	rate := level.DiscountRate.Decimal
-	if rate.LessThanOrEqual(decimal.Zero) || rate.GreaterThanOrEqual(decimal.NewFromInt(100)) {
-		return basePrice, decimal.Zero
-	}
-	mp := basePrice.Mul(rate).Div(decimal.NewFromInt(100)).Round(2)
-	if mp.LessThan(basePrice) {
-		return mp, basePrice.Sub(mp).Round(2)
-	}
-	return basePrice, decimal.Zero
+	return memberleveldomain.ApplyDiscountRate(basePrice, level.DiscountRate.Decimal)
 }
 
 // ResolveMemberPriceForProducts 批量解析会员价（用于商品列表）

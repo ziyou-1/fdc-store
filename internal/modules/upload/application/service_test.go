@@ -222,3 +222,33 @@ func createMultipartFile(t *testing.T, filename string, content []byte) *multipa
 	}
 	return files[0]
 }
+
+func TestRefineISOBMFFContentType(t *testing.T) {
+	mp4 := append([]byte{0x00, 0x00, 0x00, 0x18}, []byte("ftypmp42")...)
+	mov := append([]byte{0x00, 0x00, 0x00, 0x14}, []byte("ftypqt  ")...)
+	cases := []struct {
+		name    string
+		buffer  []byte
+		current string
+		want    string
+	}{
+		{"mp4 brand refines to video/mp4", mp4, "application/octet-stream", "video/mp4"},
+		{"quicktime brand refines to video/quicktime", mov, "application/octet-stream", "video/quicktime"},
+		{"already sniffed type is kept", mp4, "video/webm", "video/webm"},
+		{"non ftyp payload is untouched", []byte("not a media file at all"), "application/octet-stream", "application/octet-stream"},
+		{"short buffer is untouched", []byte("ftyp"), "application/octet-stream", "application/octet-stream"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := refineISOBMFFContentType(tc.buffer, tc.current); got != tc.want {
+				t.Fatalf("expected %q, got %q", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestSupportSceneIsAllowed(t *testing.T) {
+	if got := normalizeUploadScene("support"); got != "support" {
+		t.Fatalf("support scene must be preserved so attachments do not land in common/, got %q", got)
+	}
+}

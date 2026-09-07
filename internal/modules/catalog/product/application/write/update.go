@@ -101,12 +101,16 @@ func (s *WriteService) Update(id string, input CreateProductInput) (*productdoma
 		fulfillmentType = constants.FulfillmentTypeUpstream
 	}
 	product.FulfillmentType = fulfillmentType
+	product.PointsPrice = input.PointsPrice
 	if fulfillmentType == constants.FulfillmentTypeManual {
 		normalizedSchemaJSON, err := manualform.NormalizeSchema(jsonmap.JSON(input.ManualFormSchemaJSON))
 		if err != nil {
 			return nil, err
 		}
 		product.ManualFormSchemaJSON = normalizedSchemaJSON
+		product.ManualFormTiming = productdomain.NormalizeManualFormTiming(input.ManualFormTiming)
+	} else {
+		product.ManualFormTiming = constants.ManualFormTimingCheckout
 	}
 
 	manualStockTotal := product.ManualStockTotal
@@ -153,7 +157,7 @@ func (s *WriteService) Update(id string, input CreateProductInput) (*productdoma
 			if err := s.applyProductSKUsWithStockGuard(skuRepo, cardSecretRepo, product.ID, fulfillmentType, normalizedSKUs); err != nil {
 				return err
 			}
-		} else if err := s.syncSingleProductSKU(skuRepo, product.ID, priceAmount, product.CostPriceAmount.Decimal, product.ManualStockTotal, true); err != nil {
+		} else if err := s.syncSingleProductSKU(skuRepo, product.ID, priceAmount, product.CostPriceAmount.Decimal, product.PointsPrice, product.ManualStockTotal, true); err != nil {
 			return err
 		}
 		// 仅当请求显式携带批发价字段时才覆盖，省略字段（nil）保留原有配置，
