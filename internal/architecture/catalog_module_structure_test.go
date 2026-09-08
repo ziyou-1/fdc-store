@@ -191,7 +191,10 @@ func TestCatalogProductImplementationLivesInNestedBoundedContext(t *testing.T) {
 		"categoryIDFromValue", "validateActivationCategory",
 	})
 	assertFileDeclaresFunctions(t, filepath.Join(adminRoot, "operations_test.go"), []string{
-		"TestAdminServiceDeleteStopsBeforeTransactionWhenStockExists",
+		// 原为 TestAdminServiceDeleteStopsBeforeTransactionWhenStockExists（有库存即拒绝）。
+		// 按运营要求放开：有库存、有成交记录都照删，两条断言随之改名。
+		"TestAdminServiceDeleteProceedsWhenStockExists",
+		"TestAdminServiceDeleteProceedsWhenOrderRecordExists",
 		"TestAdminServiceDeleteUsesAllCascadePorts",
 		"TestAdminServiceQuickUpdateValidatesActivationCategory",
 		"TestAdminServiceUpdateWholesalePricesCanonicalizesSKU",

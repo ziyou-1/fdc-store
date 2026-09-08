@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Card, CardContent } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import { confirmAction } from '@/utils/confirm'
@@ -112,6 +113,49 @@ const handleProviderTypeChange = () => {
 // 成功的支付是买家真付过钱的凭证，后端会硬拒；这里同步置灰，
 // 避免管理员点了才被告知不行。
 const canDelete = (payment: AdminPayment) => payment.status !== 'success'
+
+const selectedIds = ref<Set<number>>(new Set())
+const batchDeleting = ref(false)
+
+// 成功的支付后端会拒，不放进可选集合——否则批量删完总有几条"失败"，
+// 让人以为是系统出问题。
+const selectableIds = computed(() => payments.value.filter(canDelete).map((p) => p.id))
+const allSelected = computed(() => selectableIds.value.length > 0 && selectableIds.value.every((id) => selectedIds.value.has(id)))
+
+const toggleSelectAll = () => {
+  selectedIds.value = allSelected.value ? new Set() : new Set(selectableIds.value)
+}
+
+const toggleSelect = (id: number) => {
+  const next = new Set(selectedIds.value)
+  next.has(id) ? next.delete(id) : next.add(id)
+  selectedIds.value = next
+}
+
+const handleBatchDelete = async () => {
+  const ids = Array.from(selectedIds.value)
+  if (!ids.length) return
+  const ok = await confirmAction({
+    title: t('admin.payments.delete.confirmTitle'),
+    description: t('admin.payments.delete.batchConfirm', { count: ids.length }),
+    confirmText: t('admin.common.delete'),
+    variant: 'destructive',
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const res = await adminAPI.batchDeletePayments(ids)
+    const data = res.data?.data as { success_count?: number } | null
+    notifySuccess(t('admin.payments.delete.batchResult', { success: data?.success_count || 0, total: ids.length }))
+    selectedIds.value = new Set()
+    await fetchPayments(pagination.value.page, { preserveRows: true })
+  } catch (err) {
+    const known = err as Error & { __notified?: boolean }
+    if (!known?.__notified) notifyError(known?.message || t('admin.payments.delete.failed'))
+  } finally {
+    batchDeleting.value = false
+  }
+}
 
 const deleting = ref<number | null>(null)
 
@@ -482,10 +526,28 @@ watch(
       {{ exportError }}
     </div>
 
+    <div v-if="selectedIds.size > 0" class="flex flex-wrap items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+      <span class="text-sm font-medium">{{ t('admin.payments.delete.selected', { count: selectedIds.size }) }}</span>
+      <Button size="sm" variant="destructive" :disabled="batchDeleting" @click="handleBatchDelete">
+        <span v-if="batchDeleting" class="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span>
+        {{ batchDeleting ? t('admin.payments.delete.deleting') : t('admin.payments.delete.action') }}
+      </Button>
+      <Button size="sm" variant="ghost" :disabled="batchDeleting" @click="selectedIds = new Set()">
+        {{ t('admin.common.cancel') }}
+      </Button>
+    </div>
+
     <div class="rounded-xl border border-border bg-card overflow-x-auto">
-      <Table class="min-w-[900px]">
+      <Table class="min-w-[960px]">
         <TableHeader class="border-b border-border bg-muted/40 text-xs uppercase text-muted-foreground">
           <TableRow>
+            <TableHead class="w-12 px-6 py-3">
+              <Checkbox
+                :model-value="allSelected ? true : (selectedIds.size > 0 ? 'indeterminate' : false)"
+                :disabled="selectableIds.length === 0"
+                @update:model-value="toggleSelectAll"
+              />
+            </TableHead>
             <TableHead class="px-6 py-3">{{ t('admin.payments.table.paymentId') }}</TableHead>
             <TableHead class="px-6 py-3 min-w-[160px]">{{ t('admin.payments.table.orderId') }}</TableHead>
             <TableHead class="px-6 py-3 min-w-[180px]">{{ t('admin.payments.table.channel') }}</TableHead>
@@ -499,14 +561,22 @@ watch(
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell :colspan="9" class="p-0">
-              <TableSkeleton :columns="9" :rows="5" />
+            <TableCell :colspan="10" class="p-0">
+              <TableSkeleton :columns="10" :rows="5" />
             </TableCell>
           </TableRow>
           <TableRow v-else-if="payments.length === 0">
-            <TableCell colspan="9" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.payments.empty') }}</TableCell>
+            <TableCell colspan="10" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.payments.empty') }}</TableCell>
           </TableRow>
           <TableRow v-for="payment in payments" :key="payment.id" class="hover:bg-muted/30">
+            <TableCell class="w-12 px-6 py-4">
+              <Checkbox
+                :model-value="selectedIds.has(payment.id)"
+                :disabled="!canDelete(payment)"
+                :title="canDelete(payment) ? '' : t('admin.payments.delete.successBlocked')"
+                @update:model-value="toggleSelect(payment.id)"
+              />
+            </TableCell>
             <TableCell class="px-6 py-4">
               <IdCell :value="payment.id" />
             </TableCell>

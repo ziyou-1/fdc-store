@@ -11,20 +11,62 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func TestAdminServiceDeleteStopsBeforeTransactionWhenStockExists(t *testing.T) {
-	transactions := &unitOfWorkStub{}
+// 有库存照删：卡密由删除事务一并清理。
+// 这条曾经断言的是相反行为（有库存就拒绝），后来按运营要求放开——
+// 下架多年的商品因为还挂着几张卡密就永远清不掉，实践中很碍事。
+func TestAdminServiceDeleteProceedsWhenStockExists(t *testing.T) {
+	deleted := make(map[string]int)
+	transactions := &unitOfWorkStub{repositories: DeleteRepositories{
+		Products:          productDeleteStub{deleted: deleted},
+		CardSecrets:       productRelationDeleteStub{name: "card_secrets", deleted: deleted},
+		CardSecretBatches: productRelationDeleteStub{name: "card_secret_batches", deleted: deleted},
+		SKUs:              productRelationDeleteStub{name: "skus", deleted: deleted},
+		MemberLevelPrices: productRelationDeleteStub{name: "member_level_prices", deleted: deleted},
+		Carts:             productRelationDeleteStub{name: "carts", deleted: deleted},
+		ProductMappings:   productMappingDeleteStub{deleted: deleted},
+	}}
 	service := NewAdminService(Options{
 		Products:     &productRepositoryStub{product: &productdomain.Product{ID: 7}},
-		CardSecrets:  stockRepositoryStub{available: 1},
+		CardSecrets:  stockRepositoryStub{available: 3, reserved: 2},
 		Orders:       orderRepositoryStub{},
 		Transactions: transactions,
 	})
 
-	if err := service.Delete("7"); !errors.Is(err, productcontract.ErrProductHasStock) {
-		t.Fatalf("expected product stock error, got %v", err)
+	if err := service.Delete("7"); err != nil {
+		t.Fatalf("有库存也应允许删除，实得 %v", err)
 	}
-	if transactions.called {
-		t.Fatal("delete transaction must not start while card-secret stock exists")
+	if !transactions.called {
+		t.Fatal("删除事务应当执行")
+	}
+	if deleted["card_secrets"] != 1 {
+		t.Fatalf("卡密应随商品一并清理，实得 %d", deleted["card_secrets"])
+	}
+}
+
+// 有成交记录照删：order_items 存的是标题快照，订单历史不依赖商品行存在。
+func TestAdminServiceDeleteProceedsWhenOrderRecordExists(t *testing.T) {
+	deleted := make(map[string]int)
+	transactions := &unitOfWorkStub{repositories: DeleteRepositories{
+		Products:          productDeleteStub{deleted: deleted},
+		CardSecrets:       productRelationDeleteStub{name: "card_secrets", deleted: deleted},
+		CardSecretBatches: productRelationDeleteStub{name: "card_secret_batches", deleted: deleted},
+		SKUs:              productRelationDeleteStub{name: "skus", deleted: deleted},
+		MemberLevelPrices: productRelationDeleteStub{name: "member_level_prices", deleted: deleted},
+		Carts:             productRelationDeleteStub{name: "carts", deleted: deleted},
+		ProductMappings:   productMappingDeleteStub{deleted: deleted},
+	}}
+	service := NewAdminService(Options{
+		Products:     &productRepositoryStub{product: &productdomain.Product{ID: 8}},
+		CardSecrets:  stockRepositoryStub{},
+		Orders:       orderRepositoryStub{count: 12},
+		Transactions: transactions,
+	})
+
+	if err := service.Delete("8"); err != nil {
+		t.Fatalf("有成交记录也应允许删除，实得 %v", err)
+	}
+	if deleted["product"] != 1 {
+		t.Fatalf("商品应被删除，实得 %d", deleted["product"])
 	}
 }
 

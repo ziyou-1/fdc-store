@@ -683,3 +683,44 @@ func TestDeleteAdminPaymentAllowsPendingPayment(t *testing.T) {
 		t.Fatal("删除后不该还能查到")
 	}
 }
+
+// 批量删除要能「删掉能删的、并说清哪些没删成」——
+// 一刀切的批量 SQL 做不到这件事，所以实现是逐条删。
+func TestBatchDeleteAdminPaymentsReportsPerItemOutcome(t *testing.T) {
+	h, fixture := setupAdminPaymentHandlerTest(t)
+	query := h.payments.(*fakeAdminPaymentQuery)
+	// 把订单支付置为成功（应被拦），充值支付保持 pending（应删成功）
+	for i := range query.payments {
+		if query.payments[i].ID == fixture.OrderPaymentID {
+			query.payments[i].Status = constants.PaymentStatusSuccess
+		}
+	}
+
+	body := fmt.Sprintf(`{"ids":[%d,%d,999999]}`, fixture.OrderPaymentID, fixture.RechargePaymentUser1)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/admin/payments/batch-delete", strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	h.BatchDeleteAdminPayments(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("批量删除应返回 200，实得 %d: %s", w.Code, w.Body.String())
+	}
+	got := w.Body.String()
+	// 三条里只有 pending 那条能删
+	if !strings.Contains(got, `"success_count":1`) {
+		t.Fatalf("应只成功 1 条，实得: %s", got)
+	}
+	if !strings.Contains(got, `"total":3`) {
+		t.Fatalf("total 应为 3，实得: %s", got)
+	}
+	// 成功支付必须还在
+	if _, err := query.GetPayment(fixture.OrderPaymentID); err != nil {
+		t.Fatalf("成功支付不该被批量删除带走: %v", err)
+	}
+	// pending 那条应已删除
+	if _, err := query.GetPayment(fixture.RechargePaymentUser1); err == nil {
+		t.Fatal("pending 支付应已被删除")
+	}
+}

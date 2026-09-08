@@ -7,7 +7,19 @@ import (
 	productdomain "github.com/dujiao-next/internal/modules/catalog/product/domain"
 )
 
-// Delete 删除商品，并在确认无库存和成交记录后级联清理关联数据。
+// Delete 删除商品，并级联清理关联数据。
+//
+// 有库存、有成交记录都照删——这是运营明确要求的行为。原先这里挡了两道
+// （可用/锁定卡密、订单条目引用），实践中反而让下架多年的商品永远清不掉。
+//
+// 之所以敢放开，是因为历史数据本来就自足：order_items 存的是 TitleJSON
+// 标题快照，商品没了订单详情照样显示得出商品名；商品本身也是软删除
+// （置 deleted_at），行还在库里可追溯。
+//
+// 代价是明确的，运营需要知道：
+//  1. 按 product_id 聚合的销量报表会丢掉这些商品的关联；
+//  2. 连带删除的卡密里若有「已锁定」的（对应在途订单），那笔订单将无法
+//     再自动发货，只能人工处理。
 func (s *AdminService) Delete(id string) error {
 	product, err := s.products.GetByID(id)
 	if err != nil {
@@ -15,30 +27,6 @@ func (s *AdminService) Delete(id string) error {
 	}
 	if product == nil {
 		return productcontract.ErrNotFound
-	}
-
-	// 事务前校验，避免 SQLite 在读后写场景中发生自锁。
-	available, err := s.cardSecrets.CountAvailable(product.ID, 0)
-	if err != nil {
-		return err
-	}
-	if available > 0 {
-		return productcontract.ErrProductHasStock
-	}
-	reserved, err := s.cardSecrets.CountReserved(product.ID, 0)
-	if err != nil {
-		return err
-	}
-	if reserved > 0 {
-		return productcontract.ErrProductHasStock
-	}
-
-	orderCount, err := s.orders.CountOrderItemsByProduct(product.ID)
-	if err != nil {
-		return err
-	}
-	if orderCount > 0 {
-		return productcontract.ErrProductHasOrderRecord
 	}
 
 	return s.transactions.WithinTransaction(func(repositories DeleteRepositories) error {

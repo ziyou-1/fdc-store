@@ -14,6 +14,7 @@ import (
 
 	walletdomain "github.com/dujiao-next/internal/modules/wallet/domain"
 
+	"github.com/dujiao-next/internal/i18n"
 	ginutil "github.com/dujiao-next/internal/platform/http/ginutil"
 
 	"github.com/dujiao-next/internal/platform/http/response"
@@ -214,6 +215,48 @@ func (h *AdminHandler) ExportAdminPayments(c *gin.Context) {
 }
 
 // GetAdminPayment 获取支付记录详情
+// BatchDeletePaymentsRequest 批量删除支付记录请求。
+type BatchDeletePaymentsRequest struct {
+	IDs []uint `json:"ids" binding:"required,min=1"`
+}
+
+// BatchDeleteAdminPayments 批量删除支付记录。
+//
+// 逐条删而不是一条 SQL 批量置位：成功的支付要单独拦下并回报给运营，
+// 一刀切的批量语句做不到「删掉能删的、告诉你哪些没删成以及为什么」。
+func (h *AdminHandler) BatchDeleteAdminPayments(c *gin.Context) {
+	var req BatchDeletePaymentsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		ginutil.RespondBindError(c, err)
+		return
+	}
+	locale := i18n.ResolveLocale(c)
+	successCount := 0
+	failedItems := make([]gin.H, 0)
+	for _, id := range req.IDs {
+		err := h.payments.DeletePayment(id)
+		if err == nil {
+			successCount++
+			continue
+		}
+		reasonKey := "error.payment_delete_failed"
+		switch {
+		case errors.Is(err, ErrPaymentNotFound):
+			reasonKey = "error.payment_not_found"
+		case errors.Is(err, ErrPaymentDeleteNotAllowed):
+			reasonKey = "error.payment_delete_success_forbidden"
+		case errors.Is(err, ErrPaymentInvalid):
+			reasonKey = "error.payment_invalid"
+		}
+		failedItems = append(failedItems, gin.H{"id": id, "reason": i18n.T(locale, reasonKey)})
+	}
+	response.Success(c, gin.H{
+		"total":         len(req.IDs),
+		"success_count": successCount,
+		"failed_items":  failedItems,
+	})
+}
+
 // DeleteAdminPayment 删除一条支付记录（软删除）。
 // 成功的支付不允许删除——那是买家付过钱的凭证，删了订单的已付状态就没了依据。
 func (h *AdminHandler) DeleteAdminPayment(c *gin.Context) {

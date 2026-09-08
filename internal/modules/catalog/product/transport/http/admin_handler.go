@@ -739,14 +739,6 @@ func (h *AdminProductHandler) DeleteProduct(c *gin.Context) {
 			ginutil.RespondError(c, response.CodeNotFound, "error.product_not_found", nil)
 			return
 		}
-		if errors.Is(err, productcontract.ErrProductHasStock) {
-			ginutil.RespondError(c, response.CodeBadRequest, "error.product_has_stock", nil)
-			return
-		}
-		if errors.Is(err, productcontract.ErrProductHasOrderRecord) {
-			ginutil.RespondError(c, response.CodeBadRequest, "error.product_has_order_record", nil)
-			return
-		}
 		ginutil.RespondError(c, response.CodeInternal, "error.product_delete_failed", err)
 		return
 	}

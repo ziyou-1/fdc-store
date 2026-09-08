@@ -45,6 +45,7 @@ func RegisterAdminRoutes(authorized gin.IRoutes, handler *AdminHandler) {
 	authorized.GET("/payments/export", handler.ExportAdminPayments)
 	authorized.GET("/payments/:id", handler.GetAdminPayment)
 	authorized.DELETE("/payments/:id", handler.DeleteAdminPayment)
+	authorized.POST("/payments/batch-delete", handler.BatchDeleteAdminPayments)
 }
 
 // RegisterAdminChannelRoutes 注册后台支付渠道路由。
