@@ -23,6 +23,8 @@ import { confirmAction } from '@/utils/confirm'
 const { locale } = useI18n()
 
 import { authzModuleLabel, authzMethodHint } from '@/utils/authzModules'
+import { summarizeRolePolicies, capabilityActionText } from '@/utils/authzSummary'
+import { permissionDescription } from '@/utils/authzPermissionDescriptions'
 
 const textMap = {
   'zh-CN': {
@@ -39,6 +41,8 @@ const textMap = {
     rolePlaceholder: '输入角色名，如 operations_manager',
     rolesEmpty: '暂无角色',
     policiesTitle: '角色策略',
+    capabilityTitle: '这个角色能做什么',
+    capabilityHint: '按模块归并；带感叹号的涉及资金、密钥或权限',
     selectRoleHint: '请先在左侧选择角色',
     immutableRoleHint: '系统内置角色不允许删除；策略可以按需增删。若把某个角色的策略全部删光，重启后会恢复为默认策略。',
     objectPlaceholder: '资源路径，例如 /admin/orders/:id',
@@ -138,6 +142,8 @@ const textMap = {
     rolePlaceholder: '輸入角色名，例如 operations_manager',
     rolesEmpty: '暫無角色',
     policiesTitle: '角色策略',
+    capabilityTitle: '這個角色能做什麼',
+    capabilityHint: '按模組歸併；帶驚嘆號的涉及資金、金鑰或權限',
     selectRoleHint: '請先在左側選擇角色',
     immutableRoleHint: '系統內建角色不允許刪除；策略可以按需增刪。若把某個角色的策略全部刪光，重啟後會恢復為預設策略。',
     objectPlaceholder: '資源路徑，例如 /admin/orders/:id',
@@ -237,6 +243,8 @@ const textMap = {
     rolePlaceholder: 'Enter role name, e.g. operations_manager',
     rolesEmpty: 'No roles',
     policiesTitle: 'Role Policies',
+    capabilityTitle: 'What this role can do',
+    capabilityHint: 'Grouped by module; flagged items touch money, keys or permissions',
     selectRoleHint: 'Please select a role first',
     immutableRoleHint: 'Built-in roles cannot be deleted, but their policies can be edited freely. Removing every policy from a role restores its defaults on the next restart.',
     objectPlaceholder: 'Resource path, e.g. /admin/orders/:id',
@@ -339,6 +347,20 @@ const policyModuleOf = (object: string): string => {
   return segments[1] === 'authz' ? 'authz' : (segments[1] ?? 'system')
 }
 const methodHint = (method: string) => authzMethodHint(method, locale.value)
+
+// 三十几行原始路径没人读得懂「这个角色能干什么」，先给一张按模块归并的能力概览。
+const roleCapabilities = computed(() => summarizeRolePolicies(policies.value, locale.value))
+const capabilityText = (cap: ReturnType<typeof summarizeRolePolicies>[number]) =>
+  capabilityActionText(cap, locale.value)
+
+// 逐条接口的人话说明。未收录时回落到「模块名 · 方法」的粗粒度描述——
+// 后端新增接口时缺说明是常态，但不能让整行变空白。
+const permDesc = (method: string, object: string) => {
+  const hit = permissionDescription(`${method}:${object}`, locale.value)
+  if (hit) return hit
+  const parts = [moduleLabel(policyModuleOf(object)), methodHint(method)].filter(Boolean)
+  return parts.join(' · ')
+}
 
 const formatText = (template: string, payload: Record<string, string | number>) => {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => String(payload[key] ?? ''))
@@ -1021,6 +1043,27 @@ onMounted(async () => {
           <div v-if="selectedRoleImmutable" class="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
             {{ text.immutableRoleHint }}
           </div>
+          <div v-if="roleCapabilities.length" class="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+            <div class="flex items-baseline justify-between">
+              <span class="text-xs font-medium">{{ text.capabilityTitle }}</span>
+              <span class="text-[11px] text-muted-foreground">{{ text.capabilityHint }}</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <span
+                v-for="cap in roleCapabilities"
+                :key="cap.module"
+                class="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
+                :class="cap.dangerous
+                  ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200'
+                  : 'border-border bg-background'"
+              >
+                <span v-if="cap.dangerous" aria-hidden="true">!</span>
+                <span class="font-medium">{{ cap.label }}</span>
+                <span class="text-muted-foreground">{{ capabilityText(cap) }}</span>
+              </span>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-2">
             <Input v-model="policyForm.object" :placeholder="text.objectPlaceholder" />
             <Select v-model="policyForm.action">
@@ -1069,11 +1112,8 @@ onMounted(async () => {
                     class="flex items-center justify-between rounded-lg border border-border px-3 py-2"
                   >
                     <div class="min-w-0">
-                      <div class="text-[11px] text-muted-foreground">
-                        {{ moduleLabel(item.module) }}
-                        <span v-if="methodHint(item.method)"> · {{ methodHint(item.method) }}</span>
-                      </div>
-                      <div class="break-all text-xs font-mono">{{ item.method }} {{ item.object }}</div>
+                      <div class="text-xs font-medium">{{ permDesc(item.method, item.object) }}</div>
+                      <div class="break-all font-mono text-[11px] text-muted-foreground">{{ item.method }} {{ item.object }}</div>
                     </div>
                     <Button
                       size="sm"
@@ -1107,8 +1147,8 @@ onMounted(async () => {
                 </TableRow>
                 <TableRow v-for="item in policies" :key="`${item.object}:${item.action}`" class="hover:bg-muted/30">
                   <TableCell class="min-w-[320px] px-4 py-3 break-all">
-                    <div class="text-xs">{{ moduleLabel(policyModuleOf(item.object)) }}</div>
-                    <div class="font-mono text-xs text-muted-foreground">{{ item.object }}</div>
+                    <div class="text-xs font-medium">{{ permDesc(item.action, item.object) }}</div>
+                    <div class="font-mono text-[11px] text-muted-foreground">{{ moduleLabel(policyModuleOf(item.object)) }} · {{ item.object }}</div>
                   </TableCell>
                   <TableCell class="min-w-[140px] px-4 py-3 break-words">
                     <div class="font-medium">{{ methodHint(item.action) || item.action }}</div>
