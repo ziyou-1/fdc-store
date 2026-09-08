@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/dujiao-next/internal/i18n"
 	cartcontract "github.com/dujiao-next/internal/modules/cart/contract"
 	"github.com/dujiao-next/internal/platform/http/response"
 
@@ -26,19 +27,19 @@ func TestRespondCartItemUpdateError(t *testing.T) {
 			name: "invalid fulfillment",
 			err:  cartcontract.ErrFulfillmentInvalid,
 			code: response.CodeBadRequest,
-			msg:  "交付信息不合法",
+			msg:  i18n.T(i18n.DefaultLocale, "error.fulfillment_invalid"),
 		},
 		{
 			name: "manual stock insufficient",
 			err:  cartcontract.ErrManualStockInsufficient,
 			code: response.CodeBadRequest,
-			msg:  "人工库存不足",
+			msg:  i18n.T(i18n.DefaultLocale, "error.manual_stock_insufficient"),
 		},
 		{
 			name: "unknown error",
 			err:  errors.New("boom"),
 			code: response.CodeInternal,
-			msg:  "更新订单失败",
+			msg:  i18n.T(i18n.DefaultLocale, "error.order_update_failed"),
 		},
 	}
 

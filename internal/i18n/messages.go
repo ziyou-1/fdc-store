@@ -1575,9 +1575,13 @@ var messages = map[string]map[string]string{
 }
 
 // ResolveLocale 根据请求解析语言
+// DefaultLocale 是站点默认语言。本站面向印尼市场，请求里问不出语言时按印尼语走，
+// 与买家端 i18n 的默认语言保持一致——否则买家不带 X-Lang 就会收到中文报错。
+const DefaultLocale = LocaleID
+
 func ResolveLocale(c *gin.Context) string {
 	if c == nil {
-		return LocaleZH
+		return DefaultLocale
 	}
 	if lang := strings.TrimSpace(c.Query("lang")); lang != "" {
 		return normalizeLocale(lang)
@@ -1587,11 +1591,11 @@ func ResolveLocale(c *gin.Context) string {
 	}
 	accept := strings.TrimSpace(c.GetHeader("Accept-Language"))
 	if accept == "" {
-		return LocaleZH
+		return DefaultLocale
 	}
 	parts := strings.Split(accept, ",")
 	if len(parts) == 0 {
-		return LocaleZH
+		return DefaultLocale
 	}
 	return normalizeLocale(parts[0])
 }
@@ -1599,7 +1603,7 @@ func ResolveLocale(c *gin.Context) string {
 // T 获取翻译文本
 func T(locale, key string) string {
 	if locale == "" {
-		locale = LocaleZH
+		locale = DefaultLocale
 	}
 	if bundle, ok := messages[locale]; ok {
 		if msg, ok := bundle[key]; ok {
@@ -1637,8 +1641,6 @@ func normalizeLocale(locale string) string {
 	case strings.HasPrefix(l, "id"), strings.HasPrefix(l, "in-"), l == "in":
 		return LocaleID
 	default:
-		// 站点面向印尼市场，识别不出的语言按印尼语返回，与买家端默认语言保持一致。
-		// 若这里仍兜底中文，印尼买家在未带 X-Lang 时会收到中文报错。
-		return LocaleID
+		return DefaultLocale
 	}
 }

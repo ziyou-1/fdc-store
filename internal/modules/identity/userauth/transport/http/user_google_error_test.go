@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dujiao-next/internal/constants"
+	"github.com/dujiao-next/internal/i18n"
 	userdomain "github.com/dujiao-next/internal/modules/identity/user/domain"
 	resellercontract "github.com/dujiao-next/internal/modules/reseller/contract"
 	"github.com/dujiao-next/internal/platform/http/response"
@@ -197,25 +198,25 @@ func TestRespondGoogleLoginError(t *testing.T) {
 			name: "invalid credential",
 			err:  ErrGoogleCredentialInvalid,
 			code: response.CodeBadRequest,
-			msg:  "Google 身份凭证无效，请重试",
+			msg:  i18n.T(i18n.DefaultLocale, "error.google_credential_invalid"),
 		},
 		{
 			name: "unsafe automatic link",
 			err:  ErrGoogleAutoLinkForbidden,
 			code: response.CodeForbidden,
-			msg:  "请先使用原账号登录，再绑定此 Google 账号",
+			msg:  i18n.T(i18n.DefaultLocale, "error.google_auto_link_forbidden"),
 		},
 		{
 			name: "upstream unavailable",
 			err:  ErrGoogleJWKSUnavailable,
 			code: response.CodeInternal,
-			msg:  "Google 登录服务暂时不可用，请稍后重试",
+			msg:  i18n.T(i18n.DefaultLocale, "error.google_service_unavailable"),
 		},
 		{
 			name: "unknown error",
 			err:  errors.New("boom"),
 			code: response.CodeInternal,
-			msg:  "登录失败",
+			msg:  i18n.T(i18n.DefaultLocale, "error.login_failed"),
 		},
 	}
 
@@ -240,19 +241,19 @@ func TestRespondGoogleBindError(t *testing.T) {
 			name: "identity belongs to another user",
 			err:  ErrUserOAuthIdentityExists,
 			code: response.CodeBadRequest,
-			msg:  "该 Google 账号已绑定其他用户",
+			msg:  i18n.T(i18n.DefaultLocale, "error.google_bind_conflict"),
 		},
 		{
 			name: "current user already has another identity",
 			err:  ErrUserOAuthAlreadyBound,
 			code: response.CodeBadRequest,
-			msg:  "当前账号已绑定其他 Google 账号",
+			msg:  i18n.T(i18n.DefaultLocale, "error.google_already_bound"),
 		},
 		{
 			name: "invalid credential",
 			err:  ErrGoogleCredentialInvalid,
 			code: response.CodeBadRequest,
-			msg:  "Google 身份凭证无效，请重试",
+			msg:  i18n.T(i18n.DefaultLocale, "error.google_credential_invalid"),
 		},
 	}
 	for _, tt := range tests {

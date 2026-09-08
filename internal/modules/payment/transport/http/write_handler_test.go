@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/dujiao-next/internal/i18n"
 	"github.com/dujiao-next/internal/platform/http/response"
 
 	"github.com/gin-gonic/gin"
@@ -25,19 +26,19 @@ func TestRespondPaymentCreateError(t *testing.T) {
 			name: "gateway response invalid",
 			err:  ErrPaymentGatewayResponseInvalid,
 			code: response.CodeBadRequest,
-			msg:  "支付网关响应异常",
+			msg:  i18n.T(i18n.DefaultLocale, "error.payment_gateway_response_invalid"),
 		},
 		{
 			name: "recharge channel not allowed",
 			err:  ErrPaymentChannelNotAllowedForRecharge,
 			code: response.CodeBadRequest,
-			msg:  "钱包充值不支持此支付渠道",
+			msg:  i18n.T(i18n.DefaultLocale, "error.payment_channel_not_allowed_for_recharge"),
 		},
 		{
 			name: "unknown error",
 			err:  errors.New("boom"),
 			code: response.CodeInternal,
-			msg:  "创建支付失败",
+			msg:  i18n.T(i18n.DefaultLocale, "error.payment_create_failed"),
 		},
 	}
 
@@ -65,13 +66,13 @@ func TestRespondPaymentCaptureError(t *testing.T) {
 			name: "amount mismatch",
 			err:  ErrPaymentAmountMismatch,
 			code: response.CodeBadRequest,
-			msg:  "支付金额不匹配",
+			msg:  i18n.T(i18n.DefaultLocale, "error.payment_amount_mismatch"),
 		},
 		{
 			name: "unknown error",
 			err:  errors.New("boom"),
 			code: response.CodeInternal,
-			msg:  "支付回调处理失败",
+			msg:  i18n.T(i18n.DefaultLocale, "error.payment_callback_failed"),
 		},
 	}
 

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/dujiao-next/internal/i18n"
 	"github.com/dujiao-next/internal/platform/http/response"
 
 	"github.com/gin-gonic/gin"
@@ -25,19 +26,19 @@ func TestRespondTelegramBindError(t *testing.T) {
 			name: "auth disabled",
 			err:  ErrTelegramAuthDisabled,
 			code: response.CodeBadRequest,
-			msg:  "Telegram 登录未启用",
+			msg:  i18n.T(i18n.DefaultLocale, "error.telegram_auth_disabled"),
 		},
 		{
 			name: "identity conflict",
 			err:  ErrUserOAuthIdentityExists,
 			code: response.CodeBadRequest,
-			msg:  "该 Telegram 账号已绑定其他用户",
+			msg:  i18n.T(i18n.DefaultLocale, "error.telegram_bind_conflict"),
 		},
 		{
 			name: "unknown error",
 			err:  errors.New("boom"),
 			code: response.CodeInternal,
-			msg:  "更新用户资料失败",
+			msg:  i18n.T(i18n.DefaultLocale, "error.user_update_failed"),
 		},
 	}
 
@@ -63,25 +64,25 @@ func TestRespondTelegramLoginError(t *testing.T) {
 			name: "expired auth payload",
 			err:  ErrTelegramAuthExpired,
 			code: response.CodeBadRequest,
-			msg:  "Telegram 登录已过期，请重试",
+			msg:  i18n.T(i18n.DefaultLocale, "error.telegram_auth_expired"),
 		},
 		{
 			name: "disabled user",
 			err:  ErrUserDisabled,
 			code: response.CodeUnauthorized,
-			msg:  "账号已禁用",
+			msg:  i18n.T(i18n.DefaultLocale, "error.user_disabled"),
 		},
 		{
 			name: "registration disabled",
 			err:  ErrRegistrationDisabled,
 			code: response.CodeForbidden,
-			msg:  "注册功能已关闭",
+			msg:  i18n.T(i18n.DefaultLocale, "error.registration_disabled"),
 		},
 		{
 			name: "unknown error",
 			err:  errors.New("boom"),
 			code: response.CodeInternal,
-			msg:  "登录失败",
+			msg:  i18n.T(i18n.DefaultLocale, "error.login_failed"),
 		},
 	}
 

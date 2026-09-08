@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dujiao-next/internal/i18n"
 	"github.com/dujiao-next/internal/platform/http/response"
 
 	"github.com/gin-gonic/gin"
@@ -42,19 +43,19 @@ func TestRespondPaymentCallbackError(t *testing.T) {
 			name: "status invalid",
 			err:  ErrPaymentStatusInvalid,
 			code: response.CodeBadRequest,
-			msg:  "支付状态不合法",
+			msg:  i18n.T(i18n.DefaultLocale, "error.payment_status_invalid"),
 		},
 		{
 			name: "gateway response invalid",
 			err:  ErrPaymentGatewayResponseInvalid,
 			code: response.CodeBadRequest,
-			msg:  "支付网关响应异常",
+			msg:  i18n.T(i18n.DefaultLocale, "error.payment_gateway_response_invalid"),
 		},
 		{
 			name: "unknown error",
 			err:  errors.New("boom"),
 			code: response.CodeInternal,
-			msg:  "支付回调处理失败",
+			msg:  i18n.T(i18n.DefaultLocale, "error.payment_callback_failed"),
 		},
 	}
 
