@@ -88,12 +88,12 @@ type NotificationLocalizedTemplate struct {
 	Body  string `json:"body"`
 }
 
-// NotificationSceneTemplate 单个通知场景模板
-type NotificationSceneTemplate struct {
-	ZHCN NotificationLocalizedTemplate `json:"zh-CN"`
-	ZHTW NotificationLocalizedTemplate `json:"zh-TW"`
-	ENUS NotificationLocalizedTemplate `json:"en-US"`
-}
+// NotificationSceneTemplate 单个通知场景模板，按 locale 索引。
+//
+// 用 map 而不是固定的 ZHCN/ZHTW/ENUS 三个字段：固定字段意味着每加一门语言都要
+// 改结构体、改 Resolve、改前端，漏掉任何一处都不会编译报错。语言集合此后只由
+// constants.SupportedLocales 决定。
+type NotificationSceneTemplate map[string]NotificationLocalizedTemplate
 
 // NotificationTemplatesSetting 通知模板集合
 type NotificationTemplatesSetting struct {
@@ -161,23 +161,80 @@ type NotificationScenePatch struct {
 
 // NotificationTemplatesPatch 通知模板补丁
 type NotificationTemplatesPatch struct {
-	WalletRechargeSuccess    *NotificationSceneTemplatePatch `json:"wallet_recharge_success"`
-	OrderPaidSuccess         *NotificationSceneTemplatePatch `json:"order_paid_success"`
-	ManualFulfillmentPending *NotificationSceneTemplatePatch `json:"manual_fulfillment_pending"`
-	ExceptionAlert           *NotificationSceneTemplatePatch `json:"exception_alert"`
+	WalletRechargeSuccess    NotificationSceneTemplatePatch `json:"wallet_recharge_success"`
+	OrderPaidSuccess         NotificationSceneTemplatePatch `json:"order_paid_success"`
+	ManualFulfillmentPending NotificationSceneTemplatePatch `json:"manual_fulfillment_pending"`
+	ExceptionAlert           NotificationSceneTemplatePatch `json:"exception_alert"`
 }
 
 // NotificationSceneTemplatePatch 单场景模板补丁
-type NotificationSceneTemplatePatch struct {
-	ZHCN *NotificationLocalizedTemplatePatch `json:"zh-CN"`
-	ZHTW *NotificationLocalizedTemplatePatch `json:"zh-TW"`
-	ENUS *NotificationLocalizedTemplatePatch `json:"en-US"`
-}
+type NotificationSceneTemplatePatch map[string]NotificationLocalizedTemplatePatch
 
 // NotificationLocalizedTemplatePatch 多语言模板补丁
 type NotificationLocalizedTemplatePatch struct {
 	Title *string `json:"title"`
 	Body  *string `json:"body"`
+}
+
+// notificationCopy 一门语言在各场景下的默认标题与正文。
+type notificationCopy struct {
+	title string
+	body  string
+}
+
+// notificationDefaultCopy 返回 locale -> scene -> 文案。
+func notificationDefaultCopy() map[string]map[string]notificationCopy {
+	return map[string]map[string]notificationCopy{
+		constants.LocaleZhCN: {
+			"wallet_recharge_success":    {title: "用户充值成功通知", body: "用户：{{customer_label}}\n邮箱：{{customer_email}}\n充值单号：{{recharge_no}}\n充值金额：{{amount}} {{currency}}\n支付渠道：{{payment_channel}}"},
+			"order_paid_success":         {title: "订单支付成功通知", body: "购买人：{{customer_label}}\n邮箱：{{customer_email}}\n订单号：{{order_no}}\n订单金额：{{amount}} {{currency}}\n支付渠道：{{payment_channel}}\n商品明细：\n{{items_summary}}\n交付摘要：{{delivery_summary}}"},
+			"manual_fulfillment_pending": {title: "待人工交付订单提醒", body: "购买人：{{customer_label}}\n邮箱：{{customer_email}}\n订单号：{{order_no}}\n订单状态：{{order_status}}\n待处理商品：\n{{fulfillment_items_summary}}\n交付摘要：{{delivery_summary}}"},
+			"exception_alert":            {title: "系统异常告警", body: "告警类型：{{alert_type}}\n告警级别：{{alert_level}}\n当前值：{{alert_value}}\n阈值：{{alert_threshold}}\n详情：{{message}}\n{{affected_items_summary}}"},
+		},
+		constants.LocaleZhTW: {
+			"wallet_recharge_success":    {title: "用戶儲值成功通知", body: "用戶：{{customer_label}}\n郵箱：{{customer_email}}\n儲值單號：{{recharge_no}}\n儲值金額：{{amount}} {{currency}}\n支付渠道：{{payment_channel}}"},
+			"order_paid_success":         {title: "訂單支付成功通知", body: "購買人：{{customer_label}}\n郵箱：{{customer_email}}\n訂單號：{{order_no}}\n訂單金額：{{amount}} {{currency}}\n支付渠道：{{payment_channel}}\n商品明細：\n{{items_summary}}\n交付摘要：{{delivery_summary}}"},
+			"manual_fulfillment_pending": {title: "待人工交付訂單提醒", body: "購買人：{{customer_label}}\n郵箱：{{customer_email}}\n訂單號：{{order_no}}\n訂單狀態：{{order_status}}\n待處理商品：\n{{fulfillment_items_summary}}\n交付摘要：{{delivery_summary}}"},
+			"exception_alert":            {title: "系統異常告警", body: "告警類型：{{alert_type}}\n告警級別：{{alert_level}}\n當前值：{{alert_value}}\n閾值：{{alert_threshold}}\n詳情：{{message}}\n{{affected_items_summary}}"},
+		},
+		constants.LocaleEnUS: {
+			"wallet_recharge_success":    {title: "Wallet Recharge Succeeded", body: "Customer: {{customer_label}}\nEmail: {{customer_email}}\nRecharge No: {{recharge_no}}\nAmount: {{amount}} {{currency}}\nChannel: {{payment_channel}}"},
+			"order_paid_success":         {title: "Order Payment Succeeded", body: "Customer: {{customer_label}}\nEmail: {{customer_email}}\nOrder No: {{order_no}}\nAmount: {{amount}} {{currency}}\nChannel: {{payment_channel}}\nItems:\n{{items_summary}}\nDelivery Summary: {{delivery_summary}}"},
+			"manual_fulfillment_pending": {title: "Manual Fulfillment Required", body: "Customer: {{customer_label}}\nEmail: {{customer_email}}\nOrder No: {{order_no}}\nOrder Status: {{order_status}}\nPending Items:\n{{fulfillment_items_summary}}\nDelivery Summary: {{delivery_summary}}"},
+			"exception_alert":            {title: "System Exception Alert", body: "Type: {{alert_type}}\nLevel: {{alert_level}}\nCurrent: {{alert_value}}\nThreshold: {{alert_threshold}}\nDetails: {{message}}\n{{affected_items_summary}}"},
+		},
+		constants.LocaleIdID: {
+			"wallet_recharge_success":    {title: "Isi Saldo Berhasil", body: "Pelanggan: {{customer_label}}\nEmail: {{customer_email}}\nNo. isi saldo: {{recharge_no}}\nJumlah: {{amount}} {{currency}}\nMetode: {{payment_channel}}"},
+			"order_paid_success":         {title: "Pembayaran Pesanan Berhasil", body: "Pelanggan: {{customer_label}}\nEmail: {{customer_email}}\nNo. pesanan: {{order_no}}\nJumlah: {{amount}} {{currency}}\nMetode: {{payment_channel}}\nRincian produk:\n{{items_summary}}\nRingkasan pengiriman: {{delivery_summary}}"},
+			"manual_fulfillment_pending": {title: "Perlu Pengiriman Manual", body: "Pelanggan: {{customer_label}}\nEmail: {{customer_email}}\nNo. pesanan: {{order_no}}\nStatus pesanan: {{order_status}}\nProduk yang menunggu:\n{{fulfillment_items_summary}}\nRingkasan pengiriman: {{delivery_summary}}"},
+			"exception_alert":            {title: "Peringatan Kesalahan Sistem", body: "Jenis: {{alert_type}}\nTingkat: {{alert_level}}\nNilai saat ini: {{alert_value}}\nAmbang batas: {{alert_threshold}}\nDetail: {{message}}\n{{affected_items_summary}}"},
+		},
+	}
+}
+
+// defaultNotificationSceneTemplate 按受支持语言构造一个场景的默认模板。
+func defaultNotificationSceneTemplate(scene string) NotificationSceneTemplate {
+	copies := notificationDefaultCopy()
+	out := NotificationSceneTemplate{}
+	for _, locale := range constants.SupportedLocales {
+		c, ok := copies[locale][scene]
+		if !ok {
+			// 新增语言但没补默认文案时回落简体，至少不会发出空通知。
+			c = copies[constants.LocaleZhCN][scene]
+		}
+		out[locale] = NotificationLocalizedTemplate{Title: c.title, Body: c.body}
+	}
+	return out
+}
+
+// isSupportedNotificationLocale 判断是否为受支持语言。
+func isSupportedNotificationLocale(locale string) bool {
+	for _, l := range constants.SupportedLocales {
+		if l == locale {
+			return true
+		}
+	}
+	return false
 }
 
 // NotificationCenterDefaultSetting 默认通知中心配置
@@ -206,62 +263,10 @@ func NotificationCenterDefaultSetting() NotificationCenterSetting {
 			ExceptionAlert:           true,
 		},
 		Templates: NotificationTemplatesSetting{
-			WalletRechargeSuccess: NotificationSceneTemplate{
-				ZHCN: NotificationLocalizedTemplate{
-					Title: "用户充值成功通知",
-					Body:  "用户：{{customer_label}}\n邮箱：{{customer_email}}\n充值单号：{{recharge_no}}\n充值金额：{{amount}} {{currency}}\n支付渠道：{{payment_channel}}",
-				},
-				ZHTW: NotificationLocalizedTemplate{
-					Title: "用戶儲值成功通知",
-					Body:  "用戶：{{customer_label}}\n郵箱：{{customer_email}}\n儲值單號：{{recharge_no}}\n儲值金額：{{amount}} {{currency}}\n支付渠道：{{payment_channel}}",
-				},
-				ENUS: NotificationLocalizedTemplate{
-					Title: "Wallet Recharge Succeeded",
-					Body:  "Customer: {{customer_label}}\nEmail: {{customer_email}}\nRecharge No: {{recharge_no}}\nAmount: {{amount}} {{currency}}\nChannel: {{payment_channel}}",
-				},
-			},
-			OrderPaidSuccess: NotificationSceneTemplate{
-				ZHCN: NotificationLocalizedTemplate{
-					Title: "订单支付成功通知",
-					Body:  "购买人：{{customer_label}}\n邮箱：{{customer_email}}\n订单号：{{order_no}}\n订单金额：{{amount}} {{currency}}\n支付渠道：{{payment_channel}}\n商品明细：\n{{items_summary}}\n交付摘要：{{delivery_summary}}",
-				},
-				ZHTW: NotificationLocalizedTemplate{
-					Title: "訂單支付成功通知",
-					Body:  "購買人：{{customer_label}}\n郵箱：{{customer_email}}\n訂單號：{{order_no}}\n訂單金額：{{amount}} {{currency}}\n支付渠道：{{payment_channel}}\n商品明細：\n{{items_summary}}\n交付摘要：{{delivery_summary}}",
-				},
-				ENUS: NotificationLocalizedTemplate{
-					Title: "Order Payment Succeeded",
-					Body:  "Customer: {{customer_label}}\nEmail: {{customer_email}}\nOrder No: {{order_no}}\nAmount: {{amount}} {{currency}}\nChannel: {{payment_channel}}\nItems:\n{{items_summary}}\nDelivery Summary: {{delivery_summary}}",
-				},
-			},
-			ManualFulfillmentPending: NotificationSceneTemplate{
-				ZHCN: NotificationLocalizedTemplate{
-					Title: "待人工交付订单提醒",
-					Body:  "购买人：{{customer_label}}\n邮箱：{{customer_email}}\n订单号：{{order_no}}\n订单状态：{{order_status}}\n待处理商品：\n{{fulfillment_items_summary}}\n交付摘要：{{delivery_summary}}",
-				},
-				ZHTW: NotificationLocalizedTemplate{
-					Title: "待人工交付訂單提醒",
-					Body:  "購買人：{{customer_label}}\n郵箱：{{customer_email}}\n訂單號：{{order_no}}\n訂單狀態：{{order_status}}\n待處理商品：\n{{fulfillment_items_summary}}\n交付摘要：{{delivery_summary}}",
-				},
-				ENUS: NotificationLocalizedTemplate{
-					Title: "Manual Fulfillment Required",
-					Body:  "Customer: {{customer_label}}\nEmail: {{customer_email}}\nOrder No: {{order_no}}\nOrder Status: {{order_status}}\nPending Items:\n{{fulfillment_items_summary}}\nDelivery Summary: {{delivery_summary}}",
-				},
-			},
-			ExceptionAlert: NotificationSceneTemplate{
-				ZHCN: NotificationLocalizedTemplate{
-					Title: "系统异常告警",
-					Body:  "告警类型：{{alert_type}}\n告警级别：{{alert_level}}\n当前值：{{alert_value}}\n阈值：{{alert_threshold}}\n详情：{{message}}\n{{affected_items_summary}}",
-				},
-				ZHTW: NotificationLocalizedTemplate{
-					Title: "系統異常告警",
-					Body:  "告警類型：{{alert_type}}\n告警級別：{{alert_level}}\n當前值：{{alert_value}}\n閾值：{{alert_threshold}}\n詳情：{{message}}\n{{affected_items_summary}}",
-				},
-				ENUS: NotificationLocalizedTemplate{
-					Title: "System Exception Alert",
-					Body:  "Type: {{alert_type}}\nLevel: {{alert_level}}\nCurrent: {{alert_value}}\nThreshold: {{alert_threshold}}\nDetails: {{message}}\n{{affected_items_summary}}",
-				},
-			},
+			WalletRechargeSuccess:    defaultNotificationSceneTemplate("wallet_recharge_success"),
+			OrderPaidSuccess:         defaultNotificationSceneTemplate("order_paid_success"),
+			ManualFulfillmentPending: defaultNotificationSceneTemplate("manual_fulfillment_pending"),
+			ExceptionAlert:           defaultNotificationSceneTemplate("exception_alert"),
 		},
 		DedupeTTLSeconds:                 300,
 		InventoryAlertIntervalSeconds:    notificationInventoryAlertIntervalDefaultSeconds,
@@ -485,17 +490,18 @@ func ApplyNotificationCenterSettingPatch(current NotificationCenterSetting, patc
 		}
 	}
 	if patch.Templates != nil {
-		if patch.Templates.WalletRechargeSuccess != nil {
-			applyNotificationSceneTemplatePatch(&next.Templates.WalletRechargeSuccess, patch.Templates.WalletRechargeSuccess)
-		}
-		if patch.Templates.OrderPaidSuccess != nil {
-			applyNotificationSceneTemplatePatch(&next.Templates.OrderPaidSuccess, patch.Templates.OrderPaidSuccess)
-		}
-		if patch.Templates.ManualFulfillmentPending != nil {
-			applyNotificationSceneTemplatePatch(&next.Templates.ManualFulfillmentPending, patch.Templates.ManualFulfillmentPending)
-		}
-		if patch.Templates.ExceptionAlert != nil {
-			applyNotificationSceneTemplatePatch(&next.Templates.ExceptionAlert, patch.Templates.ExceptionAlert)
+		for _, p := range []struct {
+			target *NotificationSceneTemplate
+			patch  NotificationSceneTemplatePatch
+		}{
+			{&next.Templates.WalletRechargeSuccess, patch.Templates.WalletRechargeSuccess},
+			{&next.Templates.OrderPaidSuccess, patch.Templates.OrderPaidSuccess},
+			{&next.Templates.ManualFulfillmentPending, patch.Templates.ManualFulfillmentPending},
+			{&next.Templates.ExceptionAlert, patch.Templates.ExceptionAlert},
+		} {
+			if err := applyNotificationSceneTemplatePatch(p.target, p.patch); err != nil {
+				return NotificationCenterSetting{}, err
+			}
 		}
 	}
 
@@ -538,17 +544,13 @@ func (s NotificationTemplatesSetting) TemplateByEvent(eventType string) Notifica
 	}
 }
 
-// ResolveLocaleTemplate 按语言选择模板
+// ResolveLocaleTemplate 按语言选择模板，缺失时回落简体。
 func (s NotificationSceneTemplate) ResolveLocaleTemplate(locale string) NotificationLocalizedTemplate {
 	normalized := NormalizeNotificationLocale(locale)
-	switch normalized {
-	case constants.LocaleZhTW:
-		return s.ZHTW
-	case constants.LocaleEnUS:
-		return s.ENUS
-	default:
-		return s.ZHCN
+	if t, ok := s[normalized]; ok && strings.TrimSpace(t.Body) != "" {
+		return t
 	}
+	return s[constants.LocaleZhCN]
 }
 
 func DecodeNotificationCenterSetting(raw jsonmap.JSON, fallback NotificationCenterSetting) NotificationCenterSetting {
@@ -613,15 +615,14 @@ func DecodeNotificationCenterSetting(raw jsonmap.JSON, fallback NotificationCent
 }
 
 func notificationSceneTemplateFromMap(raw map[string]interface{}, fallback NotificationSceneTemplate) NotificationSceneTemplate {
-	next := fallback
-	if zhCNMap := settingsvalue.ToStringAnyMap(raw[constants.LocaleZhCN]); zhCNMap != nil {
-		next.ZHCN = notificationLocalizedTemplateFromMap(zhCNMap, next.ZHCN)
+	next := NotificationSceneTemplate{}
+	for locale, t := range fallback {
+		next[locale] = t
 	}
-	if zhTWMap := settingsvalue.ToStringAnyMap(raw[constants.LocaleZhTW]); zhTWMap != nil {
-		next.ZHTW = notificationLocalizedTemplateFromMap(zhTWMap, next.ZHTW)
-	}
-	if enUSMap := settingsvalue.ToStringAnyMap(raw[constants.LocaleEnUS]); enUSMap != nil {
-		next.ENUS = notificationLocalizedTemplateFromMap(enUSMap, next.ENUS)
+	for _, locale := range constants.SupportedLocales {
+		if m := settingsvalue.ToStringAnyMap(raw[locale]); m != nil {
+			next[locale] = notificationLocalizedTemplateFromMap(m, next[locale])
+		}
 	}
 	return next
 }
@@ -634,20 +635,14 @@ func notificationLocalizedTemplateFromMap(raw map[string]interface{}, fallback N
 }
 
 func notificationSceneTemplateToMap(template NotificationSceneTemplate) map[string]interface{} {
-	return map[string]interface{}{
-		constants.LocaleZhCN: map[string]interface{}{
-			"title": strings.TrimSpace(template.ZHCN.Title),
-			"body":  strings.TrimSpace(template.ZHCN.Body),
-		},
-		constants.LocaleZhTW: map[string]interface{}{
-			"title": strings.TrimSpace(template.ZHTW.Title),
-			"body":  strings.TrimSpace(template.ZHTW.Body),
-		},
-		constants.LocaleEnUS: map[string]interface{}{
-			"title": strings.TrimSpace(template.ENUS.Title),
-			"body":  strings.TrimSpace(template.ENUS.Body),
-		},
+	out := map[string]interface{}{}
+	for locale, t := range template {
+		out[locale] = map[string]interface{}{
+			"title": strings.TrimSpace(t.Title),
+			"body":  strings.TrimSpace(t.Body),
+		}
 	}
+	return out
 }
 
 func normalizeNotificationTemplates(templates NotificationTemplatesSetting) NotificationTemplatesSetting {
@@ -659,10 +654,11 @@ func normalizeNotificationTemplates(templates NotificationTemplatesSetting) Noti
 }
 
 func normalizeNotificationSceneTemplate(template NotificationSceneTemplate) NotificationSceneTemplate {
-	template.ZHCN = normalizeNotificationLocalizedTemplate(template.ZHCN)
-	template.ZHTW = normalizeNotificationLocalizedTemplate(template.ZHTW)
-	template.ENUS = normalizeNotificationLocalizedTemplate(template.ENUS)
-	return template
+	out := NotificationSceneTemplate{}
+	for _, locale := range constants.SupportedLocales {
+		out[locale] = normalizeNotificationLocalizedTemplate(template[locale])
+	}
+	return out
 }
 
 func normalizeNotificationLocalizedTemplate(template NotificationLocalizedTemplate) NotificationLocalizedTemplate {
@@ -779,23 +775,26 @@ func normalizeNotificationIgnoredProductIDs(items []uint) []uint {
 	return result
 }
 
-func applyNotificationSceneTemplatePatch(target *NotificationSceneTemplate, patch *NotificationSceneTemplatePatch) {
-	if target == nil || patch == nil {
-		return
+func applyNotificationSceneTemplatePatch(target *NotificationSceneTemplate, patch NotificationSceneTemplatePatch) error {
+	if target == nil || len(patch) == 0 {
+		return nil
 	}
-	applyNotificationLocalizedTemplatePatch(&target.ZHCN, patch.ZHCN)
-	applyNotificationLocalizedTemplatePatch(&target.ZHTW, patch.ZHTW)
-	applyNotificationLocalizedTemplatePatch(&target.ENUS, patch.ENUS)
-}
-
-func applyNotificationLocalizedTemplatePatch(target *NotificationLocalizedTemplate, patch *NotificationLocalizedTemplatePatch) {
-	if target == nil || patch == nil {
-		return
+	if *target == nil {
+		*target = NotificationSceneTemplate{}
 	}
-	if patch.Title != nil {
-		target.Title = strings.TrimSpace(*patch.Title)
+	for locale, p := range patch {
+		// 未知语言直接拒绝，避免垃圾键写进设置表。
+		if !isSupportedNotificationLocale(locale) {
+			return fmt.Errorf("%w: 不支持的语言 %s", ErrNotificationConfigInvalid, locale)
+		}
+		t := (*target)[locale]
+		if p.Title != nil {
+			t.Title = strings.TrimSpace(*p.Title)
+		}
+		if p.Body != nil {
+			t.Body = strings.TrimSpace(*p.Body)
+		}
+		(*target)[locale] = t
 	}
-	if patch.Body != nil {
-		target.Body = strings.TrimSpace(*patch.Body)
-	}
+	return nil
 }

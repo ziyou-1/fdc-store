@@ -106,13 +106,13 @@ func setupLogService(t *testing.T) (*Service, *LogService) {
 		},
 		Templates: settingsmessaging.NotificationTemplatesSetting{
 			OrderPaidSuccess: settingsmessaging.NotificationSceneTemplate{
-				ENUS: settingsmessaging.NotificationLocalizedTemplate{
+				constants.LocaleEnUS: {
 					Title: "Order {{order_no}}",
 					Body:  "Customer {{customer_email}}",
 				},
 			},
 			ExceptionAlert: settingsmessaging.NotificationSceneTemplate{
-				ENUS: settingsmessaging.NotificationLocalizedTemplate{
+				constants.LocaleEnUS: {
 					Title: "Alert {{message}}",
 					Body:  "{{message}}",
 				},

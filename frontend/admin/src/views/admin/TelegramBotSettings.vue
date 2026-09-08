@@ -76,6 +76,7 @@ onMounted(() => {
                 <SelectItem value="zh-CN">简体中文</SelectItem>
                 <SelectItem value="zh-TW">繁體中文</SelectItem>
                 <SelectItem value="en-US">English</SelectItem>
+                <SelectItem value="id-ID">Bahasa Indonesia</SelectItem>
               </SelectContent>
             </Select>
           </div>

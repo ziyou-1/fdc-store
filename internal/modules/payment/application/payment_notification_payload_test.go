@@ -361,17 +361,17 @@ func TestBuildManualFulfillmentNotificationPayloadUsesGuestEmailAndPendingItems(
 func TestNotificationCenterDefaultSettingIncludesRichOrderVariables(t *testing.T) {
 	setting := settingsmessaging.NotificationCenterDefaultSetting()
 
-	orderBody := setting.Templates.OrderPaidSuccess.ZHCN.Body
+	orderBody := setting.Templates.OrderPaidSuccess[constants.LocaleZhCN].Body
 	if !strings.Contains(orderBody, "{{customer_email}}") || !strings.Contains(orderBody, "{{items_summary}}") {
 		t.Fatalf("order paid template should include rich variables, got: %s", orderBody)
 	}
 
-	manualBody := setting.Templates.ManualFulfillmentPending.ZHCN.Body
+	manualBody := setting.Templates.ManualFulfillmentPending[constants.LocaleZhCN].Body
 	if !strings.Contains(manualBody, "{{fulfillment_items_summary}}") || !strings.Contains(manualBody, "{{delivery_summary}}") {
 		t.Fatalf("manual fulfillment template should include fulfillment summary variables, got: %s", manualBody)
 	}
 
-	exceptionBody := setting.Templates.ExceptionAlert.ZHCN.Body
+	exceptionBody := setting.Templates.ExceptionAlert[constants.LocaleZhCN].Body
 	if !strings.Contains(exceptionBody, "{{affected_items_summary}}") {
 		t.Fatalf("exception alert template should include affected_items_summary, got: %s", exceptionBody)
 	}

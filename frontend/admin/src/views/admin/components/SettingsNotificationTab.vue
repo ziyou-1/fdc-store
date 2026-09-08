@@ -331,6 +331,7 @@ defineExpose({ save, submitting })
                 <SelectItem value="zh-CN">{{ t('admin.common.lang.zhCN') }}</SelectItem>
                 <SelectItem value="zh-TW">{{ t('admin.common.lang.zhTW') }}</SelectItem>
                 <SelectItem value="en-US">{{ t('admin.common.lang.enUS') }}</SelectItem>
+                <SelectItem value="id-ID">{{ t('admin.common.lang.idID') }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
