@@ -29,6 +29,14 @@ const form = reactive<{ templates: Record<string, Record<string, LocalizedTempla
 
 const blank = (): LocalizedTemplate => ({ subject: '', body: '' })
 
+// API 客户端在业务码非 0 时已经弹过 toast 并给错误打了 __notified 标记，
+// 这里必须跳过，否则同一个错误会连弹两次。
+const notifyErrorIfNeeded = (err: unknown, fallback: string) => {
+  const known = err as Error & { __notified?: boolean }
+  if (known?.__notified) return
+  notifyError(known?.message || fallback)
+}
+
 // 取当前场景+语言的模板；后端保证有值，这里兜底避免首次渲染时报 undefined
 const cell = (scene: string, locale: string): LocalizedTemplate => {
   let sceneForm = form.templates[scene]
@@ -69,7 +77,7 @@ const load = async () => {
     const res = await adminAPI.getVerifyEmailTemplateSettings()
     applyResponse((res.data?.data || {}) as Record<string, unknown>)
   } catch (err) {
-    notifyError(t('admin.settings.alerts.fetchFailed'))
+    notifyErrorIfNeeded(err, t('admin.settings.alerts.fetchFailed'))
   } finally {
     loading.value = false
   }
@@ -91,7 +99,7 @@ const save = async () => {
     applyResponse((res.data?.data || {}) as Record<string, unknown>)
     notifySuccess(t('admin.settings.alerts.saveSuccess'))
   } catch (err) {
-    notifyError(t('admin.settings.verifyEmailTemplate.saveFailed'))
+    notifyErrorIfNeeded(err, t('admin.settings.verifyEmailTemplate.saveFailed'))
   } finally {
     submitting.value = false
   }
@@ -105,7 +113,7 @@ const resetToDefault = async () => {
     applyResponse((res.data?.data || {}) as Record<string, unknown>)
     notifySuccess(t('admin.settings.verifyEmailTemplate.resetSuccess'))
   } catch (err) {
-    notifyError(t('admin.settings.alerts.saveFailed'))
+    notifyErrorIfNeeded(err, t('admin.settings.alerts.saveFailed'))
   } finally {
     resetting.value = false
   }

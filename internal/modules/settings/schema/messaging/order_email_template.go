@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/dujiao-next/internal/constants"
-	settingsvalue "github.com/dujiao-next/internal/modules/settings/schema/value"
 	"github.com/dujiao-next/internal/shared/jsonmap"
 )
 
@@ -17,28 +16,19 @@ type OrderEmailLocalizedTemplate struct {
 	Body    string `json:"body"`
 }
 
-// OrderEmailSceneTemplate 订单邮件场景模板（多语言）
-type OrderEmailSceneTemplate struct {
-	ZHCN OrderEmailLocalizedTemplate `json:"zh-CN"`
-	ZHTW OrderEmailLocalizedTemplate `json:"zh-TW"`
-	ENUS OrderEmailLocalizedTemplate `json:"en-US"`
-}
+// OrderEmailSceneTemplate 订单邮件场景模板，按 locale 索引。
+//
+// 这里用 map 而不是固定的 ZHCN/ZHTW/ENUS 三个字段：固定字段意味着每加一门语言
+// 都要改结构体、改 Resolve、改前端，漏掉任何一处都不会编译报错——加印尼语时就
+// 正好漏了，印尼买家收到的订单邮件一直是中文。改成 map 后语言集合只由
+// constants.SupportedLocales 决定。
+type OrderEmailSceneTemplate map[string]OrderEmailLocalizedTemplate
 
-// OrderEmailGuestTip 游客提示（多语言）
-type OrderEmailGuestTip struct {
-	ZHCN string `json:"zh-CN"`
-	ZHTW string `json:"zh-TW"`
-	ENUS string `json:"en-US"`
-}
+// OrderEmailLocalizedText 按 locale 索引的纯文本（提示语一类）。
+type OrderEmailLocalizedText map[string]string
 
-// OrderEmailFulfillmentAttachmentTip 交付内容附件提示（多语言）
-type OrderEmailFulfillmentAttachmentTip struct {
-	ZHCN string `json:"zh-CN"`
-	ZHTW string `json:"zh-TW"`
-	ENUS string `json:"en-US"`
-}
-
-// OrderEmailTemplatesSetting 所有订单邮件场景模板集合
+// OrderEmailTemplatesSetting 所有订单邮件场景模板集合。
+// 场景维度保持具名字段：它对应订单状态，是固定的领域概念，不会随语言增长。
 type OrderEmailTemplatesSetting struct {
 	Default              OrderEmailSceneTemplate `json:"default"`
 	Paid                 OrderEmailSceneTemplate `json:"paid"`
@@ -50,9 +40,9 @@ type OrderEmailTemplatesSetting struct {
 
 // OrderEmailTemplateSetting 订单邮件模板配置
 type OrderEmailTemplateSetting struct {
-	Templates                OrderEmailTemplatesSetting         `json:"templates"`
-	GuestTip                 OrderEmailGuestTip                 `json:"guest_tip"`
-	FulfillmentAttachmentTip OrderEmailFulfillmentAttachmentTip `json:"fulfillment_attachment_tip"`
+	Templates                OrderEmailTemplatesSetting `json:"templates"`
+	GuestTip                 OrderEmailLocalizedText    `json:"guest_tip"`
+	FulfillmentAttachmentTip OrderEmailLocalizedText    `json:"fulfillment_attachment_tip"`
 }
 
 // --- Patch 结构 ---
@@ -63,199 +53,241 @@ type OrderEmailLocalizedTemplatePatch struct {
 	Body    *string `json:"body"`
 }
 
-// OrderEmailSceneTemplatePatch 场景模板补丁
-type OrderEmailSceneTemplatePatch struct {
-	ZHCN *OrderEmailLocalizedTemplatePatch `json:"zh-CN"`
-	ZHTW *OrderEmailLocalizedTemplatePatch `json:"zh-TW"`
-	ENUS *OrderEmailLocalizedTemplatePatch `json:"en-US"`
-}
+// OrderEmailSceneTemplatePatch 场景模板补丁，按 locale 索引。
+type OrderEmailSceneTemplatePatch map[string]OrderEmailLocalizedTemplatePatch
 
-// OrderEmailGuestTipPatch 游客提示补丁
-type OrderEmailGuestTipPatch struct {
-	ZHCN *string `json:"zh-CN"`
-	ZHTW *string `json:"zh-TW"`
-	ENUS *string `json:"en-US"`
-}
-
-// OrderEmailFulfillmentAttachmentTipPatch 交付内容附件提示补丁
-type OrderEmailFulfillmentAttachmentTipPatch struct {
-	ZHCN *string `json:"zh-CN"`
-	ZHTW *string `json:"zh-TW"`
-	ENUS *string `json:"en-US"`
-}
+// OrderEmailLocalizedTextPatch 纯文本补丁，按 locale 索引。
+type OrderEmailLocalizedTextPatch map[string]*string
 
 // OrderEmailTemplatesPatch 模板集合补丁
 type OrderEmailTemplatesPatch struct {
-	Default              *OrderEmailSceneTemplatePatch `json:"default"`
-	Paid                 *OrderEmailSceneTemplatePatch `json:"paid"`
-	Delivered            *OrderEmailSceneTemplatePatch `json:"delivered"`
-	DeliveredWithContent *OrderEmailSceneTemplatePatch `json:"delivered_with_content"`
-	Refunded             *OrderEmailSceneTemplatePatch `json:"refunded"`
-	PartiallyRefunded    *OrderEmailSceneTemplatePatch `json:"partially_refunded"`
+	Default              OrderEmailSceneTemplatePatch `json:"default"`
+	Paid                 OrderEmailSceneTemplatePatch `json:"paid"`
+	Delivered            OrderEmailSceneTemplatePatch `json:"delivered"`
+	DeliveredWithContent OrderEmailSceneTemplatePatch `json:"delivered_with_content"`
+	Refunded             OrderEmailSceneTemplatePatch `json:"refunded"`
+	PartiallyRefunded    OrderEmailSceneTemplatePatch `json:"partially_refunded"`
 }
 
 // OrderEmailTemplateSettingPatch 订单邮件模板配置补丁
 type OrderEmailTemplateSettingPatch struct {
-	Templates                *OrderEmailTemplatesPatch                `json:"templates"`
-	GuestTip                 *OrderEmailGuestTipPatch                 `json:"guest_tip"`
-	FulfillmentAttachmentTip *OrderEmailFulfillmentAttachmentTipPatch `json:"fulfillment_attachment_tip"`
+	Templates                *OrderEmailTemplatesPatch    `json:"templates"`
+	GuestTip                 OrderEmailLocalizedTextPatch `json:"guest_tip"`
+	FulfillmentAttachmentTip OrderEmailLocalizedTextPatch `json:"fulfillment_attachment_tip"`
+}
+
+// OrderEmailScenes 返回全部场景键，顺序即后台展示顺序。
+func OrderEmailScenes() []string {
+	return []string{"default", "paid", "delivered", "delivered_with_content", "refunded", "partially_refunded"}
+}
+
+func isSupportedOrderEmailLocale(locale string) bool {
+	for _, l := range constants.SupportedLocales {
+		if l == locale {
+			return true
+		}
+	}
+	return false
 }
 
 // --- 默认值 ---
 
-// OrderEmailTemplateDefaultSetting 返回默认订单邮件模板（从原 i18n 硬编码值迁移）
+// orderEmailCopy 一门语言的全部默认文案。
+type orderEmailCopy struct {
+	subject string
+	bodies  map[string]string // scene -> body
+	guest   string
+	attach  string
+}
+
+func orderEmailDefaultCopy() map[string]orderEmailCopy {
+	return map[string]orderEmailCopy{
+		constants.LocaleZhCN: {
+			subject: "订单状态更新：{{status}}",
+			bodies: map[string]string{
+				"default":                "订单号：{{order_no}}\n状态：{{status}}\n金额：{{amount}} {{currency}}\n\n感谢您的购买。\n\n{{site_name}} 的网址：{{site_url}}",
+				"paid":                   "订单号：{{order_no}}\n状态：{{status}}\n金额：{{amount}} {{currency}}\n\n我们已收到您的付款，将尽快完成交付。\n\n{{site_name}} 的网址：{{site_url}}",
+				"delivered":              "订单号：{{order_no}}\n状态：{{status}}\n金额：{{amount}} {{currency}}\n\n交付已完成，感谢您的购买。\n\n{{site_name}} 的网址：{{site_url}}",
+				"delivered_with_content": "订单号：{{order_no}}\n状态：{{status}}\n金额：{{amount}} {{currency}}\n\n交付内容：\n{{fulfillment_info}}\n\n使用说明：\n{{instructions}}\n\n感谢您的购买。\n\n{{site_name}} 的网址：{{site_url}}",
+				"refunded":               "订单号：{{order_no}}\n状态：{{status}}\n退款金额：{{refund_amount}} {{currency}}\n退款原因：{{refund_reason}}\n\n订单已退款，如有疑问请联系管理员。\n\n{{site_name}} 的网址：{{site_url}}",
+				"partially_refunded":     "订单号：{{order_no}}\n状态：{{status}}\n退款金额：{{refund_amount}} {{currency}}\n退款原因：{{refund_reason}}\n\n订单已部分退款，如有疑问请联系管理员。\n\n{{site_name}} 的网址：{{site_url}}",
+			},
+			guest:  "游客订单可使用下单邮箱与订单密码在网站查询订单详情。",
+			attach: "交付内容较多，已作为附件发送，请查看邮件附件获取完整交付内容。",
+		},
+		constants.LocaleZhTW: {
+			subject: "訂單狀態更新：{{status}}",
+			bodies: map[string]string{
+				"default":                "訂單號：{{order_no}}\n狀態：{{status}}\n金額：{{amount}} {{currency}}\n\n感謝您的購買。\n\n{{site_name}} 的網址：{{site_url}}",
+				"paid":                   "訂單號：{{order_no}}\n狀態：{{status}}\n金額：{{amount}} {{currency}}\n\n已收到付款，將盡快完成交付。\n\n{{site_name}} 的網址：{{site_url}}",
+				"delivered":              "訂單號：{{order_no}}\n狀態：{{status}}\n金額：{{amount}} {{currency}}\n\n交付已完成，感謝您的購買。\n\n{{site_name}} 的網址：{{site_url}}",
+				"delivered_with_content": "訂單號：{{order_no}}\n狀態：{{status}}\n金額：{{amount}} {{currency}}\n\n交付內容：\n{{fulfillment_info}}\n\n使用說明：\n{{instructions}}\n\n感謝您的購買。\n\n{{site_name}} 的網址：{{site_url}}",
+				"refunded":               "訂單號：{{order_no}}\n狀態：{{status}}\n退款金額：{{refund_amount}} {{currency}}\n退款原因：{{refund_reason}}\n\n訂單已退款，如有疑問請聯絡管理員。\n\n{{site_name}} 的網址：{{site_url}}",
+				"partially_refunded":     "訂單號：{{order_no}}\n狀態：{{status}}\n退款金額：{{refund_amount}} {{currency}}\n退款原因：{{refund_reason}}\n\n訂單已部分退款，如有疑問請聯絡管理員。\n\n{{site_name}} 的網址：{{site_url}}",
+			},
+			guest:  "遊客訂單可使用下單信箱與訂單密碼在網站查詢訂單詳情。",
+			attach: "交付內容較多，已作為附件發送，請查看郵件附件獲取完整交付內容。",
+		},
+		constants.LocaleEnUS: {
+			subject: "Order status updated: {{status}}",
+			bodies: map[string]string{
+				"default":                "Order No: {{order_no}}\nStatus: {{status}}\nAmount: {{amount}} {{currency}}\n\nThank you for your purchase.\n\n{{site_name}}'s Site URL: {{site_url}}",
+				"paid":                   "Order No: {{order_no}}\nStatus: {{status}}\nAmount: {{amount}} {{currency}}\n\nWe have received your payment and will deliver soon.\n\n{{site_name}}'s Site URL: {{site_url}}",
+				"delivered":              "Order No: {{order_no}}\nStatus: {{status}}\nAmount: {{amount}} {{currency}}\n\nDelivery completed. Thank you for your purchase.\n\n{{site_name}}'s Site URL: {{site_url}}",
+				"delivered_with_content": "Order No: {{order_no}}\nStatus: {{status}}\nAmount: {{amount}} {{currency}}\n\nDelivery content:\n{{fulfillment_info}}\n\nUsage instructions:\n{{instructions}}\n\nThank you for your purchase.\n\n{{site_name}}'s Site URL: {{site_url}}",
+				"refunded":               "Order No: {{order_no}}\nStatus: {{status}}\nRefund Amount: {{refund_amount}} {{currency}}\nReason for refund: {{refund_reason}}\n\nThe order has been refunded. Please contact admin if needed.\n\n{{site_name}}'s Site URL: {{site_url}}",
+				"partially_refunded":     "Order No: {{order_no}}\nStatus: {{status}}\nRefund Amount: {{refund_amount}} {{currency}}\nReason for refund: {{refund_reason}}\n\nThe order has been partially refunded. Please contact admin if needed.\n\n{{site_name}}'s Site URL: {{site_url}}",
+			},
+			guest:  "Guest orders can be queried on the site using the checkout email and order password.",
+			attach: "The delivery content is included as an attachment. Please check the email attachment for the full content.",
+		},
+		constants.LocaleIdID: {
+			subject: "Status pesanan diperbarui: {{status}}",
+			bodies: map[string]string{
+				"default":                "No. pesanan: {{order_no}}\nStatus: {{status}}\nJumlah: {{amount}} {{currency}}\n\nTerima kasih atas pembelian kamu.\n\nSitus {{site_name}}: {{site_url}}",
+				"paid":                   "No. pesanan: {{order_no}}\nStatus: {{status}}\nJumlah: {{amount}} {{currency}}\n\nPembayaran kamu sudah kami terima dan pesanan akan segera dikirim.\n\nSitus {{site_name}}: {{site_url}}",
+				"delivered":              "No. pesanan: {{order_no}}\nStatus: {{status}}\nJumlah: {{amount}} {{currency}}\n\nPesanan sudah dikirim. Terima kasih atas pembelian kamu.\n\nSitus {{site_name}}: {{site_url}}",
+				"delivered_with_content": "No. pesanan: {{order_no}}\nStatus: {{status}}\nJumlah: {{amount}} {{currency}}\n\nIsi pesanan:\n{{fulfillment_info}}\n\nCara pakai:\n{{instructions}}\n\nTerima kasih atas pembelian kamu.\n\nSitus {{site_name}}: {{site_url}}",
+				"refunded":               "No. pesanan: {{order_no}}\nStatus: {{status}}\nJumlah pengembalian: {{refund_amount}} {{currency}}\nAlasan: {{refund_reason}}\n\nDana pesanan sudah dikembalikan. Hubungi admin bila ada pertanyaan.\n\nSitus {{site_name}}: {{site_url}}",
+				"partially_refunded":     "No. pesanan: {{order_no}}\nStatus: {{status}}\nJumlah pengembalian: {{refund_amount}} {{currency}}\nAlasan: {{refund_reason}}\n\nDana pesanan dikembalikan sebagian. Hubungi admin bila ada pertanyaan.\n\nSitus {{site_name}}: {{site_url}}",
+			},
+			guest:  "Pesanan tanpa akun bisa dicek di situs memakai email pemesanan dan kata sandi pesanan.",
+			attach: "Isi pesanan cukup panjang sehingga dikirim sebagai lampiran. Silakan buka lampiran email untuk melihat isi lengkapnya.",
+		},
+	}
+}
+
+func defaultSceneTemplate(copies map[string]orderEmailCopy, scene string) OrderEmailSceneTemplate {
+	out := OrderEmailSceneTemplate{}
+	for _, locale := range constants.SupportedLocales {
+		c, ok := copies[locale]
+		if !ok {
+			// 新增语言但未补默认文案时回落简体，至少不会发出空邮件。
+			c = copies[constants.LocaleZhCN]
+		}
+		out[locale] = OrderEmailLocalizedTemplate{Subject: c.subject, Body: c.bodies[scene]}
+	}
+	return out
+}
+
+func defaultLocalizedText(copies map[string]orderEmailCopy, pick func(orderEmailCopy) string) OrderEmailLocalizedText {
+	out := OrderEmailLocalizedText{}
+	for _, locale := range constants.SupportedLocales {
+		c, ok := copies[locale]
+		if !ok {
+			c = copies[constants.LocaleZhCN]
+		}
+		out[locale] = pick(c)
+	}
+	return out
+}
+
+// DefaultOrderEmailTemplateSetting 返回默认订单邮件模板。
 func DefaultOrderEmailTemplateSetting() OrderEmailTemplateSetting {
+	copies := orderEmailDefaultCopy()
 	return OrderEmailTemplateSetting{
 		Templates: OrderEmailTemplatesSetting{
-			Default: OrderEmailSceneTemplate{
-				ZHCN: OrderEmailLocalizedTemplate{
-					Subject: "订单状态更新：{{status}}",
-					Body:    "订单号：{{order_no}}\n状态：{{status}}\n金额：{{amount}} {{currency}}\n\n感谢您的购买。\n\n{{site_name}} 的网址：{{site_url}}",
-				},
-				ZHTW: OrderEmailLocalizedTemplate{
-					Subject: "訂單狀態更新：{{status}}",
-					Body:    "訂單號：{{order_no}}\n狀態：{{status}}\n金額：{{amount}} {{currency}}\n\n感謝您的購買。\n\n{{site_name}} 的網址：{{site_url}}",
-				},
-				ENUS: OrderEmailLocalizedTemplate{
-					Subject: "Order status updated: {{status}}",
-					Body:    "Order No: {{order_no}}\nStatus: {{status}}\nAmount: {{amount}} {{currency}}\n\nThank you for your purchase.\n\n{{site_name}}'s Site URL: {{site_url}}",
-				},
-			},
-			Paid: OrderEmailSceneTemplate{
-				ZHCN: OrderEmailLocalizedTemplate{
-					Subject: "订单状态更新：{{status}}",
-					Body:    "订单号：{{order_no}}\n状态：{{status}}\n金额：{{amount}} {{currency}}\n\n我们已收到您的付款，将尽快完成交付。\n\n{{site_name}} 的网址：{{site_url}}",
-				},
-				ZHTW: OrderEmailLocalizedTemplate{
-					Subject: "訂單狀態更新：{{status}}",
-					Body:    "訂單號：{{order_no}}\n狀態：{{status}}\n金額：{{amount}} {{currency}}\n\n已收到付款，將盡快完成交付。\n\n{{site_name}} 的網址：{{site_url}}",
-				},
-				ENUS: OrderEmailLocalizedTemplate{
-					Subject: "Order status updated: {{status}}",
-					Body:    "Order No: {{order_no}}\nStatus: {{status}}\nAmount: {{amount}} {{currency}}\n\nWe have received your payment and will deliver soon.\n\n{{site_name}}'s Site URL: {{site_url}}",
-				},
-			},
-			Delivered: OrderEmailSceneTemplate{
-				ZHCN: OrderEmailLocalizedTemplate{
-					Subject: "订单状态更新：{{status}}",
-					Body:    "订单号：{{order_no}}\n状态：{{status}}\n金额：{{amount}} {{currency}}\n\n交付已完成，感谢您的购买。\n\n{{site_name}} 的网址：{{site_url}}",
-				},
-				ZHTW: OrderEmailLocalizedTemplate{
-					Subject: "訂單狀態更新：{{status}}",
-					Body:    "訂單號：{{order_no}}\n狀態：{{status}}\n金額：{{amount}} {{currency}}\n\n交付已完成，感謝您的購買。\n\n{{site_name}} 的網址：{{site_url}}",
-				},
-				ENUS: OrderEmailLocalizedTemplate{
-					Subject: "Order status updated: {{status}}",
-					Body:    "Order No: {{order_no}}\nStatus: {{status}}\nAmount: {{amount}} {{currency}}\n\nDelivery completed. Thank you for your purchase.\n\n{{site_name}}'s Site URL: {{site_url}}",
-				},
-			},
-			DeliveredWithContent: OrderEmailSceneTemplate{
-				ZHCN: OrderEmailLocalizedTemplate{
-					Subject: "订单状态更新：{{status}}",
-					Body:    "订单号：{{order_no}}\n状态：{{status}}\n金额：{{amount}} {{currency}}\n\n交付内容：\n{{fulfillment_info}}\n\n使用说明：\n{{instructions}}\n\n感谢您的购买。\n\n{{site_name}} 的网址：{{site_url}}",
-				},
-				ZHTW: OrderEmailLocalizedTemplate{
-					Subject: "訂單狀態更新：{{status}}",
-					Body:    "訂單號：{{order_no}}\n狀態：{{status}}\n金額：{{amount}} {{currency}}\n\n交付內容：\n{{fulfillment_info}}\n\n使用說明：\n{{instructions}}\n\n感謝您的購買。\n\n{{site_name}} 的網址：{{site_url}}",
-				},
-				ENUS: OrderEmailLocalizedTemplate{
-					Subject: "Order status updated: {{status}}",
-					Body:    "Order No: {{order_no}}\nStatus: {{status}}\nAmount: {{amount}} {{currency}}\n\nDelivery content:\n{{fulfillment_info}}\n\nUsage instructions:\n{{instructions}}\n\nThank you for your purchase.\n\n{{site_name}}'s Site URL: {{site_url}}",
-				},
-			},
-			Refunded: OrderEmailSceneTemplate{
-				ZHCN: OrderEmailLocalizedTemplate{
-					Subject: "订单状态更新：{{status}}",
-					Body:    "订单号：{{order_no}}\n状态：{{status}}\n退款金额：{{refund_amount}} {{currency}}\n退款原因：{{refund_reason}}\n\n订单已退款，如有疑问请联系管理员。\n\n{{site_name}} 的网址：{{site_url}}",
-				},
-				ZHTW: OrderEmailLocalizedTemplate{
-					Subject: "訂單狀態更新：{{status}}",
-					Body:    "訂單號：{{order_no}}\n狀態：{{status}}\n退款金額：{{refund_amount}} {{currency}}\n退款原因：{{refund_reason}}\n\n訂單已退款，如有疑問請聯絡管理員。\n\n{{site_name}} 的網址：{{site_url}}",
-				},
-				ENUS: OrderEmailLocalizedTemplate{
-					Subject: "Order status updated: {{status}}",
-					Body:    "Order No: {{order_no}}\nStatus: {{status}}\nRefund Amount: {{refund_amount}} {{currency}}\nReason for refund: {{refund_reason}}\n\nThe order has been refunded. Please contact admin if needed.\n\n{{site_name}}'s Site URL: {{site_url}}",
-				},
-			},
-			PartiallyRefunded: OrderEmailSceneTemplate{
-				ZHCN: OrderEmailLocalizedTemplate{
-					Subject: "订单状态更新：{{status}}",
-					Body:    "订单号：{{order_no}}\n状态：{{status}}\n退款金额：{{refund_amount}} {{currency}}\n退款原因：{{refund_reason}}\n\n订单已部分退款，如有疑问请联系管理员。\n\n{{site_name}} 的网址：{{site_url}}",
-				},
-				ZHTW: OrderEmailLocalizedTemplate{
-					Subject: "訂單狀態更新：{{status}}",
-					Body:    "訂單號：{{order_no}}\n狀態：{{status}}\n退款金額：{{refund_amount}} {{currency}}\n退款原因：{{refund_reason}}\n\n訂單已部分退款，如有疑問請聯絡管理員。\n\n{{site_name}} 的網址：{{site_url}}",
-				},
-				ENUS: OrderEmailLocalizedTemplate{
-					Subject: "Order status updated: {{status}}",
-					Body:    "Order No: {{order_no}}\nStatus: {{status}}\nRefund Amount: {{refund_amount}} {{currency}}\nReason for refund: {{refund_reason}}\n\nThe order has been partially refunded. Please contact admin if needed.\n\n{{site_name}}'s Site URL: {{site_url}}",
-				},
-			},
+			Default:              defaultSceneTemplate(copies, "default"),
+			Paid:                 defaultSceneTemplate(copies, "paid"),
+			Delivered:            defaultSceneTemplate(copies, "delivered"),
+			DeliveredWithContent: defaultSceneTemplate(copies, "delivered_with_content"),
+			Refunded:             defaultSceneTemplate(copies, "refunded"),
+			PartiallyRefunded:    defaultSceneTemplate(copies, "partially_refunded"),
 		},
-		GuestTip: OrderEmailGuestTip{
-			ZHCN: "游客订单可使用下单邮箱与订单密码在网站查询订单详情。",
-			ZHTW: "遊客訂單可使用下單信箱與訂單密碼在網站查詢訂單詳情。",
-			ENUS: "Guest orders can be queried on the site using the checkout email and order password.",
-		},
-		FulfillmentAttachmentTip: OrderEmailFulfillmentAttachmentTip{
-			ZHCN: "交付内容较多，已作为附件发送，请查看邮件附件获取完整交付内容。",
-			ZHTW: "交付內容較多，已作為附件發送，請查看郵件附件獲取完整交付內容。",
-			ENUS: "The delivery content is included as an attachment. Please check the email attachment for the full content.",
-		},
+		GuestTip:                 defaultLocalizedText(copies, func(c orderEmailCopy) string { return c.guest }),
+		FulfillmentAttachmentTip: defaultLocalizedText(copies, func(c orderEmailCopy) string { return c.attach }),
 	}
 }
 
 // --- Normalize / Validate ---
 
-// NormalizeOrderEmailTemplateSetting 归一化订单邮件模板配置
+func (s *OrderEmailTemplatesSetting) each(fn func(scene string, tmpl OrderEmailSceneTemplate) OrderEmailSceneTemplate) {
+	s.Default = fn("default", s.Default)
+	s.Paid = fn("paid", s.Paid)
+	s.Delivered = fn("delivered", s.Delivered)
+	s.DeliveredWithContent = fn("delivered_with_content", s.DeliveredWithContent)
+	s.Refunded = fn("refunded", s.Refunded)
+	s.PartiallyRefunded = fn("partially_refunded", s.PartiallyRefunded)
+}
+
+// NormalizeOrderEmailTemplateSetting 归一化：裁剪空白、补齐缺失语言为默认值、剔除未知语言。
 func NormalizeOrderEmailTemplateSetting(setting OrderEmailTemplateSetting) OrderEmailTemplateSetting {
-	setting.Templates.Default = normalizeOrderEmailSceneTemplate(setting.Templates.Default)
-	setting.Templates.Paid = normalizeOrderEmailSceneTemplate(setting.Templates.Paid)
-	setting.Templates.Delivered = normalizeOrderEmailSceneTemplate(setting.Templates.Delivered)
-	setting.Templates.DeliveredWithContent = normalizeOrderEmailSceneTemplate(setting.Templates.DeliveredWithContent)
-	setting.Templates.Refunded = normalizeOrderEmailSceneTemplate(setting.Templates.Refunded)
-	setting.Templates.PartiallyRefunded = normalizeOrderEmailSceneTemplate(setting.Templates.PartiallyRefunded)
-	setting.GuestTip.ZHCN = strings.TrimSpace(setting.GuestTip.ZHCN)
-	setting.GuestTip.ZHTW = strings.TrimSpace(setting.GuestTip.ZHTW)
-	setting.GuestTip.ENUS = strings.TrimSpace(setting.GuestTip.ENUS)
-	setting.FulfillmentAttachmentTip.ZHCN = strings.TrimSpace(setting.FulfillmentAttachmentTip.ZHCN)
-	setting.FulfillmentAttachmentTip.ZHTW = strings.TrimSpace(setting.FulfillmentAttachmentTip.ZHTW)
-	setting.FulfillmentAttachmentTip.ENUS = strings.TrimSpace(setting.FulfillmentAttachmentTip.ENUS)
+	def := DefaultOrderEmailTemplateSetting()
+	defTemplates := map[string]OrderEmailSceneTemplate{
+		"default": def.Templates.Default, "paid": def.Templates.Paid,
+		"delivered": def.Templates.Delivered, "delivered_with_content": def.Templates.DeliveredWithContent,
+		"refunded": def.Templates.Refunded, "partially_refunded": def.Templates.PartiallyRefunded,
+	}
+	setting.Templates.each(func(scene string, tmpl OrderEmailSceneTemplate) OrderEmailSceneTemplate {
+		return normalizeOrderEmailSceneTemplate(tmpl, defTemplates[scene])
+	})
+	setting.GuestTip = normalizeOrderEmailText(setting.GuestTip, def.GuestTip)
+	setting.FulfillmentAttachmentTip = normalizeOrderEmailText(setting.FulfillmentAttachmentTip, def.FulfillmentAttachmentTip)
 	return setting
 }
 
-func normalizeOrderEmailSceneTemplate(t OrderEmailSceneTemplate) OrderEmailSceneTemplate {
-	t.ZHCN.Subject = strings.TrimSpace(t.ZHCN.Subject)
-	t.ZHCN.Body = strings.TrimSpace(t.ZHCN.Body)
-	t.ZHTW.Subject = strings.TrimSpace(t.ZHTW.Subject)
-	t.ZHTW.Body = strings.TrimSpace(t.ZHTW.Body)
-	t.ENUS.Subject = strings.TrimSpace(t.ENUS.Subject)
-	t.ENUS.Body = strings.TrimSpace(t.ENUS.Body)
-	return t
+func normalizeOrderEmailSceneTemplate(t, fallback OrderEmailSceneTemplate) OrderEmailSceneTemplate {
+	out := OrderEmailSceneTemplate{}
+	for _, locale := range constants.SupportedLocales {
+		lt := t[locale]
+		lt.Subject = strings.TrimSpace(lt.Subject)
+		lt.Body = strings.TrimSpace(lt.Body)
+		// 任一字段留空即回落默认，避免发出没有标题或没有正文的邮件。
+		if lt.Subject == "" {
+			lt.Subject = fallback[locale].Subject
+		}
+		if lt.Body == "" {
+			lt.Body = fallback[locale].Body
+		}
+		out[locale] = lt
+	}
+	return out
 }
 
-// ValidateOrderEmailTemplateSetting 校验订单邮件模板配置
-func ValidateOrderEmailTemplateSetting(setting OrderEmailTemplateSetting) error {
-	scenes := []OrderEmailSceneTemplate{
-		setting.Templates.Default,
-		setting.Templates.Paid,
-		setting.Templates.Delivered,
-		setting.Templates.DeliveredWithContent,
-		setting.Templates.Refunded,
-		setting.Templates.PartiallyRefunded,
+func normalizeOrderEmailText(t, fallback OrderEmailLocalizedText) OrderEmailLocalizedText {
+	out := OrderEmailLocalizedText{}
+	for _, locale := range constants.SupportedLocales {
+		v := strings.TrimSpace(t[locale])
+		if v == "" {
+			v = fallback[locale]
+		}
+		out[locale] = v
 	}
-	for _, scene := range scenes {
-		locales := []OrderEmailLocalizedTemplate{scene.ZHCN, scene.ZHTW, scene.ENUS}
-		for _, lt := range locales {
-			if lt.Subject == "" || lt.Body == "" {
-				return ErrOrderEmailTemplateConfigInvalid
+	return out
+}
+
+// ValidateOrderEmailTemplateSetting 校验：每个场景每种语言的标题与正文都不得为空。
+func ValidateOrderEmailTemplateSetting(setting OrderEmailTemplateSetting) error {
+	var invalid error
+	setting.Templates.each(func(_ string, tmpl OrderEmailSceneTemplate) OrderEmailSceneTemplate {
+		for _, locale := range constants.SupportedLocales {
+			lt := tmpl[locale]
+			if strings.TrimSpace(lt.Subject) == "" || strings.TrimSpace(lt.Body) == "" {
+				invalid = ErrOrderEmailTemplateConfigInvalid
 			}
 		}
-	}
-	return nil
+		return tmpl
+	})
+	return invalid
 }
 
-// --- ToMap / Mask ---
+// --- Encode / Decode ---
+
+func orderEmailSceneTemplateToMap(t OrderEmailSceneTemplate) map[string]interface{} {
+	out := map[string]interface{}{}
+	for locale, lt := range t {
+		out[locale] = map[string]interface{}{"subject": lt.Subject, "body": lt.Body}
+	}
+	return out
+}
+
+func orderEmailTextToMap(t OrderEmailLocalizedText) map[string]interface{} {
+	out := map[string]interface{}{}
+	for locale, v := range t {
+		out[locale] = v
+	}
+	return out
+}
 
 // EncodeOrderEmailTemplateSetting 序列化为 settings 表结构。
 func EncodeOrderEmailTemplateSetting(setting OrderEmailTemplateSetting) jsonmap.JSON {
@@ -269,85 +301,153 @@ func EncodeOrderEmailTemplateSetting(setting OrderEmailTemplateSetting) jsonmap.
 			"refunded":               orderEmailSceneTemplateToMap(normalized.Templates.Refunded),
 			"partially_refunded":     orderEmailSceneTemplateToMap(normalized.Templates.PartiallyRefunded),
 		},
-		"guest_tip": map[string]interface{}{
-			constants.LocaleZhCN: normalized.GuestTip.ZHCN,
-			constants.LocaleZhTW: normalized.GuestTip.ZHTW,
-			constants.LocaleEnUS: normalized.GuestTip.ENUS,
-		},
-		"fulfillment_attachment_tip": map[string]interface{}{
-			constants.LocaleZhCN: normalized.FulfillmentAttachmentTip.ZHCN,
-			constants.LocaleZhTW: normalized.FulfillmentAttachmentTip.ZHTW,
-			constants.LocaleEnUS: normalized.FulfillmentAttachmentTip.ENUS,
-		},
-	}
-}
-
-func orderEmailSceneTemplateToMap(t OrderEmailSceneTemplate) map[string]interface{} {
-	return map[string]interface{}{
-		constants.LocaleZhCN: map[string]interface{}{
-			"subject": t.ZHCN.Subject,
-			"body":    t.ZHCN.Body,
-		},
-		constants.LocaleZhTW: map[string]interface{}{
-			"subject": t.ZHTW.Subject,
-			"body":    t.ZHTW.Body,
-		},
-		constants.LocaleEnUS: map[string]interface{}{
-			"subject": t.ENUS.Subject,
-			"body":    t.ENUS.Body,
-		},
+		"guest_tip":                  orderEmailTextToMap(normalized.GuestTip),
+		"fulfillment_attachment_tip": orderEmailTextToMap(normalized.FulfillmentAttachmentTip),
 	}
 }
 
 // MaskOrderEmailTemplateSettingForAdmin 返回管理端可用配置（无敏感字段）
 func MaskOrderEmailTemplateSettingForAdmin(setting OrderEmailTemplateSetting) jsonmap.JSON {
-	return EncodeOrderEmailTemplateSetting(setting)
+	out := EncodeOrderEmailTemplateSetting(setting)
+	// 附带语言清单，前端据此渲染语言页签，不必自己再写死一份。
+	out["locales"] = append([]string(nil), constants.SupportedLocales...)
+	out["scenes"] = OrderEmailScenes()
+	return out
+}
+
+func decodeOrderEmailSceneTemplate(raw interface{}, fallback OrderEmailSceneTemplate) OrderEmailSceneTemplate {
+	out := OrderEmailSceneTemplate{}
+	for locale, lt := range fallback {
+		out[locale] = lt
+	}
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return out
+	}
+	for locale, rawTmpl := range m {
+		if !isSupportedOrderEmailLocale(locale) {
+			continue
+		}
+		tm, ok := rawTmpl.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		lt := out[locale]
+		if s, ok := tm["subject"].(string); ok {
+			lt.Subject = s
+		}
+		if b, ok := tm["body"].(string); ok {
+			lt.Body = b
+		}
+		out[locale] = lt
+	}
+	return out
+}
+
+func decodeOrderEmailText(raw interface{}, fallback OrderEmailLocalizedText) OrderEmailLocalizedText {
+	out := OrderEmailLocalizedText{}
+	for locale, v := range fallback {
+		out[locale] = v
+	}
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return out
+	}
+	for locale, v := range m {
+		if !isSupportedOrderEmailLocale(locale) {
+			continue
+		}
+		if s, ok := v.(string); ok {
+			out[locale] = s
+		}
+	}
+	return out
+}
+
+func DecodeOrderEmailTemplateSetting(raw jsonmap.JSON, fallback OrderEmailTemplateSetting) OrderEmailTemplateSetting {
+	next := fallback
+	if templates, ok := raw["templates"].(map[string]interface{}); ok {
+		next.Templates.Default = decodeOrderEmailSceneTemplate(templates["default"], fallback.Templates.Default)
+		next.Templates.Paid = decodeOrderEmailSceneTemplate(templates["paid"], fallback.Templates.Paid)
+		next.Templates.Delivered = decodeOrderEmailSceneTemplate(templates["delivered"], fallback.Templates.Delivered)
+		next.Templates.DeliveredWithContent = decodeOrderEmailSceneTemplate(templates["delivered_with_content"], fallback.Templates.DeliveredWithContent)
+		next.Templates.Refunded = decodeOrderEmailSceneTemplate(templates["refunded"], fallback.Templates.Refunded)
+		next.Templates.PartiallyRefunded = decodeOrderEmailSceneTemplate(templates["partially_refunded"], fallback.Templates.PartiallyRefunded)
+	}
+	next.GuestTip = decodeOrderEmailText(raw["guest_tip"], fallback.GuestTip)
+	next.FulfillmentAttachmentTip = decodeOrderEmailText(raw["fulfillment_attachment_tip"], fallback.FulfillmentAttachmentTip)
+	return next
+}
+
+// --- Patch ---
+
+func applyOrderEmailSceneTemplatePatch(target *OrderEmailSceneTemplate, patch OrderEmailSceneTemplatePatch) error {
+	if len(patch) == 0 {
+		return nil
+	}
+	if *target == nil {
+		*target = OrderEmailSceneTemplate{}
+	}
+	for locale, p := range patch {
+		if !isSupportedOrderEmailLocale(locale) {
+			return ErrOrderEmailTemplateConfigInvalid
+		}
+		lt := (*target)[locale]
+		if p.Subject != nil {
+			lt.Subject = strings.TrimSpace(*p.Subject)
+		}
+		if p.Body != nil {
+			lt.Body = strings.TrimSpace(*p.Body)
+		}
+		(*target)[locale] = lt
+	}
+	return nil
+}
+
+func applyOrderEmailTextPatch(target *OrderEmailLocalizedText, patch OrderEmailLocalizedTextPatch) error {
+	if len(patch) == 0 {
+		return nil
+	}
+	if *target == nil {
+		*target = OrderEmailLocalizedText{}
+	}
+	for locale, v := range patch {
+		if !isSupportedOrderEmailLocale(locale) {
+			return ErrOrderEmailTemplateConfigInvalid
+		}
+		if v != nil {
+			(*target)[locale] = strings.TrimSpace(*v)
+		}
+	}
+	return nil
 }
 
 // ApplyOrderEmailTemplateSettingPatch 应用补丁并完成校验。
 func ApplyOrderEmailTemplateSettingPatch(current OrderEmailTemplateSetting, patch OrderEmailTemplateSettingPatch) (OrderEmailTemplateSetting, error) {
-	next := current
+	next := NormalizeOrderEmailTemplateSetting(current)
 	if patch.Templates != nil {
-		if patch.Templates.Default != nil {
-			applyOrderEmailSceneTemplatePatch(&next.Templates.Default, patch.Templates.Default)
+		pairs := []struct {
+			target *OrderEmailSceneTemplate
+			patch  OrderEmailSceneTemplatePatch
+		}{
+			{&next.Templates.Default, patch.Templates.Default},
+			{&next.Templates.Paid, patch.Templates.Paid},
+			{&next.Templates.Delivered, patch.Templates.Delivered},
+			{&next.Templates.DeliveredWithContent, patch.Templates.DeliveredWithContent},
+			{&next.Templates.Refunded, patch.Templates.Refunded},
+			{&next.Templates.PartiallyRefunded, patch.Templates.PartiallyRefunded},
 		}
-		if patch.Templates.Paid != nil {
-			applyOrderEmailSceneTemplatePatch(&next.Templates.Paid, patch.Templates.Paid)
-		}
-		if patch.Templates.Delivered != nil {
-			applyOrderEmailSceneTemplatePatch(&next.Templates.Delivered, patch.Templates.Delivered)
-		}
-		if patch.Templates.DeliveredWithContent != nil {
-			applyOrderEmailSceneTemplatePatch(&next.Templates.DeliveredWithContent, patch.Templates.DeliveredWithContent)
-		}
-		if patch.Templates.Refunded != nil {
-			applyOrderEmailSceneTemplatePatch(&next.Templates.Refunded, patch.Templates.Refunded)
-		}
-		if patch.Templates.PartiallyRefunded != nil {
-			applyOrderEmailSceneTemplatePatch(&next.Templates.PartiallyRefunded, patch.Templates.PartiallyRefunded)
+		for _, p := range pairs {
+			if err := applyOrderEmailSceneTemplatePatch(p.target, p.patch); err != nil {
+				return OrderEmailTemplateSetting{}, err
+			}
 		}
 	}
-	if patch.GuestTip != nil {
-		if patch.GuestTip.ZHCN != nil {
-			next.GuestTip.ZHCN = strings.TrimSpace(*patch.GuestTip.ZHCN)
-		}
-		if patch.GuestTip.ZHTW != nil {
-			next.GuestTip.ZHTW = strings.TrimSpace(*patch.GuestTip.ZHTW)
-		}
-		if patch.GuestTip.ENUS != nil {
-			next.GuestTip.ENUS = strings.TrimSpace(*patch.GuestTip.ENUS)
-		}
+	if err := applyOrderEmailTextPatch(&next.GuestTip, patch.GuestTip); err != nil {
+		return OrderEmailTemplateSetting{}, err
 	}
-	if patch.FulfillmentAttachmentTip != nil {
-		if patch.FulfillmentAttachmentTip.ZHCN != nil {
-			next.FulfillmentAttachmentTip.ZHCN = strings.TrimSpace(*patch.FulfillmentAttachmentTip.ZHCN)
-		}
-		if patch.FulfillmentAttachmentTip.ZHTW != nil {
-			next.FulfillmentAttachmentTip.ZHTW = strings.TrimSpace(*patch.FulfillmentAttachmentTip.ZHTW)
-		}
-		if patch.FulfillmentAttachmentTip.ENUS != nil {
-			next.FulfillmentAttachmentTip.ENUS = strings.TrimSpace(*patch.FulfillmentAttachmentTip.ENUS)
-		}
+	if err := applyOrderEmailTextPatch(&next.FulfillmentAttachmentTip, patch.FulfillmentAttachmentTip); err != nil {
+		return OrderEmailTemplateSetting{}, err
 	}
 	normalized := NormalizeOrderEmailTemplateSetting(next)
 	if err := ValidateOrderEmailTemplateSetting(normalized); err != nil {
@@ -358,131 +458,27 @@ func ApplyOrderEmailTemplateSettingPatch(current OrderEmailTemplateSetting, patc
 
 // --- Locale 解析 ---
 
-// ResolveOrderEmailLocaleTemplate 按 locale 选择模板
+// ResolveOrderEmailLocaleTemplate 按 locale 选择模板，缺失时回落简体。
 func ResolveOrderEmailLocaleTemplate(t OrderEmailSceneTemplate, locale string) OrderEmailLocalizedTemplate {
-	switch locale {
-	case constants.LocaleZhTW:
-		return t.ZHTW
-	case constants.LocaleEnUS:
-		return t.ENUS
-	default:
-		return t.ZHCN
+	if lt, ok := t[locale]; ok && strings.TrimSpace(lt.Body) != "" {
+		return lt
 	}
+	return t[constants.LocaleZhCN]
+}
+
+func resolveOrderEmailText(t OrderEmailLocalizedText, locale string) string {
+	if v, ok := t[locale]; ok && strings.TrimSpace(v) != "" {
+		return v
+	}
+	return t[constants.LocaleZhCN]
 }
 
 // ResolveOrderEmailFulfillmentAttachmentTip 按 locale 选择交付内容附件提示
-func ResolveOrderEmailFulfillmentAttachmentTip(tip OrderEmailFulfillmentAttachmentTip, locale string) string {
-	switch locale {
-	case constants.LocaleZhTW:
-		return tip.ZHTW
-	case constants.LocaleEnUS:
-		return tip.ENUS
-	default:
-		return tip.ZHCN
-	}
+func ResolveOrderEmailFulfillmentAttachmentTip(tip OrderEmailLocalizedText, locale string) string {
+	return resolveOrderEmailText(tip, locale)
 }
 
 // ResolveOrderEmailGuestTip 按 locale 选择游客提示
-func ResolveOrderEmailGuestTip(tip OrderEmailGuestTip, locale string) string {
-	switch locale {
-	case constants.LocaleZhTW:
-		return tip.ZHTW
-	case constants.LocaleEnUS:
-		return tip.ENUS
-	default:
-		return tip.ZHCN
-	}
-}
-
-// --- JSON 解析 ---
-
-func DecodeOrderEmailTemplateSetting(raw jsonmap.JSON, fallback OrderEmailTemplateSetting) OrderEmailTemplateSetting {
-	next := fallback
-	if raw == nil {
-		return next
-	}
-
-	if templatesMap := settingsvalue.ToStringAnyMap(raw["templates"]); templatesMap != nil {
-		if sceneMap := settingsvalue.ToStringAnyMap(templatesMap["default"]); sceneMap != nil {
-			next.Templates.Default = orderEmailSceneTemplateFromMap(sceneMap, next.Templates.Default)
-		}
-		if sceneMap := settingsvalue.ToStringAnyMap(templatesMap["paid"]); sceneMap != nil {
-			next.Templates.Paid = orderEmailSceneTemplateFromMap(sceneMap, next.Templates.Paid)
-		}
-		if sceneMap := settingsvalue.ToStringAnyMap(templatesMap["delivered"]); sceneMap != nil {
-			next.Templates.Delivered = orderEmailSceneTemplateFromMap(sceneMap, next.Templates.Delivered)
-		}
-		if sceneMap := settingsvalue.ToStringAnyMap(templatesMap["delivered_with_content"]); sceneMap != nil {
-			next.Templates.DeliveredWithContent = orderEmailSceneTemplateFromMap(sceneMap, next.Templates.DeliveredWithContent)
-		}
-		if sceneMap := settingsvalue.ToStringAnyMap(templatesMap["refunded"]); sceneMap != nil {
-			next.Templates.Refunded = orderEmailSceneTemplateFromMap(sceneMap, next.Templates.Refunded)
-		}
-		if sceneMap := settingsvalue.ToStringAnyMap(templatesMap["partially_refunded"]); sceneMap != nil {
-			next.Templates.PartiallyRefunded = orderEmailSceneTemplateFromMap(sceneMap, next.Templates.PartiallyRefunded)
-		}
-	}
-
-	if guestTipMap := settingsvalue.ToStringAnyMap(raw["guest_tip"]); guestTipMap != nil {
-		next.GuestTip.ZHCN = settingsvalue.ReadString(guestTipMap, constants.LocaleZhCN, next.GuestTip.ZHCN)
-		next.GuestTip.ZHTW = settingsvalue.ReadString(guestTipMap, constants.LocaleZhTW, next.GuestTip.ZHTW)
-		next.GuestTip.ENUS = settingsvalue.ReadString(guestTipMap, constants.LocaleEnUS, next.GuestTip.ENUS)
-	}
-
-	if attachTipMap := settingsvalue.ToStringAnyMap(raw["fulfillment_attachment_tip"]); attachTipMap != nil {
-		next.FulfillmentAttachmentTip.ZHCN = settingsvalue.ReadString(attachTipMap, constants.LocaleZhCN, next.FulfillmentAttachmentTip.ZHCN)
-		next.FulfillmentAttachmentTip.ZHTW = settingsvalue.ReadString(attachTipMap, constants.LocaleZhTW, next.FulfillmentAttachmentTip.ZHTW)
-		next.FulfillmentAttachmentTip.ENUS = settingsvalue.ReadString(attachTipMap, constants.LocaleEnUS, next.FulfillmentAttachmentTip.ENUS)
-	}
-
-	return next
-}
-
-func orderEmailSceneTemplateFromMap(raw map[string]interface{}, fallback OrderEmailSceneTemplate) OrderEmailSceneTemplate {
-	next := fallback
-	if zhCNMap := settingsvalue.ToStringAnyMap(raw[constants.LocaleZhCN]); zhCNMap != nil {
-		next.ZHCN.Subject = settingsvalue.ReadString(zhCNMap, "subject", next.ZHCN.Subject)
-		next.ZHCN.Body = settingsvalue.ReadString(zhCNMap, "body", next.ZHCN.Body)
-	}
-	if zhTWMap := settingsvalue.ToStringAnyMap(raw[constants.LocaleZhTW]); zhTWMap != nil {
-		next.ZHTW.Subject = settingsvalue.ReadString(zhTWMap, "subject", next.ZHTW.Subject)
-		next.ZHTW.Body = settingsvalue.ReadString(zhTWMap, "body", next.ZHTW.Body)
-	}
-	if enUSMap := settingsvalue.ToStringAnyMap(raw[constants.LocaleEnUS]); enUSMap != nil {
-		next.ENUS.Subject = settingsvalue.ReadString(enUSMap, "subject", next.ENUS.Subject)
-		next.ENUS.Body = settingsvalue.ReadString(enUSMap, "body", next.ENUS.Body)
-	}
-	return next
-}
-
-// --- Patch 应用 ---
-
-func applyOrderEmailSceneTemplatePatch(target *OrderEmailSceneTemplate, patch *OrderEmailSceneTemplatePatch) {
-	if target == nil || patch == nil {
-		return
-	}
-	if patch.ZHCN != nil {
-		if patch.ZHCN.Subject != nil {
-			target.ZHCN.Subject = strings.TrimSpace(*patch.ZHCN.Subject)
-		}
-		if patch.ZHCN.Body != nil {
-			target.ZHCN.Body = strings.TrimSpace(*patch.ZHCN.Body)
-		}
-	}
-	if patch.ZHTW != nil {
-		if patch.ZHTW.Subject != nil {
-			target.ZHTW.Subject = strings.TrimSpace(*patch.ZHTW.Subject)
-		}
-		if patch.ZHTW.Body != nil {
-			target.ZHTW.Body = strings.TrimSpace(*patch.ZHTW.Body)
-		}
-	}
-	if patch.ENUS != nil {
-		if patch.ENUS.Subject != nil {
-			target.ENUS.Subject = strings.TrimSpace(*patch.ENUS.Subject)
-		}
-		if patch.ENUS.Body != nil {
-			target.ENUS.Body = strings.TrimSpace(*patch.ENUS.Body)
-		}
-	}
+func ResolveOrderEmailGuestTip(tip OrderEmailLocalizedText, locale string) string {
+	return resolveOrderEmailText(tip, locale)
 }

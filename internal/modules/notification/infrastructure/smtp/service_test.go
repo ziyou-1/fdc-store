@@ -231,8 +231,10 @@ func TestSendTextEmailSkipTelegramPlaceholder(t *testing.T) {
 
 func TestBuildOrderStatusContentFromTemplateIncludesSiteBrand(t *testing.T) {
 	tmpl := settingsmessaging.DefaultOrderEmailTemplateSetting()
-	tmpl.Templates.Paid.ZHCN.Subject = "订单通知 {{site_name}}"
-	tmpl.Templates.Paid.ZHCN.Body = "订单号：{{order_no}}\n站点：{{site_name}} {{site_url}}"
+	tmpl.Templates.Paid[constants.LocaleZhCN] = settingsmessaging.OrderEmailLocalizedTemplate{
+		Subject: "订单通知 {{site_name}}",
+		Body:    "订单号：{{order_no}}\n站点：{{site_name}} {{site_url}}",
+	}
 
 	input := notificationcontract.OrderStatusEmailInput{
 		OrderNo:         "DJ-SITE-001",
