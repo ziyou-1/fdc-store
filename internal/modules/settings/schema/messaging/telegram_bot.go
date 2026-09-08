@@ -8,7 +8,8 @@ import (
 	"github.com/dujiao-next/internal/shared/jsonmap"
 )
 
-// LocalizedText 多语言文本 {"zh-CN": "...", "zh-TW": "...", "en-US": "..."}
+// LocalizedText 多语言文本，键为 constants.SupportedLocales 中的语言码，
+// 例如 {"zh-CN": "...", "zh-TW": "...", "en-US": "...", "id-ID": "..."}
 type LocalizedText map[string]string
 
 // TelegramBotConfigSetting Telegram Bot 配置实体（嵌套分组）
@@ -110,57 +111,64 @@ func DefaultTelegramBotConfig() TelegramBotConfigSetting {
 				"zh-CN": "❓ 帮助中心",
 				"zh-TW": "❓ 幫助中心",
 				"en-US": "❓ Help Center",
+				"id-ID": "❓ Pusat Bantuan",
 			},
 			Intro: LocalizedText{
 				"zh-CN": "这里整理了下单、订单、钱包和客服入口，先点最接近你问题的按钮。",
 				"zh-TW": "這裡整理了下單、訂單、錢包與客服入口，先點最接近你問題的按鈕。",
 				"en-US": "Quick answers for shopping, orders, wallet, and support are listed here. Start with the closest topic.",
+				"id-ID": "Di sini ada panduan singkat soal belanja, pesanan, saldo, dan bantuan. Mulai dari topik yang paling dekat dengan masalah kamu.",
 			},
 			CenterHint: LocalizedText{
 				"zh-CN": "如果还是没解决，再进入客服入口即可。",
 				"zh-TW": "如果還是沒解決，再進入客服入口即可。",
 				"en-US": "If the issue remains, open the support topic from below.",
+				"id-ID": "Kalau masalahnya belum selesai, buka topik bantuan di bawah.",
 			},
 			SupportHint: LocalizedText{
 				"zh-CN": "当前还没有配置客服链接，你可以先查看上面的常见问题，或稍后再试。",
 				"zh-TW": "目前還沒有配置客服連結，你可以先查看上面的常見問題，或稍後再試。",
 				"en-US": "The support link is not configured yet. You can review the common topics above or try again later.",
+				"id-ID": "Tautan bantuan belum diatur. Silakan lihat topik umum di atas atau coba lagi nanti.",
 			},
 			Items: []TelegramBotHelpItem{
 				{
 					Key:     "shop",
 					Enabled: true,
 					Order:   1,
-					Summary: LocalizedText{"zh-CN": "🛍️ 怎么下单", "zh-TW": "🛍️ 怎麼下單", "en-US": "🛍️ How to buy"},
-					Title:   LocalizedText{"zh-CN": "🛍️ 怎么下单", "zh-TW": "🛍️ 怎麼下單", "en-US": "🛍️ How to buy"},
+					Summary: LocalizedText{"zh-CN": "🛍️ 怎么下单", "zh-TW": "🛍️ 怎麼下單", "en-US": "🛍️ How to buy", "id-ID": "🛍️ Cara belanja"},
+					Title:   LocalizedText{"zh-CN": "🛍️ 怎么下单", "zh-TW": "🛍️ 怎麼下單", "en-US": "🛍️ How to buy", "id-ID": "🛍️ Cara belanja"},
 					Content: LocalizedText{
 						"zh-CN": "先点“开始购物”，进入分类后选择商品与规格，再确认数量并完成支付。支付成功后，订单会自动进入处理流程。",
 						"zh-TW": "先點「開始購物」，進入分類後選擇商品與規格，再確認數量並完成付款。付款成功後，訂單會自動進入處理流程。",
 						"en-US": "Tap \"Shop Now\", choose a category, pick the product and spec, confirm quantity, then finish payment. Your order enters processing right after payment succeeds.",
+						"id-ID": "Ketuk \"Mulai Belanja\", pilih kategori, tentukan produk dan variannya, atur jumlah, lalu selesaikan pembayaran. Pesanan langsung diproses begitu pembayaran berhasil.",
 					},
 				},
 				{
 					Key:     "orders",
 					Enabled: true,
 					Order:   2,
-					Summary: LocalizedText{"zh-CN": "📦 订单问题", "zh-TW": "📦 訂單問題", "en-US": "📦 Order issues"},
-					Title:   LocalizedText{"zh-CN": "📦 订单问题", "zh-TW": "📦 訂單問題", "en-US": "📦 Order issues"},
+					Summary: LocalizedText{"zh-CN": "📦 订单问题", "zh-TW": "📦 訂單問題", "en-US": "📦 Order issues", "id-ID": "📦 Masalah pesanan"},
+					Title:   LocalizedText{"zh-CN": "📦 订单问题", "zh-TW": "📦 訂單問題", "en-US": "📦 Order issues", "id-ID": "📦 Masalah pesanan"},
 					Content: LocalizedText{
 						"zh-CN": "在“我的订单”里可以查看状态、支付结果与发货内容。若支付完成但暂时没发货，先刷新订单状态；仍有问题再联系人工客服。",
 						"zh-TW": "在「我的訂單」裡可以查看狀態、付款結果與發貨內容。若付款完成但暫時沒發貨，先刷新訂單狀態；仍有問題再聯繫人工客服。",
 						"en-US": "Use \"My Orders\" to review status, payment result, and delivery content. If payment is done but delivery is pending, refresh the order status first and contact support if it still looks wrong.",
+						"id-ID": "Buka \"Pesanan Saya\" untuk melihat status, hasil pembayaran, dan isi pengiriman. Kalau sudah bayar tapi belum dikirim, segarkan dulu status pesanannya; hubungi bantuan bila masih bermasalah.",
 					},
 				},
 				{
 					Key:     "wallet",
 					Enabled: true,
 					Order:   3,
-					Summary: LocalizedText{"zh-CN": "💰 钱包充值", "zh-TW": "💰 錢包儲值", "en-US": "💰 Wallet help"},
-					Title:   LocalizedText{"zh-CN": "💰 钱包充值", "zh-TW": "💰 錢包儲值", "en-US": "💰 Wallet help"},
+					Summary: LocalizedText{"zh-CN": "💰 钱包充值", "zh-TW": "💰 錢包儲值", "en-US": "💰 Wallet help", "id-ID": "💰 Bantuan dompet"},
+					Title:   LocalizedText{"zh-CN": "💰 钱包充值", "zh-TW": "💰 錢包儲值", "en-US": "💰 Wallet help", "id-ID": "💰 Bantuan dompet"},
 					Content: LocalizedText{
 						"zh-CN": "打开“我的钱包”可以查看余额、充值记录并发起充值。充值成功后，余额会更新，可直接用于支付订单。",
 						"zh-TW": "打開「我的錢包」可以查看餘額、儲值記錄並發起儲值。儲值成功後，餘額會更新，可直接用於支付訂單。",
 						"en-US": "Open \"My Wallet\" to view balance, recharge history, and create a recharge. Once the recharge succeeds, the balance updates and can be used for orders.",
+						"id-ID": "Buka \"Dompet Saya\" untuk melihat saldo, riwayat isi saldo, dan melakukan pengisian. Setelah berhasil, saldo langsung diperbarui dan bisa dipakai membayar pesanan.",
 					},
 				},
 				{
@@ -168,12 +176,13 @@ func DefaultTelegramBotConfig() TelegramBotConfigSetting {
 					Enabled:         true,
 					Order:           4,
 					ShowSupportLink: true,
-					Summary:         LocalizedText{"zh-CN": "💬 联系客服", "zh-TW": "💬 聯繫客服", "en-US": "💬 Contact support"},
-					Title:           LocalizedText{"zh-CN": "💬 联系客服", "zh-TW": "💬 聯繫客服", "en-US": "💬 Contact support"},
+					Summary:         LocalizedText{"zh-CN": "💬 联系客服", "zh-TW": "💬 聯繫客服", "en-US": "💬 Contact support", "id-ID": "💬 Hubungi bantuan"},
+					Title:           LocalizedText{"zh-CN": "💬 联系客服", "zh-TW": "💬 聯繫客服", "en-US": "💬 Contact support", "id-ID": "💬 Hubungi bantuan"},
 					Content: LocalizedText{
 						"zh-CN": "如果上面的自助说明仍然无法解决问题，请通过下方客服入口联系人工，并尽量附上订单号、商品名和问题截图。",
 						"zh-TW": "如果上面的自助說明仍然無法解決問題，請透過下方客服入口聯繫人工，並盡量附上訂單號、商品名與問題截圖。",
 						"en-US": "If the self-service guides above do not solve the issue, contact support using the link below and include your order number, product name, and screenshots when possible.",
+						"id-ID": "Kalau panduan mandiri di atas belum menyelesaikan masalah, hubungi tim bantuan lewat tautan di bawah. Sertakan nomor pesanan, nama produk, dan tangkapan layar bila ada.",
 					},
 				},
 			},
@@ -532,13 +541,13 @@ var BuiltinTelegramBotMenuKeysOrder = []string{
 
 // builtinMenuLabels 内置菜单的多语言默认 label（与 telegram-bot 的 i18n 默认值一致）。
 var builtinMenuLabels = map[string]LocalizedText{
-	"shop_home":       {"zh-CN": "🛍️ 开始购物", "zh-TW": "🛍️ 開始購物", "en-US": "🛍️ Shop Now"},
-	"my_orders":       {"zh-CN": "📦 我的订单", "zh-TW": "📦 我的訂單", "en-US": "📦 My Orders"},
-	"my_wallet":       {"zh-CN": "💰 我的钱包", "zh-TW": "💰 我的錢包", "en-US": "💰 My Wallet"},
-	"affiliate":       {"zh-CN": "📣 推广返利", "zh-TW": "📣 推廣返利", "en-US": "📣 Affiliate"},
-	"gift_card":       {"zh-CN": "🎁 礼品卡兑换", "zh-TW": "🎁 禮品卡兌換", "en-US": "🎁 Redeem Gift Card"},
-	"switch_language": {"zh-CN": "🌐 切换语言", "zh-TW": "🌐 切換語言", "en-US": "🌐 Language"},
-	"contact_support": {"zh-CN": "❓ 帮助中心", "zh-TW": "❓ 幫助中心", "en-US": "❓ Help"},
+	"shop_home":       {"zh-CN": "🛍️ 开始购物", "zh-TW": "🛍️ 開始購物", "en-US": "🛍️ Shop Now", "id-ID": "🛍️ Mulai Belanja"},
+	"my_orders":       {"zh-CN": "📦 我的订单", "zh-TW": "📦 我的訂單", "en-US": "📦 My Orders", "id-ID": "📦 Pesanan Saya"},
+	"my_wallet":       {"zh-CN": "💰 我的钱包", "zh-TW": "💰 我的錢包", "en-US": "💰 My Wallet", "id-ID": "💰 Dompet Saya"},
+	"affiliate":       {"zh-CN": "📣 推广返利", "zh-TW": "📣 推廣返利", "en-US": "📣 Affiliate", "id-ID": "📣 Program Afiliasi"},
+	"gift_card":       {"zh-CN": "🎁 礼品卡兑换", "zh-TW": "🎁 禮品卡兌換", "en-US": "🎁 Redeem Gift Card", "id-ID": "🎁 Tukar Kartu Hadiah"},
+	"switch_language": {"zh-CN": "🌐 切换语言", "zh-TW": "🌐 切換語言", "en-US": "🌐 Language", "id-ID": "🌐 Bahasa"},
+	"contact_support": {"zh-CN": "❓ 帮助中心", "zh-TW": "❓ 幫助中心", "en-US": "❓ Help", "id-ID": "❓ Bantuan"},
 }
 
 // defaultBuiltinMenuItems 返回 7 项内置菜单的默认配置（用于 default seed 与缺失补齐）。
