@@ -1637,6 +1637,8 @@ func normalizeLocale(locale string) string {
 	case strings.HasPrefix(l, "id"), strings.HasPrefix(l, "in-"), l == "in":
 		return LocaleID
 	default:
-		return LocaleZH
+		// 站点面向印尼市场，识别不出的语言按印尼语返回，与买家端默认语言保持一致。
+		// 若这里仍兜底中文，印尼买家在未带 X-Lang 时会收到中文报错。
+		return LocaleID
 	}
 }

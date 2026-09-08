@@ -1,17 +1,19 @@
 import { createI18n } from 'vue-i18n'
-// 默认语言（兜底语言）静态打包，其余语言按需动态加载
-import zhCN from './locales/zh-CN.json'
+// 默认语言（兜底语言）静态打包，其余语言按需动态加载。
+// 本站面向印尼市场，默认语言即印尼语：它是绝大多数买家的首屏语言，
+// 静态打包能省掉一次语言包往返；中文/英文改为按需懒加载。
+import idID from './locales/id-ID.json'
 
 const supportedLocales = ['zh-CN', 'zh-TW', 'en-US', 'id-ID']
 
 // 非默认语言的懒加载器：切换语言时才下载对应语言包 chunk
 const localeLoaders: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {
+    'zh-CN': () => import('./locales/zh-CN.json'),
     'zh-TW': () => import('./locales/zh-TW.json'),
     'en-US': () => import('./locales/en-US.json'),
-    'id-ID': () => import('./locales/id-ID.json'),
 }
 
-const loadedLocales = new Set(['zh-CN'])
+const loadedLocales = new Set(['id-ID'])
 
 export function detectLocale(): string {
     const saved = localStorage.getItem('locale')
@@ -31,15 +33,16 @@ export function detectLocale(): string {
     // 印尼语：浏览器发 id / id-ID；旧 ISO 码 in 仍见于部分 Android 客户端
     if (langPrefix === 'id' || langPrefix === 'in') return 'id-ID'
 
-    return 'zh-CN'
+    // 识别不出来就用站点默认语言（印尼语），而不是中文
+    return 'id-ID'
 }
 
 const i18n = createI18n({
     legacy: false,
-    locale: 'zh-CN',
-    fallbackLocale: 'zh-CN',
-    // 键断言为 string，避免 locale 类型被收窄为 "zh-CN" 字面量（其余语言在运行时动态注入）
-    messages: { 'zh-CN': zhCN } as Record<string, typeof zhCN>,
+    locale: 'id-ID',
+    fallbackLocale: 'id-ID',
+    // 键断言为 string，避免 locale 类型被收窄为 "id-ID" 字面量（其余语言在运行时动态注入）
+    messages: { 'id-ID': idID } as Record<string, typeof idID>,
 })
 
 async function loadLocaleMessages(locale: string): Promise<void> {

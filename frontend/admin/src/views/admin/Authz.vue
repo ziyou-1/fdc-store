@@ -22,6 +22,8 @@ import { confirmAction } from '@/utils/confirm'
 
 const { locale } = useI18n()
 
+import { authzModuleLabel, authzMethodHint } from '@/utils/authzModules'
+
 const textMap = {
   'zh-CN': {
     title: '权限管理',
@@ -323,6 +325,20 @@ const textMap = {
 }
 
 const text = computed(() => textMap[locale.value as keyof typeof textMap] || textMap['zh-CN'])
+
+// 权限目录里的模块名是后端按接口路径推导的（api-credentials 之类），
+// 这里翻成人话；未收录的键原样显示，避免新增模块时变成空白。
+const moduleLabel = (module: string) => authzModuleLabel(module, locale.value)
+
+// 策略行只存 object，模块键要自己从路径推——规则与后端 deriveAdminPermissionModule 一致：
+// /admin/<模块>/... 取第二段，authz 整体归一，其余情况取第一段。
+const policyModuleOf = (object: string): string => {
+  const segments = String(object || '').replace(/^\//, '').split('/').filter(Boolean)
+  if (segments.length === 0) return 'system'
+  if (segments.length === 1 || segments[0] !== 'admin') return segments[0] ?? 'system'
+  return segments[1] === 'authz' ? 'authz' : (segments[1] ?? 'system')
+}
+const methodHint = (method: string) => authzMethodHint(method, locale.value)
 
 const formatText = (template: string, payload: Record<string, string | number>) => {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => String(payload[key] ?? ''))
@@ -1052,7 +1068,10 @@ onMounted(async () => {
                   class="w-full flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-left"
                   @click="toggleModule(group.module)"
                 >
-                  <span class="text-xs font-semibold uppercase tracking-wide">{{ group.module }}</span>
+                  <span class="flex items-baseline gap-2 min-w-0">
+                    <span class="text-xs font-semibold">{{ moduleLabel(group.module) }}</span>
+                    <span class="truncate font-mono text-[10px] text-muted-foreground">{{ group.module }}</span>
+                  </span>
                   <span class="text-xs text-muted-foreground">{{ group.items.length }} · {{ isModuleCollapsed(group.module) ? '+' : '-' }}</span>
                 </button>
                 <div v-if="!isModuleCollapsed(group.module)" class="space-y-2 pl-1">
@@ -1062,7 +1081,10 @@ onMounted(async () => {
                     class="flex items-center justify-between rounded-lg border border-border px-3 py-2"
                   >
                     <div class="min-w-0">
-                      <div class="text-[11px] text-muted-foreground uppercase tracking-wide">{{ item.module }}</div>
+                      <div class="text-[11px] text-muted-foreground">
+                        {{ moduleLabel(item.module) }}
+                        <span v-if="methodHint(item.method)"> · {{ methodHint(item.method) }}</span>
+                      </div>
                       <div class="break-all text-xs font-mono">{{ item.method }} {{ item.object }}</div>
                     </div>
                     <Button
@@ -1096,8 +1118,14 @@ onMounted(async () => {
                   <TableCell colspan="3" class="px-4 py-6 text-center text-muted-foreground">{{ text.policiesEmpty }}</TableCell>
                 </TableRow>
                 <TableRow v-for="item in policies" :key="`${item.object}:${item.action}`" class="hover:bg-muted/30">
-                  <TableCell class="min-w-[320px] px-4 py-3 font-mono text-xs text-muted-foreground break-all">{{ item.object }}</TableCell>
-                  <TableCell class="min-w-[140px] px-4 py-3 font-medium break-words">{{ item.action }}</TableCell>
+                  <TableCell class="min-w-[320px] px-4 py-3 break-all">
+                    <div class="text-xs">{{ moduleLabel(policyModuleOf(item.object)) }}</div>
+                    <div class="font-mono text-xs text-muted-foreground">{{ item.object }}</div>
+                  </TableCell>
+                  <TableCell class="min-w-[140px] px-4 py-3 break-words">
+                    <div class="font-medium">{{ methodHint(item.action) || item.action }}</div>
+                    <div class="font-mono text-[11px] text-muted-foreground">{{ item.action }}</div>
+                  </TableCell>
                   <TableCell class="min-w-[140px] px-4 py-3 text-right">
                     <Button size="sm" variant="outline" :disabled="selectedRoleImmutable" @click="handleRevokePolicy(item)">
                       {{ text.delete }}
