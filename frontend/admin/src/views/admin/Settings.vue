@@ -20,6 +20,7 @@ import MediaPicker from '@/components/admin/MediaPicker.vue'
 import SettingsSMTPTab from './components/SettingsSMTPTab.vue'
 import SettingsCaptchaTab from './components/SettingsCaptchaTab.vue'
 import SettingsOrderEmailTemplateTab from './components/SettingsOrderEmailTemplateTab.vue'
+import SettingsVerifyEmailTemplateTab from './components/SettingsVerifyEmailTemplateTab.vue'
 import SettingsNavigationTab from './components/SettingsNavigationTab.vue'
 import SettingsHomeAnnouncementTab from './components/SettingsHomeAnnouncementTab.vue'
 import SettingsUpstreamSyncTab from './components/SettingsUpstreamSyncTab.vue'
@@ -29,6 +30,7 @@ const loading = ref(false)
 const smtpTabRef = ref<InstanceType<typeof SettingsSMTPTab>>()
 const captchaTabRef = ref<InstanceType<typeof SettingsCaptchaTab>>()
 const orderEmailTemplateTabRef = ref<InstanceType<typeof SettingsOrderEmailTemplateTab>>()
+const verifyEmailTemplateTabRef = ref<InstanceType<typeof SettingsVerifyEmailTemplateTab>>()
 const navigationTabRef = ref<InstanceType<typeof SettingsNavigationTab>>()
 const homeAnnouncementTabRef = ref<InstanceType<typeof SettingsHomeAnnouncementTab>>()
 const upstreamSyncTabRef = ref<InstanceType<typeof SettingsUpstreamSyncTab>>()
@@ -81,6 +83,7 @@ const tabs = computed(() => [
   { label: t('admin.settings.tabs.homeAnnouncement'), value: 'home_announcement' },
   { label: t('admin.settings.tabs.smtp'), value: 'smtp' },
   { label: t('admin.settings.tabs.orderEmailTemplate'), value: 'order_email_template' },
+  { label: t('admin.settings.tabs.verifyEmailTemplate'), value: 'verify_email_template' },
   { label: t('admin.settings.tabs.captcha'), value: 'captcha' },
   { label: t('admin.settings.tabs.telegram'), value: 'telegram' },
   { label: t('admin.settings.tabs.google'), value: 'google' },
@@ -763,6 +766,10 @@ const saveSettings = async () => {
     await orderEmailTemplateTabRef.value?.save()
     return
   }
+  if (currentTab.value === 'verify_email_template') {
+    await verifyEmailTemplateTabRef.value?.save()
+    return
+  }
   if (currentTab.value === 'captcha') {
     await captchaTabRef.value?.save()
     return
@@ -824,7 +831,7 @@ onMounted(() => {
             {{ lang.name }}
           </button>
         </div>
-        <Button size="sm" class="w-full sm:w-auto" :disabled="loading || smtpTabRef?.submitting || smtpTabRef?.smtpTesting || captchaTabRef?.submitting || orderEmailTemplateTabRef?.submitting || navigationTabRef?.submitting || homeAnnouncementTabRef?.submitting || upstreamSyncTabRef?.submitting" @click="saveSettings">
+        <Button size="sm" class="w-full sm:w-auto" :disabled="loading || smtpTabRef?.submitting || smtpTabRef?.smtpTesting || captchaTabRef?.submitting || orderEmailTemplateTabRef?.submitting || verifyEmailTemplateTabRef?.submitting || navigationTabRef?.submitting || homeAnnouncementTabRef?.submitting || upstreamSyncTabRef?.submitting" @click="saveSettings">
           <span v-if="loading" class="h-3 w-3 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span>
           {{ loading ? t('admin.settings.actions.saving') : t('admin.settings.actions.save') }}
         </Button>
@@ -1361,6 +1368,10 @@ onMounted(() => {
 
       <TabsContent value="order_email_template" :forceMount="true" v-show="currentTab === 'order_email_template'" class="mt-0">
         <SettingsOrderEmailTemplateTab ref="orderEmailTemplateTabRef" :data="orderEmailTemplateData" :current-lang="currentLang" @saved="fetchSettings" />
+      </TabsContent>
+
+      <TabsContent value="verify_email_template" :forceMount="true" v-show="currentTab === 'verify_email_template'" class="mt-0">
+        <SettingsVerifyEmailTemplateTab ref="verifyEmailTemplateTabRef" :current-lang="currentLang" />
       </TabsContent>
 
       <TabsContent value="captcha" :forceMount="true" v-show="currentTab === 'captcha'" class="mt-0">

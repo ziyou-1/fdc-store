@@ -7,13 +7,16 @@ import (
 	externalidentitydomain "github.com/dujiao-next/internal/modules/identity/externalidentity/domain"
 	googleauthapp "github.com/dujiao-next/internal/modules/identity/googleauth/application"
 	userdomain "github.com/dujiao-next/internal/modules/identity/user/domain"
+	settingsmessaging "github.com/dujiao-next/internal/modules/settings/schema/messaging"
 	"github.com/dujiao-next/internal/shared/mailbrand"
 )
 
 // VerificationEmailSender defines the only email capability required by user
 // authentication. Infrastructure implementations are supplied by composition.
 type VerificationEmailSender interface {
-	SendVerifyCode(toEmail, code, purpose, locale string, brand mailbrand.Brand) error
+	// tmpl 为 nil 时使用内置默认文案。刻意把模板做成参数而不是另开一个
+	// SendVerifyCodeWithTemplate：留两条路径迟早会有人走到不读模板的那条。
+	SendVerifyCode(toEmail, code, purpose, locale string, brand mailbrand.Brand, tmpl *settingsmessaging.VerifyEmailTemplateSetting) error
 }
 
 // AuthTransaction is the persistence surface required by cross-aggregate

@@ -33,6 +33,13 @@ func RegisterAdminAffiliateRoutes(admin gin.IRoutes, handler *AffiliateHandler) 
 	admin.PUT("/settings/affiliate", handler.UpdateAffiliate)
 }
 
+// RegisterAdminVerifyEmailTemplateRoutes 注册验证码邮件模板设置路由。
+func RegisterAdminVerifyEmailTemplateRoutes(admin gin.IRoutes, handler *VerifyEmailTemplateHandler) {
+	admin.GET("/settings/verify-email-template", handler.GetVerifyEmailTemplate)
+	admin.PUT("/settings/verify-email-template", handler.UpdateVerifyEmailTemplate)
+	admin.POST("/settings/verify-email-template/reset", handler.ResetVerifyEmailTemplate)
+}
+
 func RegisterAdminOrderEmailTemplateRoutes(admin gin.IRoutes, handler *OrderEmailTemplateHandler) {
 	admin.GET("/settings/order-email-template", handler.GetOrderEmailTemplate)
 	admin.PUT("/settings/order-email-template", handler.UpdateOrderEmailTemplate)

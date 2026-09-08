@@ -1619,6 +1619,11 @@ func Sprintf(locale, key string, args ...interface{}) string {
 	return fmt.Sprintf(T(locale, key), args...)
 }
 
+// NormalizeLocale 把任意语言标记归一化为受支持的站点语言，是全项目唯一的语言协商入口。
+// 各处不要再自己抄一份 switch —— 之前 smtp 包抄了一份，新增印尼语时漏改，
+// 结果印尼买家收到的是中文验证码邮件，而且不会编译报错。
+func NormalizeLocale(locale string) string { return normalizeLocale(locale) }
+
 func normalizeLocale(locale string) string {
 	l := strings.ToLower(strings.TrimSpace(locale))
 	switch {

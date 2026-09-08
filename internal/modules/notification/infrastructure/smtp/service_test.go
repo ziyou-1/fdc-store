@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dujiao-next/internal/constants"
+
 	"github.com/dujiao-next/internal/config"
 	"github.com/dujiao-next/internal/i18n"
 	notificationcontract "github.com/dujiao-next/internal/modules/notification/contract"
@@ -539,5 +541,81 @@ func TestIsSMTPAlreadyClosedError(t *testing.T) {
 				t.Fatalf("isSMTPAlreadyClosedError() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// 验证码邮件必须覆盖全部受支持语言。漏掉某一门语言不会编译报错，只会静默落进
+// default 分支——印尼买家收到中文验证码邮件，而且没人会发现。
+func TestBuildVerifyCodeContentCoversEverySupportedLocale(t *testing.T) {
+	brand := mailbrand.Brand{SiteName: "OIOIS Store", SiteURL: "https://oiois.top"}
+	// 各语言正文里必须出现的特征词，用来确认没有落到中文兜底分支
+	want := map[string]string{
+		i18n.LocaleZH: "您的验证码是",
+		i18n.LocaleTW: "您的驗證碼是",
+		i18n.LocaleEN: "Your verification code is",
+		i18n.LocaleID: "Kode verifikasi kamu",
+	}
+	for _, locale := range constants.SupportedLocales {
+		marker, ok := want[locale]
+		if !ok {
+			t.Fatalf("新增了语言 %s 但没有为验证码邮件补分支，也没更新本测试", locale)
+		}
+		subject, body := buildVerifyCodeContent("123456", constants.VerifyPurposeRegister, locale, brand)
+		if !strings.Contains(body, marker) {
+			t.Fatalf("%s 的验证码邮件落到了错误的语言分支，body=%s", locale, body)
+		}
+		if !strings.Contains(body, "123456") {
+			t.Fatalf("%s 的正文没有带上验证码，body=%s", locale, body)
+		}
+		if !strings.Contains(subject, "OIOIS Store") {
+			t.Fatalf("%s 的标题没有带上站点名，subject=%s", locale, subject)
+		}
+		if !strings.Contains(body, "https://oiois.top") {
+			t.Fatalf("%s 的正文没有带上站点网址，body=%s", locale, body)
+		}
+	}
+}
+
+// 后台配置的模板必须真的用到发出去的邮件上，且变量被替换。
+func TestBuildVerifyCodeContentUsesConfiguredTemplate(t *testing.T) {
+	setting := settingsmessaging.DefaultVerifyEmailTemplateSetting()
+	setting.Templates[constants.VerifyPurposeRegister][constants.LocaleZhCN] = settingsmessaging.VerifyEmailLocalizedTemplate{
+		Subject: "欢迎加入 {{site_name}}",
+		Body:    "验证码 {{code}}，10 分钟内有效。\n\n{{site_name}} {{site_url}}",
+	}
+	brand := mailbrand.Brand{SiteName: "OIOIS Store", SiteURL: "https://oiois.top"}
+
+	subject, body := buildVerifyCodeContentWithTemplate("998877", constants.VerifyPurposeRegister, constants.LocaleZhCN, &setting, brand)
+	if subject != "OIOIS Store - 欢迎加入 OIOIS Store" {
+		t.Fatalf("标题未按模板渲染: %q", subject)
+	}
+	if !strings.Contains(body, "验证码 998877，10 分钟内有效。") {
+		t.Fatalf("正文未按模板渲染: %q", body)
+	}
+	// 模板自己引用了站点变量，就不该再自动追加「站点：」落款
+	if strings.Contains(body, "站点：") {
+		t.Fatalf("模板已自行安排站点信息，不该重复追加落款: %q", body)
+	}
+	if !strings.Contains(body, "OIOIS Store https://oiois.top") {
+		t.Fatalf("站点变量未替换: %q", body)
+	}
+}
+
+// 模板未引用站点变量时，沿用原有的自动落款行为。
+func TestBuildVerifyCodeContentAppendsBrandWhenTemplateOmitsIt(t *testing.T) {
+	setting := settingsmessaging.DefaultVerifyEmailTemplateSetting()
+	brand := mailbrand.Brand{SiteName: "OIOIS Store", SiteURL: "https://oiois.top"}
+	_, body := buildVerifyCodeContentWithTemplate("112233", constants.VerifyPurposeRegister, constants.LocaleZhCN, &setting, brand)
+	if !strings.Contains(body, "站点：OIOIS Store") || !strings.Contains(body, "网址：https://oiois.top") {
+		t.Fatalf("默认模板未引用站点变量时应自动追加落款: %q", body)
+	}
+}
+
+// 传 nil 模板必须回落内置文案——设置读不到不能导致发不出验证码。
+func TestBuildVerifyCodeContentFallsBackWhenTemplateMissing(t *testing.T) {
+	brand := mailbrand.Brand{SiteName: "OIOIS Store"}
+	_, body := buildVerifyCodeContentWithTemplate("445566", constants.VerifyPurposeRegister, constants.LocaleZhCN, nil, brand)
+	if !strings.Contains(body, "您的验证码是：445566") {
+		t.Fatalf("nil 模板应回落内置文案: %q", body)
 	}
 }

@@ -404,6 +404,11 @@ export const adminAPI = {
   getOrderEmailTemplateSettings: () => api.get('/admin/settings/order-email-template'),
   updateOrderEmailTemplateSettings: (data: Record<string, unknown>) => api.put('/admin/settings/order-email-template', data),
   resetOrderEmailTemplateSettings: () => api.post('/admin/settings/order-email-template/reset'),
+
+  // 验证码邮件模板（注册/重置密码/绑定 Telegram/换邮箱）
+  getVerifyEmailTemplateSettings: () => api.get('/admin/settings/verify-email-template'),
+  updateVerifyEmailTemplateSettings: (data: Record<string, unknown>) => api.put('/admin/settings/verify-email-template', data),
+  resetVerifyEmailTemplateSettings: () => api.post('/admin/settings/verify-email-template/reset'),
   getNotificationCenterSettings: () => api.get('/admin/settings/notification-center'),
   updateNotificationCenterSettings: (data: Record<string, unknown>) => api.put('/admin/settings/notification-center', data),
   listNotificationLogs: (params?: Record<string, unknown>) => api.get('/admin/settings/notification-center/logs', { params }),

@@ -295,6 +295,50 @@ func (s *Service) ResetOrderEmailTemplateSetting() (settingsmessaging.OrderEmail
 	return defaultSetting, nil
 }
 
+// GetVerifyEmailTemplateSetting 获取验证码邮件模板配置（优先 settings，空时回退默认）。
+func (s *Service) GetVerifyEmailTemplateSetting() (settingsmessaging.VerifyEmailTemplateSetting, error) {
+	fallback := settingsmessaging.DefaultVerifyEmailTemplateSetting()
+	if s == nil {
+		return fallback, nil
+	}
+	value, err := s.GetByKey(constants.SettingKeyVerifyEmailTemplateConfig)
+	if err != nil {
+		return fallback, err
+	}
+	if value == nil {
+		return fallback, nil
+	}
+	return settingsmessaging.NormalizeVerifyEmailTemplateSetting(settingsmessaging.DecodeVerifyEmailTemplateSetting(value, fallback)), nil
+}
+
+// PatchVerifyEmailTemplateSetting 基于补丁更新验证码邮件模板配置。
+func (s *Service) PatchVerifyEmailTemplateSetting(patch settingsmessaging.VerifyEmailTemplateSettingPatch) (settingsmessaging.VerifyEmailTemplateSetting, error) {
+	current, err := s.GetVerifyEmailTemplateSetting()
+	if err != nil {
+		return settingsmessaging.VerifyEmailTemplateSetting{}, err
+	}
+	next, err := settingsmessaging.ApplyVerifyEmailTemplateSettingPatch(current, patch)
+	if err != nil {
+		return settingsmessaging.VerifyEmailTemplateSetting{}, err
+	}
+	if _, err := s.Update(constants.SettingKeyVerifyEmailTemplateConfig, map[string]interface{}(settingsmessaging.EncodeVerifyEmailTemplateSetting(next))); err != nil {
+		return settingsmessaging.VerifyEmailTemplateSetting{}, err
+	}
+	return next, nil
+}
+
+// ResetVerifyEmailTemplateSetting 重置验证码邮件模板为默认。
+func (s *Service) ResetVerifyEmailTemplateSetting() (settingsmessaging.VerifyEmailTemplateSetting, error) {
+	defaultSetting := settingsmessaging.DefaultVerifyEmailTemplateSetting()
+	if s == nil {
+		return defaultSetting, nil
+	}
+	if _, err := s.Update(constants.SettingKeyVerifyEmailTemplateConfig, map[string]interface{}(settingsmessaging.EncodeVerifyEmailTemplateSetting(defaultSetting))); err != nil {
+		return settingsmessaging.VerifyEmailTemplateSetting{}, err
+	}
+	return defaultSetting, nil
+}
+
 // GetTelegramBotConfig 获取 Telegram Bot 配置。
 func (s *Service) GetTelegramBotConfig() (settingsmessaging.TelegramBotConfigSetting, error) {
 	fallback := settingsmessaging.DefaultTelegramBotConfig()

@@ -273,6 +273,8 @@ func BuiltinRoleSeeds() []RoleSeed {
 				{Object: "/admin/settings/notifications/test", Action: "POST"},
 				{Object: "/admin/settings/order-email-template", Action: "*"},
 				{Object: "/admin/settings/order-email-template/reset", Action: "POST"},
+				{Object: "/admin/settings/verify-email-template", Action: "*"},
+				{Object: "/admin/settings/verify-email-template/reset", Action: "POST"},
 				{Object: "/admin/settings/affiliate", Action: "*"},
 				{Object: "/admin/settings/telegram-bot", Action: "*"},
 				{Object: "/admin/settings/telegram-bot/runtime-status", Action: "GET"},

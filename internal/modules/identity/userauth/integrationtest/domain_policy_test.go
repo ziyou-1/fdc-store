@@ -22,6 +22,7 @@ import (
 	externalidentitystore "github.com/dujiao-next/internal/modules/identity/externalidentity/infrastructure/gormstore"
 	userauthapp "github.com/dujiao-next/internal/modules/identity/userauth/application"
 	resellercontract "github.com/dujiao-next/internal/modules/reseller/contract"
+	settingsmessaging "github.com/dujiao-next/internal/modules/settings/schema/messaging"
 	"github.com/dujiao-next/internal/shared/mailbrand"
 
 	"github.com/glebarez/sqlite"
@@ -30,7 +31,7 @@ import (
 
 type verificationEmailSenderStub struct{}
 
-func (verificationEmailSenderStub) SendVerifyCode(_, _, _, _ string, _ mailbrand.Brand) error {
+func (verificationEmailSenderStub) SendVerifyCode(_, _, _, _ string, _ mailbrand.Brand, _ *settingsmessaging.VerifyEmailTemplateSetting) error {
 	return nil
 }
 
@@ -38,7 +39,7 @@ type capturingVerificationEmailSender struct {
 	brand mailbrand.Brand
 }
 
-func (s *capturingVerificationEmailSender) SendVerifyCode(_, _, _, _ string, brand mailbrand.Brand) error {
+func (s *capturingVerificationEmailSender) SendVerifyCode(_, _, _, _ string, brand mailbrand.Brand, _ *settingsmessaging.VerifyEmailTemplateSetting) error {
 	s.brand = brand
 	return nil
 }

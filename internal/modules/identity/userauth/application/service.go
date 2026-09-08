@@ -17,6 +17,7 @@ import (
 
 	telegramauthapp "github.com/dujiao-next/internal/modules/identity/telegramauth/application"
 	settingsapp "github.com/dujiao-next/internal/modules/settings/application"
+	settingsmessaging "github.com/dujiao-next/internal/modules/settings/schema/messaging"
 
 	"github.com/dujiao-next/internal/cache"
 	"github.com/dujiao-next/internal/config"
@@ -586,7 +587,15 @@ func (s *Service) sendVerifyCode(ctx context.Context, email, purpose, locale str
 		SentAt:    now,
 		CreatedAt: now,
 	}
-	if err := s.emailService.SendVerifyCode(email, code, purpose, locale, brand); err != nil {
+	// 后台可配的验证码邮件模板；取不到就传 nil，由发信侧回落内置文案，
+	// 不能因为读设置失败就把验证码发不出去。
+	var verifyTmpl *settingsmessaging.VerifyEmailTemplateSetting
+	if s.settingService != nil {
+		if setting, tmplErr := s.settingService.GetVerifyEmailTemplateSetting(); tmplErr == nil {
+			verifyTmpl = &setting
+		}
+	}
+	if err := s.emailService.SendVerifyCode(email, code, purpose, locale, brand, verifyTmpl); err != nil {
 		return err
 	}
 

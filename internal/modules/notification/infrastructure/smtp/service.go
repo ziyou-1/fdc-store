@@ -67,10 +67,45 @@ func (s *Service) SetConfig(cfg *config.EmailConfig) {
 	s.cfg = cfg
 }
 
-// SendVerifyCode 发送邮箱验证码
-func (s *Service) SendVerifyCode(toEmail, code, purpose, locale string, brand mailbrand.Brand) error {
-	subject, body := buildVerifyCodeContent(code, purpose, locale, brand)
+// SendVerifyCode 发送邮箱验证码。tmpl 为 nil 时使用内置默认文案。
+func (s *Service) SendVerifyCode(toEmail, code, purpose, locale string, brand mailbrand.Brand, tmpl *settingsmessaging.VerifyEmailTemplateSetting) error {
+	subject, body := buildVerifyCodeContentWithTemplate(code, purpose, locale, tmpl, brand)
 	return s.sendTextEmail(toEmail, subject, body, brand)
+}
+
+// buildVerifyCodeContentWithTemplate 优先用后台配置的模板渲染，
+// 模板缺失/未配置时回落到内置文案，保证「设置读不到」不会导致发不出验证码。
+func buildVerifyCodeContentWithTemplate(code, purpose, locale string, tmpl *settingsmessaging.VerifyEmailTemplateSetting, brands ...mailbrand.Brand) (string, string) {
+	if tmpl == nil {
+		return buildVerifyCodeContent(code, purpose, locale, brands...)
+	}
+	normalized := normalizeLocale(locale)
+	scene := strings.ToLower(strings.TrimSpace(purpose))
+	localized, ok := settingsmessaging.ResolveVerifyEmailTemplate(*tmpl, scene, normalized)
+	if !ok {
+		return buildVerifyCodeContent(code, purpose, locale, brands...)
+	}
+
+	brand := firstMailBrand(brands)
+	siteName := strings.TrimSpace(brand.SiteName)
+	siteURL := strings.TrimRight(strings.TrimSpace(brand.SiteURL), "/")
+	variables := map[string]interface{}{
+		"code":      code,
+		"site_name": siteName,
+		"site_url":  siteURL,
+	}
+	subject := renderTemplate(localized.Subject, variables)
+	body := renderTemplate(localized.Body, variables)
+
+	// 模板自己引用了站点变量时，说明管理员已经安排好位置，不再自动追加落款；
+	// 没引用则沿用原有行为，在末尾补上「站点／网址」。
+	if strings.Contains(localized.Body, "{{site_name}}") || strings.Contains(localized.Body, "{{site_url}}") {
+		if siteName != "" {
+			subject = siteName + " - " + subject
+		}
+		return subject, body
+	}
+	return applyVerifyCodeBrand(normalized, subject, body, brand)
 }
 
 // SendOrderStatusEmail 发送订单状态通知
@@ -297,6 +332,25 @@ func buildVerifyCodeContent(code, purpose, locale string, brands ...mailbrand.Br
 		}
 		body := fmt.Sprintf("您的驗證碼是：%s\n\n該驗證碼用於 %s，請勿洩露。", code, purposeText)
 		return applyVerifyCodeBrand(normalized, subject, body, brand)
+	case i18n.LocaleID:
+		subject := "Kode Verifikasi Email"
+		purposeText := "verifikasi email"
+		switch purposeKey {
+		case constants.VerifyPurposeRegister:
+			subject = "Kode Verifikasi Pendaftaran"
+			purposeText = "pendaftaran"
+		case constants.VerifyPurposeReset:
+			subject = "Kode Atur Ulang Kata Sandi"
+			purposeText = "atur ulang kata sandi"
+		case constants.VerifyPurposeTelegramBind:
+			subject = "Kode Tautan Telegram"
+			purposeText = "menautkan Telegram"
+		case constants.VerifyPurposeChangeEmailOld, constants.VerifyPurposeChangeEmailNew:
+			subject = "Kode Ganti Email"
+			purposeText = "penggantian email"
+		}
+		body := fmt.Sprintf("Kode verifikasi kamu: %s\n\nKode ini digunakan untuk %s. Jangan bagikan kepada siapa pun.", code, purposeText)
+		return applyVerifyCodeBrand(normalized, subject, body, brand)
 	case i18n.LocaleEN:
 		subject := "Email Verification Code"
 		purposeText := "email verification"
@@ -361,6 +415,13 @@ func applyVerifyCodeBrand(locale, subject, body string, brand mailbrand.Brand) (
 		}
 		if siteURL != "" {
 			body += "\n網址：" + siteURL
+		}
+	case i18n.LocaleID:
+		if siteName != "" {
+			body += "\n\nSitus: " + siteName
+		}
+		if siteURL != "" {
+			body += "\nURL: " + siteURL
 		}
 	case i18n.LocaleEN:
 		if siteName != "" {
@@ -443,17 +504,8 @@ func appendGuestTip(locale string, input notificationcontract.OrderStatusEmailIn
 	return body + "\n\n" + tip
 }
 
-func normalizeLocale(locale string) string {
-	l := strings.ToLower(strings.TrimSpace(locale))
-	switch {
-	case strings.HasPrefix(l, "zh-tw"), strings.HasPrefix(l, "zh-hk"), strings.HasPrefix(l, "zh-mo"):
-		return i18n.LocaleTW
-	case strings.HasPrefix(l, "en"):
-		return i18n.LocaleEN
-	default:
-		return i18n.LocaleZH
-	}
-}
+// normalizeLocale 直接委托给 i18n，不再自己维护一份语言协商 switch。
+func normalizeLocale(locale string) string { return i18n.NormalizeLocale(locale) }
 
 func buildFromAddress(from, name string) string {
 	name = strings.TrimSpace(strings.NewReplacer("\r", " ", "\n", " ").Replace(name))

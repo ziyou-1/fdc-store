@@ -607,7 +607,9 @@ func TestDatabaseBootstrapIsSeparatedFromPlatformConnection(t *testing.T) {
 	assertDirectoryGoFileBudget(t, connectionRoot, 2)
 	// Payssion 的渠道种子（payssion_channels.go）是一张按需求 F-23 固定的
 	// 渠道清单，独立成文件而不是塞进 29KB 的 migrations.go，因此上调一格。
-	assertDirectoryGoFileBudget(t, migrationRoot, 5)
+	// 再上调一格给 payssion_channels_test.go：它钉住「后台删掉的渠道不得被种子
+	// 复活」这条行为——那个 bug 会让被删渠道在每次重启后以启用状态回来。
+	assertDirectoryGoFileBudget(t, migrationRoot, 6)
 }
 
 func TestNoNewCompatibilityOrLegacyProductionFiles(t *testing.T) {
