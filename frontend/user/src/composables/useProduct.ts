@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { resolveSiteCurrency } from '@/utils/siteCurrency'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '../stores/app'
 import { useUserAuthStore } from '../stores/userAuth'
@@ -16,10 +17,7 @@ export function useLocalized() {
     return jsonData[locale] || jsonData['zh-CN'] || jsonData['en-US'] || ''
   }
 
-  const siteCurrency = computed(() => {
-    const raw = String(appStore.config?.currency || '').trim().toUpperCase()
-    return /^[A-Z]{3}$/.test(raw) ? raw : 'CNY'
-  })
+  const siteCurrency = computed(() => resolveSiteCurrency(appStore.config?.currency))
 
   const formatPrice = (amount: any, currency?: any): string => {
     const cur = currency ?? siteCurrency.value

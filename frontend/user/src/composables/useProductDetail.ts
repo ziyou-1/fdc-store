@@ -1,4 +1,5 @@
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
+import { resolveSiteCurrency } from '@/utils/siteCurrency'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useHead } from '@unhead/vue'
@@ -673,7 +674,7 @@ export function useProductDetail(options: { onLoaded?: () => void } = {}) {
       const seoMeta = product.value.seo_meta || {}
       const description = getLocalizedText(seoMeta.description) || (typeof seoMeta.description === 'string' ? seoMeta.description : '')
       const priceAmount = product.value.price_amount || '0'
-      const currency = siteCurrency.value || 'CNY'
+      const currency = resolveSiteCurrency(siteCurrency.value)
 
       const jsonLd: Record<string, any> = {
         '@context': 'https://schema.org',

@@ -38,7 +38,7 @@
           {{ t(`personalCenter.membership.period.${plan.period}`) }}
         </p>
         <p class="mt-2 text-lg font-bold">{{ localized(plan.name) }}</p>
-        <p class="mt-1 text-2xl font-black tabular-nums">{{ formatMoney(String(plan.price)) }}</p>
+        <p class="mt-1 text-2xl font-black tabular-nums">{{ formatMoney(String(plan.price), siteCurrency) }}</p>
         <p class="mt-2 text-sm font-semibold text-primary">
           {{ discountLabel(plan.discount_rate) }}
         </p>
@@ -81,12 +81,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { resolveSiteCurrency } from '@/utils/siteCurrency'
 import { useI18n } from 'vue-i18n'
 import QRCode from 'qrcode'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { useMembership, isMembershipActive } from '../../composables/useMembership'
 import { useUserProfileStore } from '../../stores/userProfile'
+import { useAppStore } from '../../stores/app'
 import { usePersonalCenter } from '../../composables/usePersonalCenter'
 
 const { t, locale } = useI18n()
@@ -99,6 +101,10 @@ const discountLabel = (rate: number | string | undefined) => {
   return t('personalCenter.membership.discount', { n: value / 10 })
 }
 const userProfileStore = useUserProfileStore()
+const appStore = useAppStore()
+// 会员套餐按站点币种计价（membership_plans 表没有币种列），
+// 不带币种就只剩一串裸数字，买家不知道 300000.00 是什么钱。
+const siteCurrency = computed(() => resolveSiteCurrency(appStore.config?.currency))
 const { formatMoney, formatDate } = usePersonalCenter(() => 'membership')
 const {
   loading, purchasing, channelLoading, plans, channels, selectedPeriod, channelId,

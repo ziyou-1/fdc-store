@@ -1,4 +1,5 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { resolveSiteCurrency } from '@/utils/siteCurrency'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCartStore, type CartItem } from '../stores/cart'
@@ -237,7 +238,7 @@ export function useCheckout() {
     return centsToAmount(totalCents)
   })
 
-  const totalCurrency = computed(() => siteCurrency.value || 'CNY')
+  const totalCurrency = computed(() => resolveSiteCurrency(siteCurrency.value))
 
   const previewCurrency = computed(() => preview.value?.currency || totalCurrency.value)
   const previewOriginal = computed(() => preview.value?.original_amount ?? totalAmount.value)

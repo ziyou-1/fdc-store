@@ -1,4 +1,5 @@
 import { computed, onMounted, ref } from 'vue'
+import { resolveSiteCurrency } from '@/utils/siteCurrency'
 import { useI18n } from 'vue-i18n'
 import { useCartStore, type CartItem } from '../stores/cart'
 import { useAppStore } from '../stores/app'
@@ -23,7 +24,7 @@ export function useCart() {
   const { t } = useI18n()
 
   const { getLocalizedText, siteCurrency, formatPrice } = useLocalized()
-  const totalCurrency = computed(() => siteCurrency.value || 'CNY')
+  const totalCurrency = computed(() => resolveSiteCurrency(siteCurrency.value))
 
   const cartItems = computed(() => cartStore.items)
   const totalItems = computed(() => cartStore.totalItems)

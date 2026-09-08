@@ -39,6 +39,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { resolveSiteCurrency } from '@/utils/siteCurrency'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { walletAPI } from '../../api'
@@ -254,7 +255,7 @@ const formatMoney = (amount?: string, currency?: string) => {
   return `${amount} ${currency}`
 }
 
-const selectedChannelCurrency = computed(() => String(appStore.config?.currency || 'CNY'))
+const selectedChannelCurrency = computed(() => resolveSiteCurrency(appStore.config?.currency))
 const selectedChannelFeeRateDisplay = computed(() => {
   const rate = rateToBasisPoints(selectedChannel.value?.fee_rate)
   if (rate === null) return '0.00%'
@@ -271,7 +272,7 @@ const selectedChannelFeeAmountDisplay = computed(() => {
   const variableFeeCents = calculateFeeCents(amountCents, rate) || 0
   return formatMoney(centsToAmount(variableFeeCents + fixedFeeCents), selectedChannelCurrency.value)
 })
-const balanceDisplay = computed(() => formatMoney(wallet.value?.balance, String(appStore.config?.currency || 'CNY')))
+const balanceDisplay = computed(() => formatMoney(wallet.value?.balance, resolveSiteCurrency(appStore.config?.currency)))
 
 const loadWallet = async () => {
   const response = await walletAPI.account()

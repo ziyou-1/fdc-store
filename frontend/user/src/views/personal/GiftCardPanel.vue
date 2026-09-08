@@ -90,6 +90,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { resolveSiteCurrency } from '@/utils/siteCurrency'
 import { useI18n } from 'vue-i18n'
 import { giftCardAPI, type CaptchaPayload, type GiftCardRedeemResult } from '../../api'
 import { useAppStore } from '../../stores/app'
@@ -128,14 +129,14 @@ const turnstileSiteKey = computed(() => String(captchaConfig.value?.turnstile?.s
 
 const redeemedAmountText = computed(() => {
   const rawAmount = String(lastRedeem.value?.wallet_delta || lastRedeem.value?.gift_card?.amount || '').trim()
-  const currency = String(lastRedeem.value?.gift_card?.currency || appStore.config?.currency || 'CNY').trim()
+  const currency = resolveSiteCurrency(lastRedeem.value?.gift_card?.currency || appStore.config?.currency)
   if (!rawAmount) return '-'
   return `${rawAmount} ${currency}`
 })
 
 const currentBalanceText = computed(() => {
   const balance = String(lastRedeem.value?.wallet?.balance || '').trim()
-  const currency = String(lastRedeem.value?.gift_card?.currency || appStore.config?.currency || 'CNY').trim()
+  const currency = resolveSiteCurrency(lastRedeem.value?.gift_card?.currency || appStore.config?.currency)
   if (!balance) return '-'
   return `${balance} ${currency}`
 })
@@ -217,7 +218,7 @@ const submitRedeem = async () => {
       level: 'success',
       message: t('personalCenter.giftCard.redeemSuccess', {
         amount: String(payload.wallet_delta || payload.gift_card?.amount || ''),
-        currency: String(payload.gift_card?.currency || appStore.config?.currency || 'CNY'),
+        currency: resolveSiteCurrency(payload.gift_card?.currency || appStore.config?.currency),
       }),
     }
     redeemForm.code = ''
