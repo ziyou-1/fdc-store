@@ -195,64 +195,104 @@ func TestBootstrapBuiltinRoles(t *testing.T) {
 	}
 }
 
-func TestBootstrapBuiltinRolesRemovesStaleImmutableWildcard(t *testing.T) {
-	svc := setupAuthzServiceTest(t)
-	if _, err := svc.EnsureRole("readonly_auditor"); err != nil {
-		t.Fatalf("seed readonly role failed: %v", err)
-	}
-	if _, err := svc.enforcer.AddPolicy("role:readonly_auditor", "/admin/*", "GET"); err != nil {
-		t.Fatalf("seed stale wildcard failed: %v", err)
-	}
-	if err := svc.BootstrapBuiltinRoles(); err != nil {
-		t.Fatalf("bootstrap builtin roles failed: %v", err)
-	}
-	if err := svc.SetAdminRoles(9, []string{"readonly_auditor"}); err != nil {
-		t.Fatalf("assign readonly role failed: %v", err)
-	}
-
-	allow, err := svc.EnforceAdmin(9, "/admin/payment-channels/1", "GET")
-	if err != nil {
-		t.Fatalf("enforce sensitive route failed: %v", err)
-	}
-	if allow {
-		t.Fatal("stale readonly wildcard must be removed")
-	}
-	allow, err = svc.EnforceAdmin(9, "/admin/dashboard/overview", "GET")
-	if err != nil || !allow {
-		t.Fatalf("explicit readonly dashboard policy should remain, allow=%v err=%v", allow, err)
-	}
-}
-
-func TestImmutableBuiltinRoleRejectsPolicyMutationAndDeletion(t *testing.T) {
+// 启动播种不得覆盖管理员对内置角色做的修改。
+//
+// 原先的实现每次启动都把内置角色「补齐种子里的、删掉种子外的」，等于把它们焊死：
+// 后台改完一重启就被打回原样，且不报错、无痕迹。放开编辑后，这条必须成立，
+// 否则「可以改」只是假象。
+func TestBootstrapDoesNotClobberBuiltinRoleEdits(t *testing.T) {
 	svc := setupAuthzServiceTest(t)
 	if err := svc.BootstrapBuiltinRoles(); err != nil {
 		t.Fatalf("bootstrap builtin roles failed: %v", err)
 	}
 
-	if err := svc.GrantRolePolicy("readonly_auditor", "/admin/payment-channels", "GET"); !errors.Is(err, ErrImmutableBuiltinRole) {
-		t.Fatalf("grant immutable role policy error = %v, want ErrImmutableBuiltinRole", err)
+	// 管理员给内置角色加一条策略、删一条默认策略
+	if err := svc.GrantRolePolicy("readonly_auditor", "/admin/payment-channels", "GET"); err != nil {
+		t.Fatalf("grant policy on builtin role failed: %v", err)
 	}
-	if err := svc.RevokeRolePolicy("readonly_auditor", "/admin/dashboard/overview", "GET"); !errors.Is(err, ErrImmutableBuiltinRole) {
-		t.Fatalf("revoke immutable role policy error = %v, want ErrImmutableBuiltinRole", err)
+	if err := svc.RevokeRolePolicy("readonly_auditor", "/admin/dashboard/overview", "GET"); err != nil {
+		t.Fatalf("revoke policy on builtin role failed: %v", err)
 	}
-	if err := svc.DeleteRole("readonly_auditor"); !errors.Is(err, ErrImmutableBuiltinRole) {
-		t.Fatalf("delete immutable role error = %v, want ErrImmutableBuiltinRole", err)
+
+	// 再次启动
+	if err := svc.BootstrapBuiltinRoles(); err != nil {
+		t.Fatalf("second bootstrap failed: %v", err)
 	}
 
 	policies, err := svc.GetRolePolicies("readonly_auditor")
 	if err != nil {
-		t.Fatalf("get readonly policies failed: %v", err)
+		t.Fatalf("get policies failed: %v", err)
 	}
-	foundDashboard := false
+	hasAdded, hasRemoved := false, false
 	for _, policy := range policies {
-		if policy.Object == "/admin/dashboard/overview" && policy.Action == "GET" {
-			foundDashboard = true
+		if policy.Object == "/admin/payment-channels" && policy.Action == "GET" {
+			hasAdded = true
 		}
-		if policy.Object == "/admin/payment-channels" {
-			t.Fatal("rejected policy grant must not persist")
+		if policy.Object == "/admin/dashboard/overview" && policy.Action == "GET" {
+			hasRemoved = true
 		}
 	}
-	if !foundDashboard {
-		t.Fatal("rejected policy revoke must preserve builtin policy")
+	if !hasAdded {
+		t.Fatal("重启后管理员新增的策略被抹掉了")
+	}
+	if hasRemoved {
+		t.Fatal("重启后管理员删掉的策略被种子加了回来")
+	}
+}
+
+// 内置角色的策略允许增删，但角色本身不允许删除——
+// 删掉角色会让已绑定它的管理员凭空失去全部权限，且没有入口把角色建回来。
+func TestBuiltinRolePoliciesEditableButRoleNotDeletable(t *testing.T) {
+	svc := setupAuthzServiceTest(t)
+	if err := svc.BootstrapBuiltinRoles(); err != nil {
+		t.Fatalf("bootstrap builtin roles failed: %v", err)
+	}
+
+	for _, role := range []string{"readonly_auditor", "operations", "support", "integration", "finance", "system_admin"} {
+		if err := svc.GrantRolePolicy(role, "/admin/products", "GET"); err != nil {
+			t.Fatalf("角色 %s 应当允许增加策略，实得: %v", role, err)
+		}
+		if err := svc.RevokeRolePolicy(role, "/admin/products", "GET"); err != nil {
+			t.Fatalf("角色 %s 应当允许删除策略，实得: %v", role, err)
+		}
+		if err := svc.DeleteRole(role); !errors.Is(err, ErrImmutableBuiltinRole) {
+			t.Fatalf("角色 %s 不该被删除，实得: %v", role, err)
+		}
+	}
+}
+
+// 把某个内置角色的策略全部删光后重启，应恢复默认策略。
+// 这是万一把自己锁在后台外面时的唯一退路，不需要登服务器改库。
+func TestBootstrapReseedsBuiltinRoleWithNoPolicies(t *testing.T) {
+	svc := setupAuthzServiceTest(t)
+	if err := svc.BootstrapBuiltinRoles(); err != nil {
+		t.Fatalf("bootstrap builtin roles failed: %v", err)
+	}
+
+	before, err := svc.GetRolePolicies("finance")
+	if err != nil {
+		t.Fatalf("get policies failed: %v", err)
+	}
+	if len(before) == 0 {
+		t.Fatal("finance 角色首次播种后应当有策略")
+	}
+	for _, policy := range before {
+		if err := svc.RevokeRolePolicy("finance", policy.Object, policy.Action); err != nil {
+			t.Fatalf("revoke failed: %v", err)
+		}
+	}
+	if mid, err := svc.GetRolePolicies("finance"); err != nil || len(mid) != 0 {
+		t.Fatalf("策略应已删光，实得 %d 条 err=%v", len(mid), err)
+	}
+
+	if err := svc.BootstrapBuiltinRoles(); err != nil {
+		t.Fatalf("re-bootstrap failed: %v", err)
+	}
+	after, err := svc.GetRolePolicies("finance")
+	if err != nil {
+		t.Fatalf("get policies failed: %v", err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("删光后重启应恢复默认策略：恢复 %d 条，原有 %d 条", len(after), len(before))
 	}
 }

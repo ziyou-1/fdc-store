@@ -345,13 +345,11 @@ func (s *Service) BootstrapBuiltinRoles() error {
 			}
 		}
 
-		desiredParents := map[string]struct{}{roleAnchor: {}}
 		for _, parent := range seed.Inherits {
 			parentRole, err := NormalizeRole(parent)
 			if err != nil {
 				return err
 			}
-			desiredParents[parentRole] = struct{}{}
 			added, err := s.enforcer.AddNamedGroupingPolicy("g", role, parentRole)
 			if err != nil {
 				return fmt.Errorf("link role inheritance failed: %w", err)
@@ -360,63 +358,29 @@ func (s *Service) BootstrapBuiltinRoles() error {
 				changed = true
 			}
 		}
-		if seed.Immutable {
-			currentLinks, err := s.enforcer.GetFilteredNamedGroupingPolicy("g", 0, role)
-			if err != nil {
-				return fmt.Errorf("list builtin role links failed: %w", err)
-			}
-			for _, link := range currentLinks {
-				if len(link) < 2 {
-					continue
-				}
-				if _, keep := desiredParents[link[1]]; keep {
-					continue
-				}
-				removed, err := s.enforcer.RemoveNamedGroupingPolicy("g", link)
-				if err != nil {
-					return fmt.Errorf("remove stale builtin role link failed: %w", err)
-				}
-				if removed {
-					changed = true
-				}
-			}
+		// 只在角色一条策略都没有时才播种（首次安装，或管理员把策略删光了）。
+		//
+		// 原先的做法是每次启动都「补齐种子里的 + 删掉种子外的」，等于把内置角色
+		// 焊死：管理员在后台改的策略一重启就被打回原样，而且不报错、无痕迹。
+		// 现在改为「管理员动过就不再托管」，编辑才真正持久。
+		//
+		// 副作用是有意为之的兜底：把某个角色的策略全删光后重启，会恢复成默认策略。
+		// 这是万一把自己锁在后台外面时的唯一退路，不需要登服务器改库。
+		existingPolicies, err := s.enforcer.GetFilteredPolicy(0, role)
+		if err != nil {
+			return fmt.Errorf("list builtin role policies failed: %w", err)
 		}
-
-		desiredPolicies := make(map[string]struct{}, len(seed.Policies))
-		for _, policy := range seed.Policies {
-			action := NormalizeAction(policy.Action)
-			if action == "" {
-				return fmt.Errorf("builtin policy action is required")
-			}
-			object := NormalizeObject(policy.Object)
-			desiredPolicies[object+"|"+action] = struct{}{}
-			added, err := s.enforcer.AddPolicy(role, object, action)
-			if err != nil {
-				return fmt.Errorf("add builtin policy failed: %w", err)
-			}
-			if added {
-				changed = true
-			}
-		}
-		if seed.Immutable {
-			currentPolicies, err := s.enforcer.GetFilteredPolicy(0, role)
-			if err != nil {
-				return fmt.Errorf("list builtin role policies failed: %w", err)
-			}
-			for _, policy := range currentPolicies {
-				if len(policy) < 3 {
-					continue
+		if len(existingPolicies) == 0 {
+			for _, policy := range seed.Policies {
+				action := NormalizeAction(policy.Action)
+				if action == "" {
+					return fmt.Errorf("builtin policy action is required")
 				}
-				object := NormalizeObject(policy[1])
-				action := NormalizeAction(policy[2])
-				if _, keep := desiredPolicies[object+"|"+action]; keep {
-					continue
-				}
-				removed, err := s.enforcer.RemovePolicy(role, object, action)
+				added, err := s.enforcer.AddPolicy(role, NormalizeObject(policy.Object), action)
 				if err != nil {
-					return fmt.Errorf("remove stale builtin role policy failed: %w", err)
+					return fmt.Errorf("add builtin policy failed: %w", err)
 				}
-				if removed {
+				if added {
 					changed = true
 				}
 			}

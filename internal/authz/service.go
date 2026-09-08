@@ -218,9 +218,9 @@ func (s *Service) DeleteRole(role string) error {
 
 // GrantRolePolicy 为角色授予策略
 func (s *Service) GrantRolePolicy(role, object, action string) error {
-	if IsImmutableBuiltinRole(role) {
-		return ErrImmutableBuiltinRole
-	}
+	// 内置角色的策略允许修改：运营需要按自己的组织结构裁剪 finance / support
+	// 这些角色。角色本身仍不允许删除（见 DeleteRole），删掉整个角色会让已绑定
+	// 该角色的管理员凭空失去全部权限。
 	normalizedRole, err := s.EnsureRole(role)
 	if err != nil {
 		return err
@@ -251,9 +251,6 @@ func (s *Service) RevokeRolePolicy(role, object, action string) error {
 	normalizedRole, err := NormalizeRole(role)
 	if err != nil {
 		return err
-	}
-	if IsImmutableBuiltinRole(normalizedRole) {
-		return ErrImmutableBuiltinRole
 	}
 	normalizedObject := NormalizeObject(object)
 	normalizedAction := NormalizeAction(action)
@@ -438,7 +435,11 @@ func NormalizeRole(role string) (string, error) {
 	return normalized, nil
 }
 
-// IsImmutableBuiltinRole 判断角色是否由启动引导流程完全托管。
+// IsImmutableBuiltinRole 判断角色是否为系统预置角色。
+//
+// 现在只用于「禁止删除角色」这一件事：预置角色的策略允许管理员按需增删，
+// 但角色本身删不得——已绑定该角色的管理员会凭空失去全部权限，且没有入口
+// 把角色建回来（新建的同名角色不会自动恢复原有策略）。
 // 这类角色允许分配给管理员，但不允许通过通用角色 API 改写或删除。
 func IsImmutableBuiltinRole(role string) bool {
 	normalized, err := NormalizeRole(role)

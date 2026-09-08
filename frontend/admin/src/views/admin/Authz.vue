@@ -40,7 +40,7 @@ const textMap = {
     rolesEmpty: '暂无角色',
     policiesTitle: '角色策略',
     selectRoleHint: '请先在左侧选择角色',
-    immutableRoleHint: '系统内置角色由程序托管，仅可查看和分配，不能修改策略或删除。',
+    immutableRoleHint: '系统内置角色不允许删除；策略可以按需增删。若把某个角色的策略全部删光，重启后会恢复为默认策略。',
     objectPlaceholder: '资源路径，例如 /admin/orders/:id',
     addPolicy: '添加策略',
     policiesEmpty: '暂无策略',
@@ -139,7 +139,7 @@ const textMap = {
     rolesEmpty: '暫無角色',
     policiesTitle: '角色策略',
     selectRoleHint: '請先在左側選擇角色',
-    immutableRoleHint: '系統內建角色由程式託管，僅可檢視和分配，不能修改策略或刪除。',
+    immutableRoleHint: '系統內建角色不允許刪除；策略可以按需增刪。若把某個角色的策略全部刪光，重啟後會恢復為預設策略。',
     objectPlaceholder: '資源路徑，例如 /admin/orders/:id',
     addPolicy: '新增策略',
     policiesEmpty: '暫無策略',
@@ -238,7 +238,7 @@ const textMap = {
     rolesEmpty: 'No roles',
     policiesTitle: 'Role Policies',
     selectRoleHint: 'Please select a role first',
-    immutableRoleHint: 'Built-in roles are system-managed. They can be viewed and assigned, but not modified or deleted.',
+    immutableRoleHint: 'Built-in roles cannot be deleted, but their policies can be edited freely. Removing every policy from a role restores its defaults on the next restart.',
     objectPlaceholder: 'Resource path, e.g. /admin/orders/:id',
     addPolicy: 'Add Policy',
     policiesEmpty: 'No policies',
@@ -641,10 +641,6 @@ const handleGrantPolicy = async () => {
     notifyError(text.value.selectRoleFirst)
     return
   }
-  if (selectedRoleImmutable.value) {
-    notifyError(text.value.immutableRoleHint)
-    return
-  }
   const object = policyForm.object.trim()
   if (!object) {
     notifyError(text.value.objectRequired)
@@ -668,10 +664,6 @@ const handleGrantCatalogPolicy = async (item: AdminPermissionCatalogItem) => {
     notifyError(text.value.selectRoleFirst)
     return
   }
-  if (selectedRoleImmutable.value) {
-    notifyError(text.value.immutableRoleHint)
-    return
-  }
   if (hasCoveredPolicy(item)) {
     return
   }
@@ -691,10 +683,6 @@ const handleGrantCatalogPolicy = async (item: AdminPermissionCatalogItem) => {
 }
 
 const handleRevokePolicy = async (item: AdminAuthzPolicy) => {
-  if (selectedRoleImmutable.value) {
-    notifyError(text.value.immutableRoleHint)
-    return
-  }
   const confirmed = await confirmAction({
     description: formatText(text.value.confirmRevokePolicy, { object: item.object, action: item.action }),
     confirmText: text.value.delete,
@@ -1034,8 +1022,8 @@ onMounted(async () => {
             {{ text.immutableRoleHint }}
           </div>
           <div class="grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-2">
-            <Input v-model="policyForm.object" :placeholder="text.objectPlaceholder" :disabled="selectedRoleImmutable" />
-            <Select v-model="policyForm.action" :disabled="selectedRoleImmutable">
+            <Input v-model="policyForm.object" :placeholder="text.objectPlaceholder" />
+            <Select v-model="policyForm.action">
               <SelectTrigger class="h-10">
                 <SelectValue />
               </SelectTrigger>
@@ -1043,7 +1031,7 @@ onMounted(async () => {
                 <SelectItem v-for="action in actionOptions" :key="action" :value="action">{{ action }}</SelectItem>
               </SelectContent>
             </Select>
-            <Button :disabled="selectedRoleImmutable" @click="handleGrantPolicy">{{ text.addPolicy }}</Button>
+            <Button @click="handleGrantPolicy">{{ text.addPolicy }}</Button>
           </div>
 
           <div class="rounded-lg border border-border p-3 space-y-3">
@@ -1090,7 +1078,7 @@ onMounted(async () => {
                     <Button
                       size="sm"
                       :variant="hasCoveredPolicy(item) ? 'outline' : 'default'"
-                      :disabled="selectedRoleImmutable || hasCoveredPolicy(item)"
+                      :disabled="hasCoveredPolicy(item)"
                       @click="handleGrantCatalogPolicy(item)"
                     >
                       {{ hasCoveredPolicy(item) ? text.catalogAdded : text.catalogAdd }}
@@ -1127,7 +1115,7 @@ onMounted(async () => {
                     <div class="font-mono text-[11px] text-muted-foreground">{{ item.action }}</div>
                   </TableCell>
                   <TableCell class="min-w-[140px] px-4 py-3 text-right">
-                    <Button size="sm" variant="outline" :disabled="selectedRoleImmutable" @click="handleRevokePolicy(item)">
+                    <Button size="sm" variant="outline" @click="handleRevokePolicy(item)">
                       {{ text.delete }}
                     </Button>
                   </TableCell>
