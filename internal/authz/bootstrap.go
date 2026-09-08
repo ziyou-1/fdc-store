@@ -220,6 +220,9 @@ func BuiltinRoleSeeds() []RoleSeed {
 				{Object: "/admin/payments", Action: "GET"},
 				{Object: "/admin/payments/:id", Action: "GET"},
 				{Object: "/admin/payments/export", Action: "GET"},
+				// 删除支付记录只给财务：客服能看不能删，避免财务凭证被误清。
+				// 成功的支付在服务层另有硬拦截，任何角色都删不掉。
+				{Object: "/admin/payments/:id", Action: "DELETE"},
 				{Object: "/admin/payment-channels", Action: "*"},
 				{Object: "/admin/payment-channels/:id", Action: "*"},
 				{Object: "/admin/payment-channels/:id/wechatpay-public-key-test", Action: "POST"},

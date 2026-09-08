@@ -26,6 +26,7 @@ import (
 var (
 	ErrPaymentInvalid                      = errors.New("payment invalid")
 	ErrPaymentNotFound                     = errors.New("payment not found")
+	ErrPaymentDeleteNotAllowed             = errors.New("payment delete not allowed")
 	ErrPaymentCreateFailed                 = errors.New("payment create failed")
 	ErrPaymentUpdateFailed                 = errors.New("payment update failed")
 	ErrPaymentStatusInvalid                = errors.New("payment status invalid")

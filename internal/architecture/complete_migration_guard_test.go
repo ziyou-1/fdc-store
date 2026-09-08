@@ -24,7 +24,11 @@ var packageFileBudgetOverrides = map[string]packageFileBudget{
 	// skip_payment 不得吞掉积分兑换与免费领取，这条规则的回归测试
 	// （payment_skip_points_test.go）保持独立文件而不是塞进 60KB 的
 	// wallet 测试里，因此显式上调一格测试文件预算，生产文件数不变。
-	"internal/modules/payment/application": {production: 12, total: 21},
+	// production 12 -> 13：新增 payment_service_admin.go 承载后台对支付记录的
+	// 生命周期操作（目前是删除）。不并进 payment_service.go，那个文件按
+	// TestPaymentServiceImplementationIsSplitByResponsibility 只许放构造/查询/注入。
+	// total 21 -> 23：多一个生产文件，外加它的 payment_delete_test.go。
+	"internal/modules/payment/application": {production: 13, total: 23},
 }
 
 // completedMigrationPaths are deleted compatibility-free entry points. Once a

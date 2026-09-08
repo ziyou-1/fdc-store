@@ -66,6 +66,21 @@ func (f *fakeAdminPaymentQuery) ListPayments(filter AdminPaymentListFilter) ([]p
 	return out[start:end], total, nil
 }
 
+// DeletePayment 复现服务层的规则：成功的支付一律拒绝，其余从桩数据里移除。
+func (f *fakeAdminPaymentQuery) DeletePayment(id uint) error {
+	for i := range f.payments {
+		if f.payments[i].ID != id {
+			continue
+		}
+		if f.payments[i].Status == constants.PaymentStatusSuccess {
+			return ErrPaymentDeleteNotAllowed
+		}
+		f.payments = append(f.payments[:i], f.payments[i+1:]...)
+		return nil
+	}
+	return ErrPaymentNotFound
+}
+
 func (f *fakeAdminPaymentQuery) GetPayment(id uint) (*paymentdomain.Payment, error) {
 	for i := range f.payments {
 		if f.payments[i].ID == id {
@@ -614,5 +629,57 @@ func TestGetAdminPaymentsBadQueryReturnsBadRequestCode(t *testing.T) {
 	}
 	if resp.StatusCode != 400 {
 		t.Fatalf("status_code want 400 got %d", resp.StatusCode)
+	}
+}
+
+// 成功的支付走 HTTP 接口也必须删不掉——服务层拒绝后，
+// handler 要把它翻成明确的 400 而不是 500，好让后台弹出有意义的提示。
+func TestDeleteAdminPaymentRejectsSuccessfulPayment(t *testing.T) {
+	h, fixture := setupAdminPaymentHandlerTest(t)
+	query := h.payments.(*fakeAdminPaymentQuery)
+	for i := range query.payments {
+		if query.payments[i].ID == fixture.OrderPaymentID {
+			query.payments[i].Status = constants.PaymentStatusSuccess
+		}
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: fmt.Sprint(fixture.OrderPaymentID)}}
+	c.Request = httptest.NewRequest(http.MethodDelete, "/admin/payments/1", nil)
+
+	h.DeleteAdminPayment(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("业务错误应以 HTTP 200 + 业务码返回，实得 %d", w.Code)
+	}
+	// 断言业务码而不是文案：错误消息会随站点语言变化，
+	// 拿文案做断言会在默认语言一改就红。
+	if !strings.Contains(w.Body.String(), `"status_code":400`) {
+		t.Fatalf("应返回业务码 400，实得: %s", w.Body.String())
+	}
+	// 记录必须还在
+	if _, err := query.GetPayment(fixture.OrderPaymentID); err != nil {
+		t.Fatalf("被拒绝后记录不该消失: %v", err)
+	}
+}
+
+// 非成功状态允许删除，删完就查不到了。
+func TestDeleteAdminPaymentAllowsPendingPayment(t *testing.T) {
+	h, fixture := setupAdminPaymentHandlerTest(t)
+	query := h.payments.(*fakeAdminPaymentQuery)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: fmt.Sprint(fixture.OrderPaymentID)}}
+	c.Request = httptest.NewRequest(http.MethodDelete, "/admin/payments/1", nil)
+
+	h.DeleteAdminPayment(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("删除应成功，实得 %d: %s", w.Code, w.Body.String())
+	}
+	if _, err := query.GetPayment(fixture.OrderPaymentID); err == nil {
+		t.Fatal("删除后不该还能查到")
 	}
 }

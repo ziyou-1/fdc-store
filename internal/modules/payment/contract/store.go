@@ -23,6 +23,9 @@ type Store interface {
 	ExpirePendingByOrderIDs(orderIDs []uint, expiredAt time.Time) (int64, error)
 	ListAdmin(filter ListFilter) ([]paymentdomain.Payment, int64, error)
 	GetByIDForUpdate(id uint) (*paymentdomain.Payment, error)
+	// Delete 软删除一条支付记录（置 deleted_at）。行保留在库里以便追溯，
+	// 只是不再出现在后台列表与仪表盘统计中。
+	Delete(id uint) error
 	WithinTransaction(fn func(Transaction) error) error
 }
 

@@ -440,6 +440,8 @@ export const adminAPI = {
   getPayments: (params?: Record<string, unknown>) => api.get('/admin/payments', { params }),
   getPayment: (id: number) => api.get(`/admin/payments/${id}`),
   exportPayments: (params?: Record<string, unknown>) => api.get('/admin/payments/export', { params, blob: true }),
+  // 删除支付记录（软删除）。成功的支付由后端硬拒，不在前端放行。
+  deletePayment: (id: number) => api.delete(`/admin/payments/${id}`),
   createPaymentChannel: (data: Partial<AdminPaymentChannel>) => api.post('/admin/payment-channels', data),
   getPaymentChannels: (params?: Record<string, unknown>) => api.get('/admin/payment-channels', { params }),
   getPaymentChannel: (id: number) => api.get(`/admin/payment-channels/${id}`),

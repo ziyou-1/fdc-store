@@ -39,6 +39,18 @@ func (r *Store) Update(payment *paymentdomain.Payment) error {
 	return r.db.Save(payment).Error
 }
 
+// Delete 软删除支付记录。与 ChannelStore.Delete 一致：本项目的 DeletedAt 是
+// *time.Time 而非 gorm.DeletedAt，GORM 不做自动软删除，必须手工置位。
+func (r *Store) Delete(id uint) error {
+	if id == 0 {
+		return nil
+	}
+	now := time.Now()
+	return r.db.Model(&paymentdomain.Payment{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Updates(map[string]interface{}{"deleted_at": now, "updated_at": now}).Error
+}
+
 // GetByID 根据 ID 获取支付记录
 func (r *Store) GetByID(id uint) (*paymentdomain.Payment, error) {
 	var payment paymentdomain.Payment

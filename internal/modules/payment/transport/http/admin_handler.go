@@ -43,6 +43,7 @@ type AdminPaymentListFilter struct {
 type AdminPaymentQuery interface {
 	ListPayments(filter AdminPaymentListFilter) ([]paymentdomain.Payment, int64, error)
 	GetPayment(id uint) (*paymentdomain.Payment, error)
+	DeletePayment(id uint) error
 }
 
 // AdminChannelLookup 后台支付渠道名称查询端口。
@@ -213,6 +214,30 @@ func (h *AdminHandler) ExportAdminPayments(c *gin.Context) {
 }
 
 // GetAdminPayment 获取支付记录详情
+// DeleteAdminPayment 删除一条支付记录（软删除）。
+// 成功的支付不允许删除——那是买家付过钱的凭证，删了订单的已付状态就没了依据。
+func (h *AdminHandler) DeleteAdminPayment(c *gin.Context) {
+	id, err := ginutil.ParseParamUint(c, "id")
+	if err != nil {
+		ginutil.RespondError(c, response.CodeBadRequest, "error.payment_invalid", nil)
+		return
+	}
+	if err := h.payments.DeletePayment(id); err != nil {
+		switch {
+		case errors.Is(err, ErrPaymentNotFound):
+			ginutil.RespondError(c, response.CodeNotFound, "error.payment_not_found", nil)
+		case errors.Is(err, ErrPaymentDeleteNotAllowed):
+			ginutil.RespondError(c, response.CodeBadRequest, "error.payment_delete_success_forbidden", nil)
+		case errors.Is(err, ErrPaymentInvalid):
+			ginutil.RespondError(c, response.CodeBadRequest, "error.payment_invalid", nil)
+		default:
+			ginutil.RespondError(c, response.CodeInternal, "error.payment_delete_failed", err)
+		}
+		return
+	}
+	response.Success(c, gin.H{"id": id})
+}
+
 func (h *AdminHandler) GetAdminPayment(c *gin.Context) {
 	id, err := ginutil.ParseParamUint(c, "id")
 	if err != nil {

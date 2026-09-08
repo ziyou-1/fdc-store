@@ -13,6 +13,8 @@ import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/compon
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import TableSkeleton from '@/components/TableSkeleton.vue'
+import { confirmAction } from '@/utils/confirm'
+import { notifyError, notifySuccess } from '@/utils/notify'
 import ListPagination from '@/components/ListPagination.vue'
 import { useListRefresh, type ListFetchOptions } from '@/composables/useListRefresh'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -105,6 +107,33 @@ const availableChannelTypes = computed(() => {
 const handleProviderTypeChange = () => {
   filters.channelType = '__all__'
   handleSearch()
+}
+
+// 成功的支付是买家真付过钱的凭证，后端会硬拒；这里同步置灰，
+// 避免管理员点了才被告知不行。
+const canDelete = (payment: AdminPayment) => payment.status !== 'success'
+
+const deleting = ref<number | null>(null)
+
+const removePayment = async (payment: AdminPayment) => {
+  if (!canDelete(payment)) return
+  const ok = await confirmAction({
+    title: t('admin.payments.delete.confirmTitle'),
+    description: t('admin.payments.delete.confirmDesc', { id: payment.id }),
+  })
+  if (!ok) return
+  deleting.value = payment.id
+  try {
+    await adminAPI.deletePayment(payment.id)
+    notifySuccess(t('admin.payments.delete.success'))
+    await fetchPayments(pagination.value.page, { preserveRows: true })
+  } catch (err) {
+    // API 客户端在业务码非 0 时已弹过 toast 并打了 __notified 标记，这里不重复弹
+    const known = err as Error & { __notified?: boolean }
+    if (!known?.__notified) notifyError(known?.message || t('admin.payments.delete.failed'))
+  } finally {
+    deleting.value = null
+  }
 }
 
 const fetchPayments = async (page = 1, options: ListFetchOptions = {}) => {
@@ -465,7 +494,7 @@ watch(
             <TableHead class="px-6 py-3">{{ t('admin.payments.table.feeRate') }}</TableHead>
             <TableHead class="px-6 py-3">{{ t('admin.payments.table.feeAmount') }}</TableHead>
             <TableHead class="px-6 py-3">{{ t('admin.payments.table.createdAt') }}</TableHead>
-            <TableHead class="px-6 py-3 min-w-[90px] text-right">{{ t('admin.payments.table.action') }}</TableHead>
+            <TableHead class="px-6 py-3 min-w-[160px] text-right">{{ t('admin.payments.table.action') }}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody class="divide-y divide-border">
@@ -527,9 +556,20 @@ watch(
             <TableCell class="px-6 py-4 font-mono text-foreground">{{ formatMoney(payment.fee_amount, payment.currency) }}</TableCell>
             <TableCell class="px-6 py-4 text-xs text-muted-foreground">{{ formatDate(payment.created_at) }}</TableCell>
             <TableCell class="min-w-[90px] px-6 py-4 text-right">
-              <Button size="sm" variant="outline" @click="openDetail(payment)">
-                {{ t('admin.payments.view') }}
-              </Button>
+              <div class="flex items-center justify-end gap-2">
+                <Button size="sm" variant="outline" @click="openDetail(payment)">
+                  {{ t('admin.payments.view') }}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  :disabled="!canDelete(payment) || deleting === payment.id"
+                  :title="canDelete(payment) ? '' : t('admin.payments.delete.successBlocked')"
+                  @click="removePayment(payment)"
+                >
+                  {{ deleting === payment.id ? t('admin.payments.delete.deleting') : t('admin.payments.delete.action') }}
+                </Button>
+              </div>
             </TableCell>
           </TableRow>
         </TableBody>

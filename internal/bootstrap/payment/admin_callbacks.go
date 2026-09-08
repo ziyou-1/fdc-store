@@ -47,6 +47,10 @@ func (a adminQueryAdapter) GetPayment(id uint) (*paymentdomain.Payment, error) {
 	return payment, mapTransportError(err)
 }
 
+func (a adminQueryAdapter) DeletePayment(id uint) error {
+	return mapTransportError(a.payments.DeletePayment(id))
+}
+
 type adminChannelLookupAdapter struct {
 	channels paymentcontract.ChannelStore
 }

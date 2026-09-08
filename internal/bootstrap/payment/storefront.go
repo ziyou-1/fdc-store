@@ -110,6 +110,7 @@ func mapTransportError(err error) error {
 		{orderapp.ErrOrderStatusInvalid, paymenttransport.ErrOrderStatusInvalid},
 		{paymentapp.ErrPaymentInvalid, paymenttransport.ErrPaymentInvalid},
 		{paymentapp.ErrPaymentNotFound, paymenttransport.ErrPaymentNotFound},
+		{paymentapp.ErrPaymentDeleteNotAllowed, paymenttransport.ErrPaymentDeleteNotAllowed},
 		{paymentapp.ErrPaymentChannelNotFound, paymenttransport.ErrPaymentChannelNotFound},
 		{paymentapp.ErrPaymentChannelInactive, paymenttransport.ErrPaymentChannelInactive},
 		{paymentapp.ErrPaymentProviderNotSupported, paymenttransport.ErrPaymentProviderNotSupported},
