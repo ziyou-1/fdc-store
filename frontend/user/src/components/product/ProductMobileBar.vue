@@ -8,9 +8,9 @@
     leave-to-class="translate-y-full opacity-0">
     <div v-if="visible"
       class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t shadow-2xl theme-safe-bottom">
-      <div class="flex items-center gap-3 px-4 py-3">
+      <div class="flex items-center gap-2 px-3 py-2.5">
         <!-- Price -->
-        <div class="flex-1 min-w-0">
+        <div class="min-w-0 flex-1 basis-0">
           <span v-if="showMemberPrice" class="theme-price-sm text-amber-600 dark:text-amber-300 truncate block">
             {{ memberPriceDisplay }}
           </span>
@@ -32,11 +32,21 @@
           {{ t('productDetail.loginToBuy') }}
         </Button>
         <template v-else>
-          <Button variant="secondary" size="lg" class="rounded-xl font-bold" :disabled="!canPurchase" @click="$emit('addToCart')">
+          <Button variant="secondary" size="sm" class="h-11 shrink-0 rounded-xl px-3 text-xs font-bold" :disabled="!canPurchase" @click="$emit('addToCart')">
             {{ t('productDetail.addToCart') }}
           </Button>
-          <Button size="lg" class="rounded-xl font-bold" :disabled="!canPurchase" @click="$emit('buyNow')">
+          <Button size="sm" class="h-11 shrink-0 rounded-xl px-3 text-xs font-bold" :disabled="!canPurchase" @click="$emit('buyNow')">
             {{ t('productDetail.buyNow') }}
+          </Button>
+          <Button
+            v-if="canShowPointsRedeem"
+            variant="outline"
+            size="sm"
+            class="h-11 shrink-0 rounded-xl px-3 text-xs font-bold"
+            :disabled="!canPurchase || redeeming"
+            @click="$emit('redeemWithPoints')"
+          >
+            {{ redeeming ? t('productDetail.redeeming') : t('productDetail.redeemWithPoints') }}
           </Button>
         </template>
       </div>
@@ -63,11 +73,14 @@ defineProps<{
   showProductPromotionPrice: boolean
   productPromotionPriceDisplay: string
   productPriceDisplay: string
+  canShowPointsRedeem?: boolean
+  redeeming?: boolean
 }>()
 
 defineEmits<{
   addToCart: []
   buyNow: []
   goLogin: []
+  redeemWithPoints: []
 }>()
 </script>

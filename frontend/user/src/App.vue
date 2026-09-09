@@ -25,7 +25,7 @@
       </main>
       <Footer v-if="!isResellerConsole" />
       <BackToTop v-if="!isResellerConsole" />
-      <MobileBottomNav v-if="!isResellerConsole" />
+      <MobileBottomNav v-if="!isResellerConsole && !hideMobileBottomNav" />
     </template>
 
     <Loading :loading="appStore.loading" />
@@ -65,6 +65,10 @@ const SupportChatWidget = defineAsyncComponent(() => import('./components/suppor
 const appStore = useAppStore()
 const route = useRoute()
 const isResellerConsole = computed(() => route.meta.resellerConsole === true)
+// 商品详情页底部常驻购买条（加入购物车/立即购买/积分兑换），与主导航同为
+// fixed bottom-0，两条并存会互相遮挡。这里让详情页只保留购买条——
+// 和淘宝等电商详情页的做法一致，返回入口由页内的返回按钮承担。
+const hideMobileBottomNav = computed(() => route.name === 'product-detail')
 // getActiveTemplate 读取 appStore.config（响应式），config 加载后会重新计算
 const isVault = computed(() => getActiveTemplate() === 'vault')
 const userAuthStore = useUserAuthStore()

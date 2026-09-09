@@ -71,11 +71,11 @@
                   </Badge>
                 </div>
 
-                <h1 class="mb-4 text-2xl md:text-3xl lg:text-5xl font-black leading-tight text-foreground">
+                <h1 class="mb-2 text-lg md:mb-4 md:text-3xl lg:text-5xl font-black leading-snug md:leading-tight text-foreground">
                   {{ getLocalizedText(product.title) }}
                 </h1>
 
-                <div class="mb-6 flex flex-wrap items-center gap-2">
+                <div class="mb-3 md:mb-6 flex flex-wrap items-center gap-2">
                   <Badge variant="success">
                     <Lock class="h-3 w-3" />
                     {{ getPurchaseTypeLabel(product.purchase_type) }}
@@ -92,7 +92,7 @@
                   </Badge>
                 </div>
 
-                <div class="mb-8 border-b pb-8" ref="priceSection">
+                <div class="mb-4 pb-4 md:mb-8 md:pb-8 border-b" ref="priceSection">
                   <div class="mb-3 flex flex-wrap items-center gap-2">
                     <span class="text-sm text-muted-foreground">{{ t('products.price') }}</span>
                     <Badge v-if="(selectedSku && hasSkuPromotionPrice(selectedSku)) || (!selectedSku && hasPromotionPrice(product))" variant="danger">
@@ -385,7 +385,7 @@
 
         <!-- Mobile Fixed Purchase Bar -->
         <ProductMobileBar
-          :visible="showMobileBar && !!product && !loading"
+          :visible="!!product && !loading"
           :requires-login="requiresLogin"
           :can-purchase="canPurchase"
           :show-member-price="mobileBarShowMemberPrice"
@@ -397,9 +397,12 @@
           :show-product-promotion-price="mobileBarShowProductPromotionPrice"
           :product-promotion-price-display="mobileBarProductPromotionPriceDisplay"
           :product-price-display="mobileBarProductPriceDisplay"
+          :can-show-points-redeem="canShowPointsRedeem"
+          :redeeming="redeeming"
           @add-to-cart="addToCart"
           @buy-now="buyNow"
           @go-login="goLogin"
+          @redeem-with-points="redeemWithPoints"
         />
       </div>
 

@@ -348,14 +348,22 @@ html[data-telegram-mini-app="true"] body {
   }
 
   /* Price typography */
+  /* 手机上 2.75rem 会让「25000.00 IDR」这类长金额折成两行、把首屏挤满，
+     所以小屏收到 1.75rem，桌面维持原字号。 */
   .theme-price-lg {
-    font-size: 2.75rem;
+    font-size: 1.75rem;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
     line-height: 1.1;
     color: var(--ui-price-primary);
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  }
+
+  @media (min-width: 768px) {
+    .theme-price-lg {
+      font-size: 2.75rem;
+    }
   }
 
   .theme-price-sm {

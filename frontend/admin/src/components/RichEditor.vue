@@ -17,6 +17,7 @@ import { getImageUrl } from '@/utils/image'
 import { processHtmlForDisplay, processHtmlForStorage } from '@/utils/content'
 import { useI18n } from 'vue-i18n'
 import TiptapImage from './TiptapImage.vue'
+import { VideoNode } from '@/utils/richEditorMedia'
 
 const props = defineProps<{
   modelValue: string
@@ -27,33 +28,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
-
-const Video = Image.extend({
-  name: 'video',
-  group: 'block',
-  inline: false,
-  atom: true,
-  addAttributes() {
-    return {
-      src: { default: null },
-      controls: { default: true },
-      preload: { default: 'metadata' },
-    }
-  },
-  parseHTML() {
-    return [{
-      tag: 'video',
-      getAttrs: (element: HTMLElement) => ({
-        src: element.getAttribute('src') || element.querySelector('source')?.getAttribute('src'),
-        controls: true,
-        preload: 'metadata',
-      }),
-    }]
-  },
-  renderHTML({ HTMLAttributes }: { HTMLAttributes: Record<string, any> }) {
-    return ['video', { ...HTMLAttributes, controls: 'controls', preload: 'metadata' }]
-  },
-})
 
 const mediaPickerRef = ref<InstanceType<typeof MediaPicker> | null>(null)
 const mediaPickerValue = ref<string[]>([])
@@ -143,7 +117,7 @@ const editor = useEditor({
     TableRow,
     TableHeader,
     TableCell,
-    Video,
+    VideoNode,
   ],
   editorProps: {
     attributes: {
