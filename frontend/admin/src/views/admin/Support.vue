@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Loader2, Paperclip, Pencil, Plus, SendHorizontal, Trash2 } from 'lucide-vue-next'
+import { Copy, CornerUpLeft, Loader2, Paperclip, Pencil, Plus, SendHorizontal, Trash2, Undo2, X } from 'lucide-vue-next'
 import { adminAPI } from '@/api/admin'
 import type {
   AdminSupportAttachmentResult,
@@ -21,11 +21,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useAdminAuthStore } from '@/stores/auth'
+import { copyText } from '@/utils/clipboard'
+import { canRevokeMessage as canRevokeByWindow, isRevoked, quoteSummary } from '@/utils/supportMessage'
 import { confirmAction } from '@/utils/confirm'
 import { formatDate, formatMoney } from '@/utils/format'
 import { orderStatusClass, orderStatusLabel } from '@/utils/status'
 import { getImageUrl } from '@/utils/image'
-import { notifySuccess } from '@/utils/notify'
+import { notifyError, notifySuccess } from '@/utils/notify'
 
 const STATUS_ALL = '__all__'
 const LIST_POLL_MS = 10000
@@ -64,6 +66,11 @@ const filters = reactive({
   unreadOnly: false,
   userId: '',
 })
+// replyTo 是正在引用的消息；发送后清空。
+const replyTo = ref<AdminSupportMessage | null>(null)
+const revokingId = ref<number | null>(null)
+// nowTick 由消息轮询推进，超过 2 分钟的撤回按钮会自己消失，不额外开定时器。
+const nowTick = ref(Date.now())
 const scrollRef = ref<HTMLElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const quickReplies = ref<AdminSupportQuickReply[]>([])
@@ -84,6 +91,7 @@ let messageTimer: ReturnType<typeof setInterval> | null = null
 const canReply = computed(() => authStore.hasPermission('POST:/admin/support/conversations/:id/messages'))
 const canStatus = computed(() => authStore.hasPermission('PUT:/admin/support/conversations/:id/status'))
 const canUpload = computed(() => authStore.hasPermission('POST:/admin/support/attachments'))
+const canRevoke = computed(() => authStore.hasPermission('POST:/admin/support/messages/:id/revoke'))
 const canOpenUser = computed(() => authStore.hasPermission('GET:/admin/users/:id'))
 // 客服角色在 RBAC seed 里已带 GET:/admin/orders，
 // 没有该权限的角色（如纯只读审计）不渲染侧栏而不是让它 403。
@@ -122,6 +130,82 @@ const appendMessages = (incoming: AdminSupportMessage[]) => {
   if (fresh.length === 0) return
   messages.value = [...messages.value, ...fresh].sort((a, b) => a.id - b.id)
   void scrollToBottom()
+}
+
+// patchMessage 就地更新一条已在列表里的消息。撤回不产生新消息，
+// 而增量轮询用的是 after_id，永远不会把旧消息再拉一遍。
+const patchMessage = (updated: AdminSupportMessage) => {
+  messages.value = messages.value.map((item) =>
+    item.id === updated.id ? { ...item, ...updated } : item,
+  )
+}
+
+const messageByID = computed(() => {
+  const map = new Map<number, AdminSupportMessage>()
+  messages.value.forEach((item) => map.set(item.id, item))
+  return map
+})
+
+const quotedMessage = (message: AdminSupportMessage) =>
+  message.reply_to_id ? messageByID.value.get(message.reply_to_id) ?? null : null
+
+const senderLabel = (message: AdminSupportMessage) =>
+  message.sender_type === 'agent' ? t('admin.support.agent') : t('admin.support.buyer')
+
+// 引用块里只放一行摘要：图片/视频没有文字，撤回后原文也不该再露出来。
+const quotedSummary = (message: AdminSupportMessage) =>
+  quoteSummary(message, {
+    revoked: t('admin.support.revoked'),
+    image: t('admin.support.quoteImage'),
+    video: t('admin.support.quoteVideo'),
+  })
+
+// 撤回按钮：有权限 + 客服自己发的 + 未撤回 + 在窗口内。
+// 「是不是本人发的」交给服务端判，越权时会返回可读的错误提示。
+const canRevokeMessage = (message: AdminSupportMessage) =>
+  canRevoke.value && canRevokeByWindow(message, nowTick.value)
+
+const startReply = (message: AdminSupportMessage) => {
+  if (!canReply.value || isRevoked(message)) return
+  replyTo.value = message
+}
+
+const cancelReply = () => {
+  replyTo.value = null
+}
+
+const copyMessage = async (message: AdminSupportMessage) => {
+  // 图片/视频没有文字可复制，退而复制它的地址。
+  const text =
+    message.content_type === 'text' ? message.content : getImageUrl(message.media_url)
+  if (!text) return
+  try {
+    await copyText(text)
+    notifySuccess(t('admin.common.copied'))
+  } catch {
+    notifyError(t('admin.common.copyFailed'))
+  }
+}
+
+const revokeMessage = async (message: AdminSupportMessage) => {
+  if (!canRevokeMessage(message) || revokingId.value !== null) return
+  const confirmed = await confirmAction({
+    description: t('admin.support.revokeConfirm'),
+    confirmText: t('admin.support.revoke'),
+    variant: 'destructive',
+  })
+  if (!confirmed) return
+  revokingId.value = message.id
+  try {
+    const response = await adminAPI.revokeSupportMessage(message.id)
+    patchMessage(response.data.data as AdminSupportMessage)
+    if (replyTo.value?.id === message.id) cancelReply()
+    void fetchList({ silent: true })
+  } catch {
+    // client 已提示（超时/越权由服务端给出可读文案）
+  } finally {
+    revokingId.value = null
+  }
 }
 
 const applyConversation = (next: AdminSupportConversation) => {
@@ -215,6 +299,8 @@ const loadMessages = async (id: number) => {
 }
 
 const pollMessages = async () => {
+  // 顺带推进时间基准，让过期的撤回按钮自己消失。
+  nowTick.value = Date.now()
   if (!selectedId.value) return
   try {
     const response = await adminAPI.getSupportMessages(
@@ -287,6 +373,7 @@ const selectConversation = async (row: AdminSupportConversation) => {
   selectedId.value = row.id
   selected.value = row
   messages.value = []
+  replyTo.value = null
   buyerOrders.value = []
   await Promise.all([loadMessages(row.id), loadBuyerOrders(row.user_id)])
 }
@@ -305,9 +392,11 @@ const sendText = async () => {
     const response = await adminAPI.sendSupportMessage(selectedId.value, {
       content_type: 'text',
       content,
+      reply_to_id: replyTo.value?.id ?? 0,
     })
     appendMessages([response.data.data as AdminSupportMessage])
     draft.value = ''
+    replyTo.value = null
     void fetchList({ silent: true })
   } catch {
     // client 已提示
@@ -650,16 +739,75 @@ onBeforeUnmount(stopPolling)
               v-for="message in messages"
               v-else
               :key="message.id"
-              class="flex"
+              class="group flex items-center gap-1"
               :class="message.sender_type === 'agent' ? 'justify-end' : 'justify-start'"
             >
+              <!-- 悬浮操作条：客服消息在气泡左侧，买家消息在右侧，始终朝屏幕中间 -->
+              <div
+                v-if="message.sender_type === 'agent' && !isRevoked(message)"
+                class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100"
+              >
+                <button
+                  v-if="canReply"
+                  type="button"
+                  class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  :title="t('admin.support.reply')"
+                  :aria-label="t('admin.support.reply')"
+                  @click="startReply(message)"
+                >
+                  <CornerUpLeft class="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  :title="t('admin.common.copy')"
+                  :aria-label="t('admin.common.copy')"
+                  @click="copyMessage(message)"
+                >
+                  <Copy class="h-3.5 w-3.5" />
+                </button>
+                <button
+                  v-if="canRevokeMessage(message)"
+                  type="button"
+                  class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-destructive disabled:opacity-50"
+                  :disabled="revokingId === message.id"
+                  :title="t('admin.support.revoke')"
+                  :aria-label="t('admin.support.revoke')"
+                  @click="revokeMessage(message)"
+                >
+                  <Loader2 v-if="revokingId === message.id" class="h-3.5 w-3.5 animate-spin" />
+                  <Undo2 v-else class="h-3.5 w-3.5" />
+                </button>
+              </div>
+
               <div class="max-w-[78%] space-y-1">
+                <!-- 撤回后只留一行灰字：行还在库里，内容不再露出来 -->
                 <div
+                  v-if="isRevoked(message)"
+                  class="rounded-2xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground"
+                >
+                  {{ message.sender_type === 'agent' ? t('admin.support.revokedByMe') : t('admin.support.revoked') }}
+                </div>
+                <div
+                  v-else
                   class="rounded-2xl px-3 py-2 text-sm break-words"
                   :class="message.sender_type === 'agent'
                     ? 'rounded-br-sm bg-primary text-primary-foreground'
                     : 'rounded-bl-sm bg-muted text-foreground'"
                 >
+                  <!-- 引用块：被引用的消息若已撤回，这里跟着显示「已撤回」 -->
+                  <div
+                    v-if="quotedMessage(message)"
+                    class="mb-1.5 rounded-lg border-l-2 px-2 py-1 text-xs opacity-80"
+                    :class="message.sender_type === 'agent'
+                      ? 'border-primary-foreground/60 bg-primary-foreground/10'
+                      : 'border-border bg-background/60'"
+                  >
+                    <p class="font-medium">{{ senderLabel(quotedMessage(message)!) }}</p>
+                    <p class="line-clamp-2 whitespace-pre-wrap break-words">
+                      {{ quotedSummary(quotedMessage(message)!) }}
+                    </p>
+                  </div>
                   <template v-if="message.content_type === 'text'">
                     <p class="whitespace-pre-wrap">{{ message.content }}</p>
                     <template v-if="message.sender_type === 'user' && message.translation">
@@ -693,9 +841,34 @@ onBeforeUnmount(stopPolling)
                   class="px-1 text-[11px] text-muted-foreground"
                   :class="message.sender_type === 'agent' ? 'text-right' : 'text-left'"
                 >
-                  {{ message.sender_type === 'agent' ? t('admin.support.agent') : t('admin.support.buyer') }}
+                  {{ senderLabel(message) }}
                   · {{ formatDate(message.created_at) }}
                 </p>
+              </div>
+
+              <div
+                v-if="message.sender_type === 'user' && !isRevoked(message)"
+                class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100"
+              >
+                <button
+                  v-if="canReply"
+                  type="button"
+                  class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  :title="t('admin.support.reply')"
+                  :aria-label="t('admin.support.reply')"
+                  @click="startReply(message)"
+                >
+                  <CornerUpLeft class="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  :title="t('admin.common.copy')"
+                  :aria-label="t('admin.common.copy')"
+                  @click="copyMessage(message)"
+                >
+                  <Copy class="h-3.5 w-3.5" />
+                </button>
               </div>
             </div>
           </div>
@@ -756,6 +929,28 @@ onBeforeUnmount(stopPolling)
               </div>
             </div>
             <p v-if="formError" class="mb-2 text-xs text-destructive">{{ formError }}</p>
+            <!-- 正在引用哪条：发送后自动清空，也可以手动叉掉 -->
+            <div
+              v-if="replyTo"
+              class="mb-2 flex items-start gap-2 rounded-lg border-l-2 border-primary bg-muted/60 px-2 py-1.5"
+            >
+              <div class="min-w-0 flex-1 text-xs">
+                <p class="font-medium">
+                  {{ t('admin.support.replyingTo', { name: senderLabel(replyTo) }) }}
+                </p>
+                <p class="line-clamp-2 whitespace-pre-wrap break-words text-muted-foreground">
+                  {{ quotedSummary(replyTo) }}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground"
+                :aria-label="t('admin.support.cancelReply')"
+                @click="cancelReply"
+              >
+                <X class="h-3.5 w-3.5" />
+              </button>
+            </div>
             <div class="flex items-end gap-2">
               <input
                 ref="fileInput"

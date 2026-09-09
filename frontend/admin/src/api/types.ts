@@ -1323,6 +1323,12 @@ export interface AdminSupportMessage {
   content: string
   translation?: string
   media_url: string
+  // reply_to_id 引用的消息 ID，0 表示普通消息。
+  // 只给 ID：被引用的消息若已撤回，引用块要跟着变成「已撤回」，
+  // 冗余一份内容快照就会留下一段撤不掉的原文。
+  reply_to_id?: number
+  // revoked_at 非空表示已撤回。行仍在，内容仍在库里，只是不再展示。
+  revoked_at?: string | null
   created_at: string
 }
 
@@ -1330,6 +1336,7 @@ export interface AdminSupportSendMessagePayload {
   content_type?: string
   content?: string
   media_url?: string
+  reply_to_id?: number
 }
 
 export interface AdminSupportMessageListResult {

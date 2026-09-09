@@ -1,6 +1,7 @@
 package application
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -138,6 +139,39 @@ func (s *Service) SendAgentMessage(adminID, conversationID uint, input supportco
 	return s.appendMessage(conversation, input)
 }
 
+// RevokeAgentMessage 撤回客服自己发的消息。
+//
+// 只打标记不删行：这张表的约定是只追加，行留着才有审计痕迹，
+// 买家侧也才知道「这里原本有条消息」而不是凭空少一条。
+//
+// 撤回不回退会话的未读计数。买家很可能已经读到了，硬把未读数减回去
+// 只会让工作台的计数与买家实际看到的对不上——宁可计数偏保守。
+func (s *Service) RevokeAgentMessage(messageID, agentID uint) (*supportdomain.Message, error) {
+	if messageID == 0 || agentID == 0 {
+		return nil, supportcontract.ErrMessageNotFound
+	}
+	message, err := s.repo.GetMessageByID(messageID)
+	if err != nil {
+		return nil, err
+	}
+	if message == nil {
+		return nil, supportcontract.ErrMessageNotFound
+	}
+	now := time.Now()
+	if !message.CanRevokeBy(agentID, now) {
+		return nil, supportcontract.ErrRevokeNotAllowed
+	}
+	if err := s.repo.RevokeMessage(messageID, now); err != nil {
+		// 仓储的条件更新影响 0 行说明期间已被撤回，按不允许处理。
+		if errors.Is(err, supportcontract.ErrMessageNotFound) {
+			return nil, supportcontract.ErrRevokeNotAllowed
+		}
+		return nil, err
+	}
+	message.RevokedAt = &now
+	return message, nil
+}
+
 // appendMessage 落一条消息并同步会话上的冗余字段。
 func (s *Service) appendMessage(
 	conversation *supportdomain.Conversation,
@@ -160,6 +194,19 @@ func (s *Service) appendMessage(
 		return nil, supportcontract.ErrContentTypeInvalid
 	}
 
+	// 引用必须指向同一会话里的真实消息，否则丢弃。
+	// 允许跨会话引用等于把别人的对话内容搬进这个会话。
+	replyToID := input.ReplyToID
+	if replyToID != 0 {
+		referenced, err := s.repo.GetMessageByID(replyToID)
+		if err != nil {
+			return nil, err
+		}
+		if referenced == nil || referenced.ConversationID != conversation.ID {
+			replyToID = 0
+		}
+	}
+
 	now := time.Now()
 	message := &supportdomain.Message{
 		ConversationID: conversation.ID,
@@ -169,6 +216,7 @@ func (s *Service) appendMessage(
 		Content:        strings.TrimSpace(input.Content),
 		Translation:    strings.TrimSpace(input.Translation),
 		MediaURL:       strings.TrimSpace(input.MediaURL),
+		ReplyToID:      replyToID,
 		CreatedAt:      now,
 	}
 	if err := s.repo.CreateMessage(message); err != nil {

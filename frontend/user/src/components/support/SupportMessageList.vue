@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Loader2, MessageCircle } from 'lucide-vue-next'
 import { getImageUrl } from '../../utils/image'
@@ -34,6 +34,29 @@ const formatTime = (value: string) => {
   })
 }
 
+// 引用块要按 ID 反查原消息。只存 ID 不冗余快照：被引用的消息一旦撤回，
+// 引用块必须跟着变成「已撤回」，否则原文会从引用里漏出来。
+const messageByID = computed(() => {
+  const map = new Map<number, SupportMessageData>()
+  props.messages.forEach((item) => map.set(item.id, item))
+  return map
+})
+
+const isRevoked = (message: SupportMessageData) => Boolean(message.revoked_at)
+
+const quotedMessage = (message: SupportMessageData) =>
+  message.reply_to_id ? messageByID.value.get(message.reply_to_id) ?? null : null
+
+const senderLabel = (message: SupportMessageData) =>
+  message.sender_type === 'user' ? t('support.you') : t('support.agent')
+
+const quotedSummary = (message: SupportMessageData) => {
+  if (isRevoked(message)) return t('support.revoked')
+  if (message.content_type === 'image') return t('support.quoteImage')
+  if (message.content_type === 'video') return t('support.quoteVideo')
+  return message.content
+}
+
 defineExpose({ scrollToBottom })
 </script>
 
@@ -59,12 +82,33 @@ defineExpose({ scrollToBottom })
         :class="message.sender_type === 'user' ? 'justify-end' : 'justify-start'"
       >
         <div class="max-w-[78%] space-y-1">
+          <!-- 客服撤回后只留一行灰字，内容不再露出来 -->
           <div
+            v-if="isRevoked(message)"
+            class="rounded-2xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground"
+          >
+            {{ message.sender_type === 'user' ? t('support.revokedByMe') : t('support.revoked') }}
+          </div>
+          <div
+            v-else
             class="rounded-2xl px-3 py-2 text-sm break-words"
             :class="message.sender_type === 'user'
               ? 'bg-primary text-primary-foreground rounded-br-sm'
               : 'bg-muted text-foreground rounded-bl-sm'"
           >
+            <div
+              v-if="quotedMessage(message)"
+              class="mb-1.5 rounded-lg border-l-2 px-2 py-1 text-xs opacity-80"
+              :class="message.sender_type === 'user'
+                ? 'border-primary-foreground/60 bg-primary-foreground/10'
+                : 'border-border bg-background/60'"
+            >
+              <p class="font-medium">{{ senderLabel(quotedMessage(message)!) }}</p>
+              <p class="line-clamp-2 whitespace-pre-wrap break-words">
+                {{ quotedSummary(quotedMessage(message)!) }}
+              </p>
+            </div>
+
             <p v-if="message.content_type === 'text'" class="whitespace-pre-wrap">
               {{ message.content }}
             </p>
@@ -96,7 +140,7 @@ defineExpose({ scrollToBottom })
             class="px-1 text-[11px] text-muted-foreground"
             :class="message.sender_type === 'user' ? 'text-right' : 'text-left'"
           >
-            {{ message.sender_type === 'user' ? t('support.you') : t('support.agent') }}
+            {{ senderLabel(message) }}
             · {{ formatTime(message.created_at) }}
           </p>
         </div>

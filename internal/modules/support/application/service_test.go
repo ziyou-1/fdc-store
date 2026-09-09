@@ -3,6 +3,7 @@ package application
 import (
 	"errors"
 	"testing"
+	"time"
 
 	supportcontract "github.com/dujiao-next/internal/modules/support/contract"
 	supportdomain "github.com/dujiao-next/internal/modules/support/domain"
@@ -91,6 +92,31 @@ func (r *fakeRepo) CreateMessage(message *supportdomain.Message) error {
 	message.ID = r.take()
 	r.messages = append(r.messages, *message)
 	return nil
+}
+
+func (r *fakeRepo) GetMessageByID(id uint) (*supportdomain.Message, error) {
+	for i := range r.messages {
+		if r.messages[i].ID == id {
+			message := r.messages[i]
+			return &message, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *fakeRepo) RevokeMessage(id uint, revokedAt time.Time) error {
+	for i := range r.messages {
+		if r.messages[i].ID != id {
+			continue
+		}
+		// 与 gormstore 的 WHERE revoked_at IS NULL 对齐：重复撤回视为找不到。
+		if r.messages[i].RevokedAt != nil {
+			return supportcontract.ErrMessageNotFound
+		}
+		r.messages[i].RevokedAt = &revokedAt
+		return nil
+	}
+	return supportcontract.ErrMessageNotFound
 }
 
 func (r *fakeRepo) ListMessages(filter supportcontract.MessageListFilter) (

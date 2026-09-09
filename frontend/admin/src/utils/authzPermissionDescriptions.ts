@@ -1,7 +1,7 @@
 // 每个后台接口权限的人话说明。运营在「角色策略」页配权限时靠它判断
 // 「勾上这条，这个角色能干什么」——原始路径对非技术人员没有意义。
 //
-// 由权限目录（GET /admin/authz/permissions/catalog）逐条生成，共 276 条。
+// 由权限目录（GET /admin/authz/permissions/catalog）逐条生成，共 277 条。
 // 后端新增接口时这里会缺项，调用方需回落到「模块名 + 方法」的粗粒度描述：
 // 缺说明不该让整行变空白，那会让人以为权限失效了。
 
@@ -232,6 +232,7 @@ export const permissionDescriptions: Record<string, PermissionDescription> = {
   "POST:/admin/support/attachments": { "zh-CN": "上传客服聊天的图片或视频", "zh-TW": "上傳客服聊天的圖片或影片", "en-US": "Upload an image or video for support chat" },
   "POST:/admin/support/conversations/:id/messages": { "zh-CN": "以客服身份回复买家消息", "zh-TW": "以客服身分回覆買家訊息", "en-US": "Reply to a buyer in a conversation" },
   "POST:/admin/support/conversations/:id/read": { "zh-CN": "把会话消息标记为已读", "zh-TW": "將會話訊息標記為已讀", "en-US": "Mark a conversation as read" },
+  "POST:/admin/support/messages/:id/revoke": { "zh-CN": "撤回自己 2 分钟内发出的客服消息", "zh-TW": "收回自己 2 分鐘內發出的客服訊息", "en-US": "Recall your own support message sent within 2 minutes" },
   "POST:/admin/support/quick-replies": { "zh-CN": "新增一条客服快捷回复", "zh-TW": "新增一條客服快捷回覆", "en-US": "Create a quick reply" },
   "POST:/admin/system/restart": { "zh-CN": "重启后台服务（全站短暂中断）", "zh-TW": "重新啟動後台服務（全站短暫中斷）", "en-US": "Restart the service (brief site downtime)" },
   "POST:/admin/system/update/rollback": { "zh-CN": "回滚到升级前的旧版本（有数据风险）", "zh-TW": "還原到升級前的舊版本（有資料風險）", "en-US": "Roll back to the pre-update version (risky)" },
@@ -291,7 +292,7 @@ export const permissionDescriptions: Record<string, PermissionDescription> = {
 }
 
 /** 说明条目总数，供测试断言覆盖面。 */
-export const permissionDescriptionCount = 276
+export const permissionDescriptionCount = 277
 
 /**
  * 取某个权限的说明。permission 形如 "DELETE:/admin/products/:id"。

@@ -708,6 +708,7 @@ export const adminAPI = {
     api.get(`/admin/support/conversations/${id}/messages`, { params, ...options }),
   sendSupportMessage: (id: number, data: AdminSupportSendMessagePayload) =>
     api.post(`/admin/support/conversations/${id}/messages`, data),
+  revokeSupportMessage: (id: number) => api.post(`/admin/support/messages/${id}/revoke`, {}),
   markSupportRead: (id: number, options?: Record<string, unknown>) =>
     api.post(`/admin/support/conversations/${id}/read`, {}, options),
   updateSupportStatus: (id: number, data: AdminSupportStatusPayload) =>

@@ -174,8 +174,11 @@ func respondSupportError(c *gin.Context, err error) {
 		errors.Is(err, supportcontract.ErrContentTypeInvalid),
 		errors.Is(err, supportcontract.ErrQuickReplyInvalid):
 		ginutil.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
-	case errors.Is(err, supportcontract.ErrQuickReplyNotFound):
+	case errors.Is(err, supportcontract.ErrQuickReplyNotFound),
+		errors.Is(err, supportcontract.ErrMessageNotFound):
 		ginutil.RespondError(c, response.CodeNotFound, "error.not_found", err)
+	case errors.Is(err, supportcontract.ErrRevokeNotAllowed):
+		ginutil.RespondError(c, response.CodeBadRequest, "error.support_revoke_not_allowed", err)
 	default:
 		ginutil.RespondError(c, response.CodeInternal, "error.bad_request", err)
 	}

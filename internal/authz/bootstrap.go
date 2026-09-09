@@ -146,6 +146,7 @@ func BuiltinRoleSeeds() []RoleSeed {
 				{Object: "/admin/support/conversations/:id/messages", Action: "POST"},
 				{Object: "/admin/support/conversations/:id/read", Action: "POST"},
 				{Object: "/admin/support/conversations/:id/status", Action: "PUT"},
+				{Object: "/admin/support/messages/:id/revoke", Action: "POST"},
 				{Object: "/admin/support/attachments", Action: "POST"},
 				{Object: "/admin/support/quick-replies", Action: "GET"},
 				{Object: "/admin/support/quick-replies", Action: "POST"},

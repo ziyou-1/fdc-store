@@ -24,6 +24,7 @@ func RegisterAdminRoutes(admin gin.IRoutes, handler *AdminHandler) {
 	admin.GET("/support/unread-count", handler.CountUnread)
 	admin.GET("/support/conversations/:id/messages", handler.ListMessages)
 	admin.POST("/support/conversations/:id/messages", handler.SendMessage)
+	admin.POST("/support/messages/:id/revoke", handler.RevokeMessage)
 	admin.POST("/support/attachments", handler.UploadAttachment)
 	admin.POST("/support/conversations/:id/read", handler.MarkRead)
 	admin.PUT("/support/conversations/:id/status", handler.UpdateStatus)

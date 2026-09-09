@@ -1802,6 +1802,10 @@
     "you": "Kamu",
     "agent": "Dukungan",
     "imageAlt": "Lampiran percakapan dukungan",
+    "revoked": "Sebuah pesan telah ditarik",
+    "revokedByMe": "Kamu menarik sebuah pesan",
+    "quoteImage": "[Gambar]",
+    "quoteVideo": "[Video]",
     "closedHint": "Percakapan ini sudah ditutup oleh tim dukungan. Kirim pesan baru untuk membukanya lagi.",
     "errors": {
       "attachmentTooLarge": "Lampiran tidak boleh lebih dari {size}MB"

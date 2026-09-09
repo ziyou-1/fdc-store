@@ -17,6 +17,9 @@ type Repository interface {
 
 	CreateMessage(message *supportdomain.Message) error
 	ListMessages(filter MessageListFilter) ([]supportdomain.Message, int64, error)
+	GetMessageByID(id uint) (*supportdomain.Message, error)
+	// RevokeMessage 只写 revoked_at，不动内容——撤回是标记不是删除。
+	RevokeMessage(id uint, revokedAt time.Time) error
 
 	ListQuickReplies(activeOnly bool) ([]supportdomain.QuickReply, error)
 	GetQuickReplyByID(id uint) (*supportdomain.QuickReply, error)
@@ -54,6 +57,8 @@ type SendMessageInput struct {
 	Content        string
 	Translation    string
 	MediaURL       string
+	// ReplyToID 引用的消息 ID，0 表示普通消息。
+	ReplyToID uint
 }
 
 // QuickReplyInput 常见问题写入入参。

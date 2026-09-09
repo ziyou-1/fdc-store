@@ -1802,6 +1802,10 @@
     "you": "我",
     "agent": "客服",
     "imageAlt": "客服会话图片",
+    "revoked": "对方撤回了一条消息",
+    "revokedByMe": "你撤回了一条消息",
+    "quoteImage": "[图片]",
+    "quoteVideo": "[视频]",
     "closedHint": "该会话已由客服关闭，发送新消息会重新开启。",
     "errors": {
       "attachmentTooLarge": "附件不能超过 {size}MB"

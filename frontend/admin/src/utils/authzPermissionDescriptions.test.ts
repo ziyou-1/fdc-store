@@ -6,9 +6,9 @@ import {
 } from './authzPermissionDescriptions'
 
 describe('permissionDescriptions', () => {
-  it('覆盖全部 276 个后台接口权限', () => {
+  it('覆盖全部 277 个后台接口权限', () => {
     expect(Object.keys(permissionDescriptions).length).toBe(permissionDescriptionCount)
-    expect(permissionDescriptionCount).toBe(276)
+    expect(permissionDescriptionCount).toBe(277)
   })
 
   it('三种语言都有非空说明', () => {

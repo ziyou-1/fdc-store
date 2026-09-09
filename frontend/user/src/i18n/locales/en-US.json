@@ -1802,6 +1802,10 @@
     "you": "You",
     "agent": "Support",
     "imageAlt": "Support conversation attachment",
+    "revoked": "A message was recalled",
+    "revokedByMe": "You recalled a message",
+    "quoteImage": "[Image]",
+    "quoteVideo": "[Video]",
     "closedHint": "This conversation was closed by support. Sending a new message reopens it.",
     "errors": {
       "attachmentTooLarge": "Attachment must not exceed {size}MB"

@@ -18,6 +18,7 @@ type AdminSupportService interface {
 	ListAgentMessages(conversationID, afterID uint, page, pageSize int) (
 		*supportdomain.Conversation, []supportdomain.Message, int64, error)
 	SendAgentMessage(adminID, conversationID uint, input supportcontract.SendMessageInput) (*supportdomain.Message, error)
+	RevokeAgentMessage(messageID, agentID uint) (*supportdomain.Message, error)
 	MarkReadByAgent(conversationID uint) error
 	SetConversationStatus(conversationID uint, status string) (*supportdomain.Conversation, error)
 	ListQuickReplies(activeOnly bool) ([]supportdomain.QuickReply, error)
@@ -44,6 +45,10 @@ type agentMessageRequest struct {
 	ContentType string `json:"content_type"`
 	Content     string `json:"content" binding:"max=4000"`
 	MediaURL    string `json:"media_url" binding:"max=512"`
+	// ReplyToID 引用的消息 ID，0 表示普通发送。
+	// 服务层会校验它确实属于同一会话，跨会话引用会被静默丢弃而不是报错——
+	// 报错等于告诉客服「那条消息存在但不是这个会话的」，没必要泄露。
+	ReplyToID uint `json:"reply_to_id"`
 }
 
 type conversationStatusRequest struct {
@@ -131,7 +136,25 @@ func (h *AdminHandler) SendMessage(c *gin.Context) {
 		ContentType: request.ContentType,
 		Content:     request.Content,
 		MediaURL:    request.MediaURL,
+		ReplyToID:   request.ReplyToID,
 	})
+	if err != nil {
+		respondSupportError(c, err)
+		return
+	}
+	response.Success(c, message)
+}
+
+// RevokeMessage 客服撤回自己刚发的消息。
+// 只标记不删除：support_messages 是只追加表，前端把撤回态渲染成「已撤回」。
+func (h *AdminHandler) RevokeMessage(c *gin.Context) {
+	id, err := ginutil.ParseParamUint(c, "id")
+	if err != nil {
+		ginutil.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+	adminID, _ := ginutil.GetAdminID(c)
+	message, err := h.support.RevokeAgentMessage(id, adminID)
 	if err != nil {
 		respondSupportError(c, err)
 		return

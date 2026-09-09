@@ -560,6 +560,10 @@ export interface SupportMessageData {
     content_type: SupportContentType
     content: string
     media_url: string
+    // reply_to_id 引用的消息 ID，0 表示普通消息。买家端只渲染不发起引用。
+    reply_to_id?: number
+    // revoked_at 非空表示客服已撤回这条，气泡显示「对方撤回了一条消息」。
+    revoked_at?: string | null
     created_at: string
 }
 

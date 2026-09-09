@@ -3,6 +3,7 @@ package gormstore
 import (
 	"errors"
 	"strings"
+	"time"
 
 	supportcontract "github.com/dujiao-next/internal/modules/support/contract"
 	supportdomain "github.com/dujiao-next/internal/modules/support/domain"
@@ -119,6 +120,39 @@ func (s *Store) CreateMessage(message *supportdomain.Message) error {
 		return supportcontract.ErrCreateFailed
 	}
 	return s.db.Create(message).Error
+}
+
+func (s *Store) GetMessageByID(id uint) (*supportdomain.Message, error) {
+	if id == 0 {
+		return nil, nil
+	}
+	var message supportdomain.Message
+	if err := s.db.Where("id = ?", id).First(&message).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &message, nil
+}
+
+// RevokeMessage 只写 revoked_at。
+// 条件里带上 revoked_at IS NULL：并发重复撤回时只有第一次会命中，
+// 后到的那次影响 0 行，由服务层判定为「已撤回」而不是覆盖时间戳。
+func (s *Store) RevokeMessage(id uint, revokedAt time.Time) error {
+	if id == 0 {
+		return supportcontract.ErrMessageNotFound
+	}
+	result := s.db.Model(&supportdomain.Message{}).
+		Where("id = ? AND revoked_at IS NULL", id).
+		Update("revoked_at", revokedAt)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return supportcontract.ErrMessageNotFound
+	}
+	return nil
 }
 
 func (s *Store) ListMessages(filter supportcontract.MessageListFilter) ([]supportdomain.Message, int64, error) {
