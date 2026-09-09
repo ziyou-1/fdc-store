@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { supportAPI } from '../api'
+import { mergeRevocations, nextRevokedCursor } from '../utils/supportMessage'
 import type {
     SupportConversationData,
     SupportMessageData,
@@ -22,6 +23,14 @@ const messages = ref<SupportMessageData[]>([])
 const quickReplies = ref<SupportQuickReplyData[]>([])
 const quickRepliesLoaded = ref(false)
 const initialized = ref(false)
+// replyTo 是正在引用的那条消息，发送成功后清空。
+const replyTo = ref<SupportMessageData | null>(null)
+const revoking = ref(false)
+// revokedCursor 是撤回的增量游标：服务端产出、这里原样带回，
+// 因此不受两边时钟不一致影响，也不随离线时长衰减——挂机几小时回来照样对得上。
+const revokedCursor = ref('')
+// nowTick 由轮询推进，让过了 2 分钟的撤回按钮自己消失，不另开定时器。
+const nowTick = ref(0)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollDelay = 0
@@ -43,6 +52,16 @@ function appendMessages(incoming: SupportMessageData[]) {
     messages.value = [...messages.value, ...fresh].sort((a, b) => a.id - b.id)
 }
 
+// 撤回是状态变更不是新消息：它不产生新 id，上面那个「见过就跳过」的
+// appendMessages 会把它整条丢掉。这才是「撤回后要刷新一下才看得到」的根因。
+function applyRevocations(result: {
+    revoked?: SupportMessageData[]
+    revoked_cursor?: string | null
+}) {
+    messages.value = mergeRevocations(messages.value, result.revoked ?? [])
+    revokedCursor.value = nextRevokedCursor(revokedCursor.value, result.revoked_cursor)
+}
+
 async function loadInitial() {
     loading.value = true
     errorMessage.value = ''
@@ -51,6 +70,10 @@ async function loadInitial() {
         const data = res.data.data
         conversation.value = data.conversation
         messages.value = [...(data.messages ?? [])].sort((a, b) => a.id - b.id)
+        // 首屏的消息本来就带着 revoked_at，这里只需把游标接上，
+        // 之后的增量轮询才知道该从哪儿开始对账。
+        revokedCursor.value = nextRevokedCursor(revokedCursor.value, data.revoked_cursor)
+        nowTick.value = Date.now()
         initialized.value = true
     } catch (err: any) {
         errorMessage.value = err?.message ?? ''
@@ -61,13 +84,21 @@ async function loadInitial() {
 
 // 轮询失败必须吞掉：网络抖动不该弹 toast，也不该把已加载的消息清空。
 async function poll() {
+    // 顺带推进时间基准，撤回按钮到点会自己消失。
+    nowTick.value = Date.now()
     try {
         if (isOpen.value) {
-            const res = await supportAPI.messages({ after_id: lastMessageID.value })
+            const res = await supportAPI.messages({
+                after_id: lastMessageID.value,
+                revoked_after: revokedCursor.value || undefined,
+            })
             const data = res.data.data
             conversation.value = data.conversation
             appendMessages(data.messages ?? [])
-            // 展开状态下收到新消息即视为已读
+            applyRevocations(data)
+            // 展开状态下收到新消息即视为已读。
+            // 判定只看 messages，不能把 revoked 算进来：撤回会被反复回传，
+            // 算进来就等于每 5 秒把买家还没看的消息标成已读。
             if ((data.messages?.length ?? 0) > 0) {
                 await markRead()
             }
@@ -123,6 +154,10 @@ async function open() {
     isOpen.value = true
     if (!initialized.value) {
         await loadInitial()
+    } else {
+        // 收起期间只刷未读角标、不拉消息，这段时间的撤回没同步过。
+        // 重新展开时立刻对一次账，不等 5 秒后的下一轮。
+        void poll()
     }
     void loadQuickReplies()
     void markRead()
@@ -148,8 +183,13 @@ async function sendText(content: string) {
     sending.value = true
     errorMessage.value = ''
     try {
-        const res = await supportAPI.send({ content: trimmed })
+        const res = await supportAPI.send({
+            content: trimmed,
+            reply_to_id: replyTo.value?.id,
+        })
         appendMessages([res.data.data])
+        // 发送成功才清引用：失败时保留，否则买家得重新找回那条再引一次
+        replyTo.value = null
         // 买家发言会重开已关闭的会话，本地状态同步跟上
         if (conversation.value) {
             conversation.value = { ...conversation.value, status: 'open' }
@@ -172,8 +212,13 @@ async function sendAttachment(file: File) {
     try {
         const uploaded = await supportAPI.uploadAttachment(file)
         const { media_url, content_type } = uploaded.data.data
-        const res = await supportAPI.send({ content_type, media_url })
+        const res = await supportAPI.send({
+            content_type,
+            media_url,
+            reply_to_id: replyTo.value?.id,
+        })
         appendMessages([res.data.data])
+        replyTo.value = null
         if (conversation.value) {
             conversation.value = { ...conversation.value, status: 'open' }
         }
@@ -186,6 +231,32 @@ async function sendAttachment(file: File) {
     }
 }
 
+function setReplyTo(message: SupportMessageData | null) {
+    // 引用一条已撤回的消息没有意义：摘要只会显示「已撤回」
+    if (message && message.revoked_at) return
+    replyTo.value = message
+}
+
+// 撤回自己 2 分钟内发的消息。服务端才是判定方，这里失败就把文案交给
+// errorMessage，走 Widget 里既有的 toast 通路。
+async function revokeMessage(id: number) {
+    if (!id || revoking.value) return false
+    revoking.value = true
+    errorMessage.value = ''
+    try {
+        const res = await supportAPI.revoke(id)
+        const updated = res.data.data as SupportMessageData
+        applyRevocations({ revoked: [updated], revoked_cursor: updated.revoked_at })
+        if (replyTo.value?.id === id) replyTo.value = null
+        return true
+    } catch (err: any) {
+        errorMessage.value = err?.message ?? ''
+        return false
+    } finally {
+        revoking.value = false
+    }
+}
+
 // 登出时调用：清空单例状态，避免下一个账号看到上一个账号的消息。
 function reset() {
     stopPolling()
@@ -195,7 +266,12 @@ function reset() {
     conversation.value = null
     messages.value = []
     quickReplies.value = []
+    quickRepliesLoaded.value = false
     errorMessage.value = ''
+    replyTo.value = null
+    revoking.value = false
+    revokedCursor.value = ''
+    nowTick.value = 0
 }
 
 export function useSupportChat() {
@@ -210,6 +286,11 @@ export function useSupportChat() {
         quickReplies,
         unreadCount,
         isClosed,
+        replyTo,
+        revoking,
+        nowTick,
+        setReplyTo,
+        revokeMessage,
         open,
         close,
         toggle,

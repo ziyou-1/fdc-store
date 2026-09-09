@@ -10,7 +10,9 @@ func RegisterUserRoutes(user gin.IRoutes, handler *UserHandler) {
 	user.GET("/support/conversation", handler.GetConversation)
 	user.GET("/support/messages", handler.ListMessages)
 	user.POST("/support/messages", handler.SendMessage)
+	// 静态段 read 与参数段 :id 同层共存，gin 的路由树支持（有测试兜底）。
 	user.POST("/support/messages/read", handler.MarkRead)
+	user.POST("/support/messages/:id/revoke", handler.RevokeMessage)
 	user.POST("/support/attachments", handler.UploadAttachment)
 	user.GET("/support/quick-replies", handler.ListQuickReplies)
 }

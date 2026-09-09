@@ -2,6 +2,7 @@ package application
 
 import (
 	"errors"
+	"sort"
 	"testing"
 	"time"
 
@@ -117,6 +118,30 @@ func (r *fakeRepo) RevokeMessage(id uint, revokedAt time.Time) error {
 		return nil
 	}
 	return supportcontract.ErrMessageNotFound
+}
+
+func (r *fakeRepo) ListRevokedSince(conversationID uint, since time.Time, limit int) (
+	[]supportdomain.Message, error,
+) {
+	result := make([]supportdomain.Message, 0)
+	for _, message := range r.messages {
+		if message.ConversationID != conversationID || message.RevokedAt == nil {
+			continue
+		}
+		// 与 gormstore 一致用 >=：撤回时间撞到同一时刻时 > 会永久漏掉一条。
+		if !since.IsZero() && message.RevokedAt.Before(since) {
+			continue
+		}
+		result = append(result, message)
+	}
+	// 按 revoked_at 倒序，首条即最新，服务层拿它当游标。
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].RevokedAt.After(*result[j].RevokedAt)
+	})
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
 }
 
 func (r *fakeRepo) ListMessages(filter supportcontract.MessageListFilter) (
@@ -341,12 +366,12 @@ func TestListUserMessagesSupportsIncrementalCursor(t *testing.T) {
 	if _, err := service.SendUserMessage(12, supportcontract.SendMessageInput{Content: "二"}); err != nil {
 		t.Fatalf("second send: %v", err)
 	}
-	_, messages, _, err := service.ListUserMessages(12, first.ID, 1, 30)
+	result, err := service.ListUserMessages(12, first.ID, 1, 30, time.Time{})
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(messages) != 1 || messages[0].Content != "二" {
-		t.Fatalf("expected only messages after cursor, got %#v", messages)
+	if len(result.Messages) != 1 || result.Messages[0].Content != "二" {
+		t.Fatalf("expected only result.Messages after cursor, got %#v", result.Messages)
 	}
 }
 
@@ -386,18 +411,18 @@ func TestSendUserMessageAutoRepliesMatchingFAQ(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ensure: %v", err)
 	}
-	_, messages, _, err := service.ListUserMessages(31, 0, 1, 30)
+	result, err := service.ListUserMessages(31, 0, 1, 30, time.Time{})
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(messages) != 2 {
-		t.Fatalf("expected buyer question plus FAQ solution, got %d messages: %#v", len(messages), messages)
+	if len(result.Messages) != 2 {
+		t.Fatalf("expected buyer question plus FAQ solution, got %d result.Messages: %#v", len(result.Messages), result.Messages)
 	}
-	if messages[1].SenderType != supportdomain.SenderTypeAgent {
-		t.Fatalf("solution must be an agent message on the left, got %s", messages[1].SenderType)
+	if result.Messages[1].SenderType != supportdomain.SenderTypeAgent {
+		t.Fatalf("solution must be an agent message on the left, got %s", result.Messages[1].SenderType)
 	}
-	if messages[1].Content != "请把订单号发我，我帮你查激活进度。" {
-		t.Fatalf("unexpected solution %q", messages[1].Content)
+	if result.Messages[1].Content != "请把订单号发我，我帮你查激活进度。" {
+		t.Fatalf("unexpected solution %q", result.Messages[1].Content)
 	}
 	if conversation.LastMessagePreview != "请把订单号发我，我帮你查激活进度。" {
 		t.Fatalf("unexpected preview %q", conversation.LastMessagePreview)
@@ -423,18 +448,18 @@ func TestSendUserMessageTranslatesBuyerTextAndStillAutoRepliesFAQ(t *testing.T) 
 	if _, err := service.SendUserMessage(32, supportcontract.SendMessageInput{Content: "怎么激活"}); err != nil {
 		t.Fatalf("send: %v", err)
 	}
-	_, messages, _, err := service.ListUserMessages(32, 0, 1, 30)
+	result, err := service.ListUserMessages(32, 0, 1, 30, time.Time{})
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(messages) != 2 {
-		t.Fatalf("expected buyer plus FAQ, got %#v", messages)
+	if len(result.Messages) != 2 {
+		t.Fatalf("expected buyer plus FAQ, got %#v", result.Messages)
 	}
-	if messages[0].Translation != "译：怎么激活" {
-		t.Fatalf("buyer translation %q", messages[0].Translation)
+	if result.Messages[0].Translation != "译：怎么激活" {
+		t.Fatalf("buyer translation %q", result.Messages[0].Translation)
 	}
-	if messages[1].Translation != "" || messages[1].Content != "打开官网粘贴卡密" {
-		t.Fatalf("FAQ reply must stay untranslated, got %#v", messages[1])
+	if result.Messages[1].Translation != "" || result.Messages[1].Content != "打开官网粘贴卡密" {
+		t.Fatalf("FAQ reply must stay untranslated, got %#v", result.Messages[1])
 	}
 }
 
@@ -468,12 +493,12 @@ func TestSendUserMessageDoesNotAutoReplyWhenFAQDoesNotMatch(t *testing.T) {
 		if _, err := service.SendUserMessage(userID, supportcontract.SendMessageInput{Content: content}); err != nil {
 			t.Fatalf("send %q: %v", content, err)
 		}
-		_, messages, _, err := service.ListUserMessages(userID, 0, 1, 30)
+		result, err := service.ListUserMessages(userID, 0, 1, 30, time.Time{})
 		if err != nil {
 			t.Fatalf("list %q: %v", content, err)
 		}
-		if len(messages) != 1 {
-			t.Fatalf("expected no auto-reply for %q, got %#v", content, messages)
+		if len(result.Messages) != 1 {
+			t.Fatalf("expected no auto-reply for %q, got %#v", content, result.Messages)
 		}
 	}
 }

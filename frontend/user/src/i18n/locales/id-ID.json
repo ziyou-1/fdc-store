@@ -1806,6 +1806,14 @@
     "revokedByMe": "Kamu menarik sebuah pesan",
     "quoteImage": "[Gambar]",
     "quoteVideo": "[Video]",
+    "actions": "Aksi pesan",
+    "reply": "Balas",
+    "replyingTo": "Membalas {name}",
+    "cancelReply": "Batal balas",
+    "copy": "Salin",
+    "copied": "Tersalin",
+    "copyFailed": "Gagal menyalin",
+    "revoke": "Tarik",
     "closedHint": "Percakapan ini sudah ditutup oleh tim dukungan. Kirim pesan baru untuk membukanya lagi.",
     "errors": {
       "attachmentTooLarge": "Lampiran tidak boleh lebih dari {size}MB"

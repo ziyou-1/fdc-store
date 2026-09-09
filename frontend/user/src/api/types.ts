@@ -560,7 +560,7 @@ export interface SupportMessageData {
     content_type: SupportContentType
     content: string
     media_url: string
-    // reply_to_id 引用的消息 ID，0 表示普通消息。买家端只渲染不发起引用。
+    // reply_to_id 引用的消息 ID，0 表示普通消息。
     reply_to_id?: number
     // revoked_at 非空表示客服已撤回这条，气泡显示「对方撤回了一条消息」。
     revoked_at?: string | null
@@ -583,6 +583,9 @@ export interface SupportSendMessagePayload {
     content_type?: SupportContentType
     content?: string
     media_url?: string
+    // reply_to_id 引用的消息 ID，0 或省略表示普通发送。
+    // 服务端会校验它属于本人会话，不属于的静默丢弃而不是报错。
+    reply_to_id?: number
 }
 
 export interface SupportAttachmentResult {
@@ -595,6 +598,13 @@ export interface SupportMessageListResult {
     conversation: SupportConversationData
     messages: SupportMessageData[]
     total: number
+    // revoked 是自 revoked_after 游标以来被撤回的消息，内容已由服务端抹掉。
+    // 撤回只改 revoked_at 不新增行，after_id 那条增量游标永远拉不到它，
+    // 所以必须单开一条通道——不刷新就看不到撤回，根因就在这里。
+    // 前端拿它「只更新已有的、不新增」，见 utils/supportMessage.ts 的 mergeRevocations。
+    revoked?: SupportMessageData[]
+    // revoked_cursor 由服务端产出、前端原样带回，因此不受两边时钟不一致影响。
+    revoked_cursor?: string | null
 }
 
 // ===== 积分 =====

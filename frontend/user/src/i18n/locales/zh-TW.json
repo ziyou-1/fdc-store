@@ -1806,6 +1806,14 @@
     "revokedByMe": "你收回了一則訊息",
     "quoteImage": "[圖片]",
     "quoteVideo": "[影片]",
+    "actions": "訊息操作",
+    "reply": "回覆",
+    "replyingTo": "回覆 {name}",
+    "cancelReply": "取消引用",
+    "copy": "複製",
+    "copied": "已複製",
+    "copyFailed": "複製失敗",
+    "revoke": "收回",
     "closedHint": "該對話已由客服關閉，傳送新訊息會重新開啟。",
     "errors": {
       "attachmentTooLarge": "附件不能超過 {size}MB"

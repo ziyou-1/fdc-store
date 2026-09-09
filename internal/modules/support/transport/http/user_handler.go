@@ -5,6 +5,7 @@ import (
 	"mime/multipart"
 	"strconv"
 	"strings"
+	"time"
 
 	supportcontract "github.com/dujiao-next/internal/modules/support/contract"
 	supportdomain "github.com/dujiao-next/internal/modules/support/domain"
@@ -18,7 +19,9 @@ import (
 type SupportService interface {
 	EnsureConversation(userID uint) (*supportdomain.Conversation, error)
 	SendUserMessage(userID uint, input supportcontract.SendMessageInput) (*supportdomain.Message, error)
-	ListUserMessages(userID uint, afterID uint, page, pageSize int) (*supportdomain.Conversation, []supportdomain.Message, int64, error)
+	RevokeUserMessage(messageID, userID uint) (*supportdomain.Message, error)
+	ListUserMessages(userID uint, afterID uint, page, pageSize int, revokedSince time.Time) (
+		*supportcontract.MessageListResult, error)
 	MarkReadByUser(userID uint) error
 	ListQuickReplies(activeOnly bool) ([]supportdomain.QuickReply, error)
 }
@@ -48,6 +51,10 @@ type sendMessageRequest struct {
 	ContentType string `json:"content_type"`
 	Content     string `json:"content" binding:"max=4000"`
 	MediaURL    string `json:"media_url" binding:"max=512"`
+	// ReplyToID 引用的消息 ID，0 表示普通发送。
+	// 服务层会校验它确实属于本人会话，不属于的静默丢弃而不是报错——
+	// 报错等于告诉发送方「那条消息存在但不是你这个会话的」。
+	ReplyToID uint `json:"reply_to_id"`
 }
 
 // GetConversation 返回买家自己的会话（不存在则创建）。
@@ -72,16 +79,12 @@ func (h *UserHandler) ListMessages(c *gin.Context) {
 	}
 	afterID := parseUintQuery(c, "after_id")
 	page, pageSize := ginutil.ParsePagination(c)
-	conversation, messages, total, err := h.support.ListUserMessages(uid, afterID, page, pageSize)
+	result, err := h.support.ListUserMessages(uid, afterID, page, pageSize, parseTimeQuery(c, "revoked_after"))
 	if err != nil {
 		respondSupportError(c, err)
 		return
 	}
-	response.Success(c, gin.H{
-		"conversation": conversation,
-		"messages":     messages,
-		"total":        total,
-	})
+	response.Success(c, result)
 }
 
 // SendMessage 买家发送一条消息。
@@ -99,7 +102,28 @@ func (h *UserHandler) SendMessage(c *gin.Context) {
 		ContentType: request.ContentType,
 		Content:     request.Content,
 		MediaURL:    request.MediaURL,
+		ReplyToID:   request.ReplyToID,
 	})
+	if err != nil {
+		respondSupportError(c, err)
+		return
+	}
+	response.Success(c, message)
+}
+
+// RevokeMessage 买家撤回自己刚发的消息。
+// 只标记不删除：support_messages 是只追加表，前端把撤回态渲染成「已撤回」。
+func (h *UserHandler) RevokeMessage(c *gin.Context) {
+	uid, ok := ginutil.GetUserID(c)
+	if !ok {
+		return
+	}
+	id, err := ginutil.ParseParamUint(c, "id")
+	if err != nil {
+		ginutil.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+	message, err := h.support.RevokeUserMessage(id, uid)
 	if err != nil {
 		respondSupportError(c, err)
 		return
@@ -182,6 +206,21 @@ func respondSupportError(c *gin.Context, err error) {
 	default:
 		ginutil.RespondError(c, response.CodeInternal, "error.bad_request", err)
 	}
+}
+
+// parseTimeQuery 解析前端回显的撤回游标。
+// 游标是服务端产出、前端原样带回的 RFC3339 串，所以两边时钟不一致也不影响。
+// 解析不了就当没传：退化成「回传最近的撤回」，前端打标是幂等的，不会出错。
+func parseTimeQuery(c *gin.Context, key string) time.Time {
+	raw := strings.TrimSpace(c.Query(key))
+	if raw == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
 }
 
 func parseUintQuery(c *gin.Context, key string) uint {

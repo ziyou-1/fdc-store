@@ -1806,6 +1806,14 @@
     "revokedByMe": "You recalled a message",
     "quoteImage": "[Image]",
     "quoteVideo": "[Video]",
+    "actions": "Message actions",
+    "reply": "Reply",
+    "replyingTo": "Replying to {name}",
+    "cancelReply": "Cancel reply",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "revoke": "Recall",
     "closedHint": "This conversation was closed by support. Sending a new message reopens it.",
     "errors": {
       "attachmentTooLarge": "Attachment must not exceed {size}MB"

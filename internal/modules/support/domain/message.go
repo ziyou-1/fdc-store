@@ -36,7 +36,9 @@ type Message struct {
 	// RevokedAt 撤回时间，nil 表示未撤回。
 	// 撤回是软标记而不是删行：这张表的约定是只追加，行留着才有审计痕迹，
 	// 买家侧也才知道「这里原本有条消息」而不是凭空少一条。
-	RevokedAt *time.Time `json:"revoked_at"`
+	// 建索引是因为撤回要走独立的增量游标：两端每 5 秒按 conversation_id + revoked_at
+	// 查一次，没索引就是每轮对整个会话做前缀扫。
+	RevokedAt *time.Time `gorm:"index" json:"revoked_at"`
 	CreatedAt time.Time  `gorm:"index:idx_support_msg_conv_id,priority:2;index" json:"created_at"`
 }
 
@@ -49,17 +51,45 @@ func (m Message) IsRevoked() bool {
 	return m.RevokedAt != nil
 }
 
-// CanRevokeBy 判断某个客服此刻能否撤回这条消息。
-// 三个条件缺一不可：必须是客服自己发的、必须还没撤过、必须在时限内。
-// 买家消息一律不可撤——客服撤掉买家说过的话等于篡改证据。
-func (m Message) CanRevokeBy(agentID uint, now time.Time) bool {
-	if m.SenderType != SenderTypeAgent || m.SenderID != agentID {
+// CanRevokeBy 判断某个身份此刻能否撤回这条消息。
+// 三个条件缺一不可：必须是本人发的、必须还没撤过、必须在时限内。
+//
+// senderType 必须一起传，不能只比 SenderID。买家 ID 与管理员 ID 是两套
+// 独立自增序列，都存在 sender_id 这一列里，光比数字会让 5 号客服撤掉
+// 5 号买家的消息。调用方只能传自己那一侧的常量，越权在类型层就没法表达。
+func (m Message) CanRevokeBy(senderType string, senderID uint, now time.Time) bool {
+	if senderType != SenderTypeUser && senderType != SenderTypeAgent {
+		return false
+	}
+	if m.SenderType != senderType || m.SenderID != senderID {
 		return false
 	}
 	if m.IsRevoked() {
 		return false
 	}
 	return now.Sub(m.CreatedAt) <= RevokeWindow
+}
+
+// Redacted 返回一份把已撤回内容抹掉的副本，用于出网。
+//
+// 行留在库里是为了审计，不是为了还能再看见。不抹的话撤回只是「前端不渲染」，
+// 对端翻一下网络面板就能读到原文——那等于没撤。
+func (m Message) Redacted() Message {
+	if !m.IsRevoked() {
+		return m
+	}
+	m.Content = ""
+	m.Translation = ""
+	m.MediaURL = ""
+	return m
+}
+
+// RedactRevoked 批量抹掉切片里已撤回消息的内容。
+func RedactRevoked(messages []Message) []Message {
+	for i := range messages {
+		messages[i] = messages[i].Redacted()
+	}
+	return messages
 }
 
 func (Message) TableName() string {

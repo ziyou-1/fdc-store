@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Headset, Loader2, X } from 'lucide-vue-next'
 import { useSupportChat } from '../../composables/useSupportChat'
@@ -7,7 +7,7 @@ import { useToast } from '../../composables/useToast'
 import SupportMessageList from './SupportMessageList.vue'
 import SupportComposer from './SupportComposer.vue'
 import SupportQuickReplies from './SupportQuickReplies.vue'
-import type { SupportQuickReplyData } from '../../api/types'
+import type { SupportMessageData, SupportQuickReplyData } from '../../api/types'
 
 const props = withDefaults(
   defineProps<{
@@ -25,6 +25,7 @@ const chat = useSupportChat()
 const {
   isOpen, loading, sending, uploading, errorMessage,
   messages, quickReplies, unreadCount, isClosed,
+  replyTo, revoking, nowTick,
 } = chat
 
 const badgeText = computed(() => (unreadCount.value > 99 ? '99+' : String(unreadCount.value)))
@@ -56,9 +57,33 @@ const handleInvalid = (message: string) => {
   toast.error(message)
 }
 
+const handleReply = (message: SupportMessageData) => {
+  chat.setReplyTo(message)
+}
+
+const handleCancelReply = () => {
+  chat.setReplyTo(null)
+}
+
+const handleRevoke = async (message: SupportMessageData) => {
+  // 失败文案由服务端给（超时/越权），走 errorMessage 那条既有的 toast 通路
+  await chat.revokeMessage(message.id)
+}
+
+// 消息列表里复制成功/失败的提示
+const handleNotify = (message: string) => {
+  toast.success(message)
+}
+
 const handlePickQuickReply = (reply: SupportQuickReplyData) => {
   void chat.sendText(reply.title)
 }
+
+// 面板收起时把展开着的操作条一并收掉，免得下次打开还挂在那里
+const messageListRef = ref<{ closeActions: () => void } | null>(null)
+watch(isOpen, (open) => {
+  if (!open) messageListRef.value?.closeActions()
+})
 
 // 组件全局常驻，卸载时必须停轮询
 onBeforeUnmount(() => {
@@ -100,16 +125,27 @@ void chat.poll()
         {{ t('support.closedHint') }}
       </p>
 
-      <SupportMessageList :messages="messages" :loading="loading" />
+      <SupportMessageList
+        ref="messageListRef"
+        :messages="messages"
+        :loading="loading"
+        :now="nowTick"
+        :revoking="revoking"
+        @reply="handleReply"
+        @revoke="handleRevoke"
+        @notify="handleNotify"
+      />
 
       <SupportQuickReplies :replies="quickReplies" @pick="handlePickQuickReply" />
 
       <SupportComposer
         :sending="sending"
         :uploading="uploading"
+        :reply-to="replyTo"
         @send="handleSend"
         @attach="handleAttach"
         @invalid="handleInvalid"
+        @cancel-reply="handleCancelReply"
       />
     </section>
   </Transition>

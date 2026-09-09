@@ -704,6 +704,8 @@ export const adminAPI = {
     api.get('/admin/support/conversations', { params, ...options }),
   getSupportUnreadCount: (options?: Record<string, unknown>) =>
     api.get('/admin/support/unread-count', options),
+  // 两条独立游标：after_id 拉新消息，revoked_after 拉撤回。
+  // 撤回不产生新消息，只靠 after_id 永远拉不到，不刷新就看不到对方撤回。
   getSupportMessages: (id: number, params?: Record<string, unknown>, options?: Record<string, unknown>) =>
     api.get(`/admin/support/conversations/${id}/messages`, { params, ...options }),
   sendSupportMessage: (id: number, data: AdminSupportSendMessagePayload) =>

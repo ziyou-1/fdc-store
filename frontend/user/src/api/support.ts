@@ -3,10 +3,17 @@ import type { SupportSendMessagePayload } from './types'
 
 export const supportAPI = {
     conversation: () => userApi.get('/support/conversation'),
-    // after_id 为增量游标：只返回该 id 之后的新消息，用于轮询。
-    messages: (params?: { after_id?: number; page?: number; page_size?: number }) =>
-        userApi.get('/support/messages', { params }),
+    // 两条独立游标：after_id 拉新消息，revoked_after 拉撤回。
+    // 撤回不产生新消息，只靠 after_id 永远拉不到，不刷新就看不到对方撤回。
+    messages: (params?: {
+        after_id?: number
+        page?: number
+        page_size?: number
+        revoked_after?: string
+    }) => userApi.get('/support/messages', { params }),
     send: (data: SupportSendMessagePayload) => userApi.post('/support/messages', data),
+    // 只能撤自己 2 分钟内发的，服务端判定；越权或超时返回可读错误。
+    revoke: (id: number) => userApi.post(`/support/messages/${id}/revoke`),
     markRead: () => userApi.post('/support/messages/read'),
     quickReplies: () => userApi.get('/support/quick-replies'),
     // 字段名必须是 file，后端 c.FormFile("file") 硬编码。

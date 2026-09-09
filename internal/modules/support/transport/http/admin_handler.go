@@ -2,6 +2,7 @@ package supporthttp
 
 import (
 	"strings"
+	"time"
 
 	supportcontract "github.com/dujiao-next/internal/modules/support/contract"
 	supportdomain "github.com/dujiao-next/internal/modules/support/domain"
@@ -15,8 +16,8 @@ import (
 type AdminSupportService interface {
 	ListConversations(filter supportcontract.ConversationListFilter) ([]supportcontract.ConversationView, int64, error)
 	CountUnreadConversations() (int64, error)
-	ListAgentMessages(conversationID, afterID uint, page, pageSize int) (
-		*supportdomain.Conversation, []supportdomain.Message, int64, error)
+	ListAgentMessages(conversationID, afterID uint, page, pageSize int, revokedSince time.Time) (
+		*supportcontract.MessageListResult, error)
 	SendAgentMessage(adminID, conversationID uint, input supportcontract.SendMessageInput) (*supportdomain.Message, error)
 	RevokeAgentMessage(messageID, agentID uint) (*supportdomain.Message, error)
 	MarkReadByAgent(conversationID uint) error
@@ -107,16 +108,13 @@ func (h *AdminHandler) ListMessages(c *gin.Context) {
 		return
 	}
 	page, pageSize := ginutil.ParsePagination(c)
-	conversation, messages, total, err := h.support.ListAgentMessages(id, parseUintQuery(c, "after_id"), page, pageSize)
+	result, err := h.support.ListAgentMessages(
+		id, parseUintQuery(c, "after_id"), page, pageSize, parseTimeQuery(c, "revoked_after"))
 	if err != nil {
 		respondSupportError(c, err)
 		return
 	}
-	response.Success(c, gin.H{
-		"conversation": conversation,
-		"messages":     messages,
-		"total":        total,
-	})
+	response.Success(c, result)
 }
 
 // SendMessage 客服回复。

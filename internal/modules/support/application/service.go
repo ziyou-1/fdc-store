@@ -140,14 +140,42 @@ func (s *Service) SendAgentMessage(adminID, conversationID uint, input supportco
 }
 
 // RevokeAgentMessage 撤回客服自己发的消息。
+func (s *Service) RevokeAgentMessage(messageID, agentID uint) (*supportdomain.Message, error) {
+	return s.revokeMessage(messageID, supportdomain.SenderTypeAgent, agentID, 0)
+}
+
+// RevokeUserMessage 撤回买家自己发的消息。
+//
+// 除了「是本人发的」，还要确认这条消息确实落在该买家自己的会话里。
+// 光比 sender_id 不够：买家 ID 只在自己的会话里有意义，跨会话引用同一个数字
+// 就能撤到别人对话里的消息。
+func (s *Service) RevokeUserMessage(messageID, userID uint) (*supportdomain.Message, error) {
+	if userID == 0 {
+		return nil, supportcontract.ErrGuestForbidden
+	}
+	conversation, err := s.EnsureConversation(userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.revokeMessage(messageID, supportdomain.SenderTypeUser, userID, conversation.ID)
+}
+
+// revokeMessage 是撤回的唯一实现。
 //
 // 只打标记不删行：这张表的约定是只追加，行留着才有审计痕迹，
-// 买家侧也才知道「这里原本有条消息」而不是凭空少一条。
+// 对端也才知道「这里原本有条消息」而不是凭空少一条。
 //
-// 撤回不回退会话的未读计数。买家很可能已经读到了，硬把未读数减回去
-// 只会让工作台的计数与买家实际看到的对不上——宁可计数偏保守。
-func (s *Service) RevokeAgentMessage(messageID, agentID uint) (*supportdomain.Message, error) {
-	if messageID == 0 || agentID == 0 {
+// 撤回不回退会话的未读计数。对方很可能已经读到了，硬把未读数减回去
+// 只会让计数与对方实际看到的对不上——宁可计数偏保守。
+//
+// requireConversationID 非 0 时额外校验消息归属；客服本就能看全部会话，传 0。
+func (s *Service) revokeMessage(
+	messageID uint,
+	senderType string,
+	senderID uint,
+	requireConversationID uint,
+) (*supportdomain.Message, error) {
+	if messageID == 0 || senderID == 0 {
 		return nil, supportcontract.ErrMessageNotFound
 	}
 	message, err := s.repo.GetMessageByID(messageID)
@@ -157,8 +185,12 @@ func (s *Service) RevokeAgentMessage(messageID, agentID uint) (*supportdomain.Me
 	if message == nil {
 		return nil, supportcontract.ErrMessageNotFound
 	}
+	if requireConversationID != 0 && message.ConversationID != requireConversationID {
+		// 不区分「不存在」与「不是你的」：区分开就能拿它探别人会话里有没有某条消息。
+		return nil, supportcontract.ErrMessageNotFound
+	}
 	now := time.Now()
-	if !message.CanRevokeBy(agentID, now) {
+	if !message.CanRevokeBy(senderType, senderID, now) {
 		return nil, supportcontract.ErrRevokeNotAllowed
 	}
 	if err := s.repo.RevokeMessage(messageID, now); err != nil {
@@ -169,7 +201,8 @@ func (s *Service) RevokeAgentMessage(messageID, agentID uint) (*supportdomain.Me
 		return nil, err
 	}
 	message.RevokedAt = &now
-	return message, nil
+	redacted := message.Redacted()
+	return &redacted, nil
 }
 
 // appendMessage 落一条消息并同步会话上的冗余字段。
@@ -241,13 +274,41 @@ func (s *Service) appendMessage(
 }
 
 // ListUserMessages 买家拉取自己会话的消息。
-func (s *Service) ListUserMessages(userID uint, afterID uint, page, pageSize int) (
-	*supportdomain.Conversation, []supportdomain.Message, int64, error,
-) {
+func (s *Service) ListUserMessages(
+	userID uint, afterID uint, page, pageSize int, revokedSince time.Time,
+) (*supportcontract.MessageListResult, error) {
 	conversation, err := s.EnsureConversation(userID)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, err
 	}
+	return s.listMessages(conversation, afterID, page, pageSize, revokedSince)
+}
+
+// ListAgentMessages 客服拉取指定会话的消息。
+func (s *Service) ListAgentMessages(
+	conversationID, afterID uint, page, pageSize int, revokedSince time.Time,
+) (*supportcontract.MessageListResult, error) {
+	conversation, err := s.repo.GetConversationByID(conversationID)
+	if err != nil {
+		return nil, err
+	}
+	if conversation == nil {
+		return nil, supportcontract.ErrConversationNotFound
+	}
+	return s.listMessages(conversation, afterID, page, pageSize, revokedSince)
+}
+
+// listMessages 是两侧共用的读取实现。
+//
+// 撤回单独查一次而不是混进 Messages：混进去的话，前端那句
+// 「本轮有新消息就标记已读 / 滚到底部」会被一条几分钟前的撤回反复触发。
+// 撤回是状态变更，不是新消息，两者必须分开回传。
+func (s *Service) listMessages(
+	conversation *supportdomain.Conversation,
+	afterID uint,
+	page, pageSize int,
+	revokedSince time.Time,
+) (*supportcontract.MessageListResult, error) {
 	messages, total, err := s.repo.ListMessages(supportcontract.MessageListFilter{
 		ConversationID: conversation.ID,
 		AfterID:        afterID,
@@ -255,32 +316,28 @@ func (s *Service) ListUserMessages(userID uint, afterID uint, page, pageSize int
 		PageSize:       pageSize,
 	})
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, err
 	}
-	return conversation, messages, total, nil
-}
-
-// ListAgentMessages 客服拉取指定会话的消息。
-func (s *Service) ListAgentMessages(conversationID, afterID uint, page, pageSize int) (
-	*supportdomain.Conversation, []supportdomain.Message, int64, error,
-) {
-	conversation, err := s.repo.GetConversationByID(conversationID)
+	revoked, err := s.repo.ListRevokedSince(conversation.ID, revokedSince, supportcontract.RevokedFeedLimit)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, err
 	}
-	if conversation == nil {
-		return nil, nil, 0, supportcontract.ErrConversationNotFound
+	result := &supportcontract.MessageListResult{
+		Conversation: conversation,
+		Messages:     supportdomain.RedactRevoked(messages),
+		Total:        total,
+		Revoked:      supportdomain.RedactRevoked(revoked),
 	}
-	messages, total, err := s.repo.ListMessages(supportcontract.MessageListFilter{
-		ConversationID: conversationID,
-		AfterID:        afterID,
-		Page:           page,
-		PageSize:       pageSize,
-	})
-	if err != nil {
-		return nil, nil, 0, err
+	// 游标取本次最新的撤回时间（查询按 revoked_at 倒序，首条即最新）；
+	// 本轮没有撤回就把请求带来的下界原样还回去，免得前端把游标退回零。
+	switch {
+	case len(revoked) > 0 && revoked[0].RevokedAt != nil:
+		result.RevokedCursor = revoked[0].RevokedAt
+	case !revokedSince.IsZero():
+		since := revokedSince
+		result.RevokedCursor = &since
 	}
-	return conversation, messages, total, nil
+	return result, nil
 }
 
 // MarkReadByUser 买家已读，清零买家侧未读。

@@ -1343,6 +1343,12 @@ export interface AdminSupportMessageListResult {
   conversation: AdminSupportConversation
   messages: AdminSupportMessage[]
   total: number
+  // revoked 是自 revoked_after 游标以来被撤回的消息，内容已由服务端抹掉。
+  // 撤回只改 revoked_at 不新增行，after_id 增量游标永远拉不到它，
+  // 必须单开一条通道——否则对方撤回后这边要刷新页面才看得到。
+  revoked?: AdminSupportMessage[]
+  // revoked_cursor 由服务端产出、前端原样带回，不受两边时钟不一致影响。
+  revoked_cursor?: string | null
 }
 
 export interface AdminSupportUnreadCount {

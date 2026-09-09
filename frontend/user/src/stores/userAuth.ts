@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { userAuthAPI } from '../api'
 import { inviteCodeFields } from '../utils/affiliate'
+import { useSupportChat } from '../composables/useSupportChat'
 
 export const useUserAuthStore = defineStore('user-auth', () => {
     const router = useRouter()
@@ -42,6 +43,10 @@ export const useUserAuthStore = defineStore('user-auth', () => {
         user.value = null
         localStorage.removeItem('user_token')
         localStorage.removeItem('user_profile')
+        // 客服浮窗的状态是模块级单例，登出走的是 router.push 不是整页刷新，
+        // 不主动清的话下一个登录的账号会在同一个标签页里看到上一个账号的消息，
+        // 还会拿上一个会话的游标去拉自己的消息。
+        useSupportChat().reset()
     }
 
     const sendVerifyCode = async (payload: any) => {

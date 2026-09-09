@@ -155,6 +155,29 @@ func (s *Store) RevokeMessage(id uint, revokedAt time.Time) error {
 	return nil
 }
 
+// ListRevokedSince 取会话里已撤回且撤回时间不早于 since 的消息。
+//
+// 用 >= 而不是 >：两条消息的 revoked_at 撞到同一时刻时，> 会永久漏掉其中一条。
+// 代价只是每轮重复回传最新那一两条，前端的打标是幂等的，重复无害。
+func (s *Store) ListRevokedSince(conversationID uint, since time.Time, limit int) ([]supportdomain.Message, error) {
+	if conversationID == 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = supportcontract.RevokedFeedLimit
+	}
+	query := s.db.Model(&supportdomain.Message{}).
+		Where("conversation_id = ? AND revoked_at IS NOT NULL", conversationID)
+	if !since.IsZero() {
+		query = query.Where("revoked_at >= ?", since)
+	}
+	var messages []supportdomain.Message
+	if err := query.Order("revoked_at DESC").Limit(limit).Find(&messages).Error; err != nil {
+		return nil, err
+	}
+	return messages, nil
+}
+
 func (s *Store) ListMessages(filter supportcontract.MessageListFilter) ([]supportdomain.Message, int64, error) {
 	if filter.ConversationID == 0 {
 		return nil, 0, nil

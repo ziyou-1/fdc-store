@@ -22,7 +22,13 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useAdminAuthStore } from '@/stores/auth'
 import { copyText } from '@/utils/clipboard'
-import { canRevokeMessage as canRevokeByWindow, isRevoked, quoteSummary } from '@/utils/supportMessage'
+import {
+  canRevokeMessage as canRevokeByWindow,
+  isRevoked,
+  mergeRevocations,
+  nextRevokedCursor,
+  quoteSummary,
+} from '@/utils/supportMessage'
 import { confirmAction } from '@/utils/confirm'
 import { formatDate, formatMoney } from '@/utils/format'
 import { orderStatusClass, orderStatusLabel } from '@/utils/status'
@@ -71,6 +77,9 @@ const replyTo = ref<AdminSupportMessage | null>(null)
 const revokingId = ref<number | null>(null)
 // nowTick 由消息轮询推进，超过 2 分钟的撤回按钮会自己消失，不额外开定时器。
 const nowTick = ref(Date.now())
+// revokedCursor 是撤回的增量游标：服务端产出、这里原样带回。
+// 不用「最近 N 分钟」这种本地相对时间，否则标签页挂后台久了会漏掉撤回。
+const revokedCursor = ref('')
 const scrollRef = ref<HTMLElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const quickReplies = ref<AdminSupportQuickReply[]>([])
@@ -138,6 +147,13 @@ const patchMessage = (updated: AdminSupportMessage) => {
   messages.value = messages.value.map((item) =>
     item.id === updated.id ? { ...item, ...updated } : item,
   )
+}
+
+// applyRevocations 消费服务端的撤回增量。只更新已有的、不新增，
+// 否则会凭空插进一条本地从没收到过的空气泡，还会触发滚动到底。
+const applyRevocations = (data: AdminSupportMessageListResult) => {
+  messages.value = mergeRevocations(messages.value, data.revoked)
+  revokedCursor.value = nextRevokedCursor(revokedCursor.value, data.revoked_cursor)
 }
 
 const messageByID = computed(() => {
@@ -288,6 +304,9 @@ const loadMessages = async (id: number) => {
     const response = await adminAPI.getSupportMessages(id, { page: 1, page_size: 50 })
     const data = response.data.data as AdminSupportMessageListResult
     messages.value = [...(data.messages ?? [])].sort((a, b) => a.id - b.id)
+    // 整页的消息本来就带着 revoked_at，这里只需把游标接上，
+    // 之后的增量轮询才知道该从哪儿开始对账。
+    revokedCursor.value = nextRevokedCursor('', data.revoked_cursor)
     if (data.conversation) applyConversation(data.conversation)
     await markRead(id)
     void scrollToBottom()
@@ -305,13 +324,16 @@ const pollMessages = async () => {
   try {
     const response = await adminAPI.getSupportMessages(
       selectedId.value,
-      { after_id: lastMessageID() },
+      { after_id: lastMessageID(), revoked_after: revokedCursor.value || undefined },
       { silent: true },
     )
     const data = response.data.data as AdminSupportMessageListResult
     if (data.conversation) applyConversation(data.conversation)
     const incoming = data.messages ?? []
     appendMessages(incoming)
+    applyRevocations(data)
+    // 已读判定只看 messages，不能把 revoked 算进来：撤回会被反复回传，
+    // 算进来就等于每 5 秒把买家还没看的消息标成已读，工单会从未读视图里消失。
     if (incoming.length > 0) await markRead(selectedId.value)
   } catch {
     // 轮询失败不打扰
@@ -374,6 +396,7 @@ const selectConversation = async (row: AdminSupportConversation) => {
   selected.value = row
   messages.value = []
   replyTo.value = null
+  revokedCursor.value = ''
   buyerOrders.value = []
   await Promise.all([loadMessages(row.id), loadBuyerOrders(row.user_id)])
 }

@@ -1,18 +1,23 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Loader2, Paperclip, SendHorizontal } from 'lucide-vue-next'
+import { Loader2, Paperclip, SendHorizontal, X } from 'lucide-vue-next'
+import { quoteSummary } from '../../utils/supportMessage'
+import type { SupportMessageData } from '../../api/types'
 
 const props = defineProps<{
   sending: boolean
   uploading: boolean
   disabled?: boolean
+  // replyTo 由父组件持有：发送成功后才清，失败时草稿与引用都要留住。
+  replyTo?: SupportMessageData | null
 }>()
 
 const emit = defineEmits<{
   (e: 'send', content: string): void
   (e: 'attach', file: File): void
   (e: 'invalid', message: string): void
+  (e: 'cancel-reply'): void
 }>()
 
 const { t } = useI18n()
@@ -59,6 +64,22 @@ const handleFileChange = (event: Event) => {
   emit('attach', file)
 }
 
+const quotedLabel = computed(() => {
+  const target = props.replyTo
+  if (!target) return ''
+  return target.sender_type === 'user' ? t('support.you') : t('support.agent')
+})
+
+const quotedText = computed(() => {
+  const target = props.replyTo
+  if (!target) return ''
+  return quoteSummary(target, {
+    revoked: t('support.revoked'),
+    image: t('support.quoteImage'),
+    video: t('support.quoteVideo'),
+  })
+})
+
 // 供父组件把常见问题填进输入框
 const fill = (content: string) => {
   draft.value = content
@@ -69,6 +90,26 @@ defineExpose({ fill })
 
 <template>
   <div class="border-t border-border p-3">
+    <!-- 正在引用哪条：发送成功后自动清空，也可以手动叉掉 -->
+    <div
+      v-if="replyTo"
+      class="mb-2 flex items-start gap-2 rounded-lg border-l-2 border-primary bg-muted/60 px-2 py-1.5"
+    >
+      <div class="min-w-0 flex-1 text-xs">
+        <p class="font-medium">{{ t('support.replyingTo', { name: quotedLabel }) }}</p>
+        <p class="line-clamp-2 whitespace-pre-wrap break-words text-muted-foreground">
+          {{ quotedText }}
+        </p>
+      </div>
+      <button
+        type="button"
+        class="shrink-0 rounded-md p-1 text-muted-foreground"
+        :aria-label="t('support.cancelReply')"
+        @click="emit('cancel-reply')"
+      >
+        <X class="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+    </div>
     <div class="flex items-end gap-2">
       <button
         type="button"
