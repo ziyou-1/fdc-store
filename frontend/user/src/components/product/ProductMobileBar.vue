@@ -8,9 +8,17 @@
     leave-to-class="translate-y-full opacity-0">
     <div v-if="visible"
       class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t shadow-2xl theme-safe-bottom">
-      <div class="flex items-center gap-2 px-3 py-2.5">
-        <!-- Price -->
-        <div class="min-w-0 flex-1 basis-0">
+      <!--
+        价格与按钮分成上下两行，而不是挤在同一行。
+
+        挤一行时价格会吃掉约三分之一宽度，375px 视口下每个按钮只剩 70px、
+        可用文字宽仅 52px；「Masukkan Keranjang」需要 127px，只显示得下四成，
+        中文「加入购物车」也放不下。分行后按钮独占整行宽度，文字才完整。
+        参考的淘宝/1688 详情页同样是价格在上、按钮独占一行。
+      -->
+      <div class="px-3 pb-2.5 pt-2">
+        <!-- 价格行：整行给它，长金额（如 25000.00 IDR）也不会被挤断 -->
+        <div class="mb-1.5 min-w-0">
           <span v-if="showMemberPrice" class="theme-price-sm text-amber-600 dark:text-amber-300 truncate block">
             {{ memberPriceDisplay }}
           </span>
@@ -27,28 +35,39 @@
             {{ productPriceDisplay }}
           </span>
         </div>
-        <!-- Actions -->
-        <Button v-if="requiresLogin" size="lg" class="rounded-xl font-bold" @click="$emit('goLogin')">
-          {{ t('productDetail.loginToBuy') }}
-        </Button>
-        <template v-else>
-          <Button variant="secondary" size="sm" class="h-11 shrink-0 rounded-xl px-3 text-xs font-bold" :disabled="!canPurchase" @click="$emit('addToCart')">
-            {{ t('productDetail.addToCart') }}
+
+        <!-- 按钮行：独占整行。不加 truncate——文字宁可换行也不截断 -->
+        <div class="flex items-stretch gap-2">
+          <Button v-if="requiresLogin" size="lg" class="min-w-0 flex-1 rounded-xl font-bold" @click="$emit('goLogin')">
+            {{ t('productDetail.loginToBuy') }}
           </Button>
-          <Button size="sm" class="h-11 shrink-0 rounded-xl px-3 text-xs font-bold" :disabled="!canPurchase" @click="$emit('buyNow')">
-            {{ t('productDetail.buyNow') }}
-          </Button>
-          <Button
-            v-if="canShowPointsRedeem"
-            variant="outline"
-            size="sm"
-            class="h-11 shrink-0 rounded-xl px-3 text-xs font-bold"
-            :disabled="!canPurchase || redeeming"
-            @click="$emit('redeemWithPoints')"
-          >
-            {{ redeeming ? t('productDetail.redeeming') : t('productDetail.redeemWithPoints') }}
-          </Button>
-        </template>
+          <template v-else>
+            <Button
+              variant="secondary"
+              class="min-h-11 h-auto min-w-0 flex-1 basis-0 whitespace-normal rounded-xl px-2 py-1.5 text-xs font-bold leading-tight"
+              :disabled="!canPurchase"
+              @click="$emit('addToCart')"
+            >
+              {{ t('productDetail.addToCart') }}
+            </Button>
+            <Button
+              class="min-h-11 h-auto min-w-0 flex-1 basis-0 whitespace-normal rounded-xl px-2 py-1.5 text-xs font-bold leading-tight"
+              :disabled="!canPurchase"
+              @click="$emit('buyNow')"
+            >
+              {{ t('productDetail.buyNow') }}
+            </Button>
+            <Button
+              v-if="canShowPointsRedeem"
+              variant="outline"
+              class="min-h-11 h-auto min-w-0 flex-1 basis-0 whitespace-normal rounded-xl px-2 py-1.5 text-xs font-bold leading-tight"
+              :disabled="!canPurchase || redeeming"
+              @click="$emit('redeemWithPoints')"
+            >
+              {{ redeeming ? t('productDetail.redeeming') : t('productDetail.redeemWithPoints') }}
+            </Button>
+          </template>
+        </div>
       </div>
     </div>
   </Transition>

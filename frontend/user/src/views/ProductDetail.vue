@@ -302,7 +302,8 @@
                   <AlertDescription class="font-semibold text-warning">{{ purchaseWarning }}</AlertDescription>
                 </Alert>
 
-                <div class="space-y-3">
+                <!-- 移动端由底部固定栏提供同样的操作，这里隐藏避免两套按钮重复出现 -->
+                <div class="hidden lg:block space-y-3">
                   <Button v-if="requiresLogin" class="w-full h-12 font-bold" @click="goLogin">
                     {{ t('productDetail.loginToBuy') }}
                   </Button>
