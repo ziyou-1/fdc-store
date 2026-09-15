@@ -29,3 +29,9 @@ func NewGoogleAuthHandler(c *container.Container, cfg *config.Config) *settingst
 		settings: c.SettingService, cfg: cfg, googleAuth: c.GoogleAuthService,
 	})
 }
+
+func NewDeepLHandler(c *container.Container, cfg *config.Config) *settingstransport.DeepLHandler {
+	return settingstransport.NewDeepLHandler(settingsDeepLAdapter{
+		settings: c.SettingService, cfg: cfg, translators: c.DeepLTranslators,
+	})
+}

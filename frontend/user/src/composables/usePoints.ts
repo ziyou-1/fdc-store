@@ -10,6 +10,7 @@ import type {
     PointsTransactionData,
 } from '../api/types'
 import type { PageAlert } from '../utils/alerts'
+import { reservePayWindow } from '../utils/payWindow'
 
 const PAGE_SIZE = 20
 
@@ -28,11 +29,13 @@ export function usePoints() {
     const transactions = ref<PointsTransactionData[]>([])
     const recharges = ref<PointsRechargeRecordData[]>([])
     const channels = ref<any[]>([])
+    const walletBalance = ref('0')
     const alert = ref<PageAlert | null>(null)
 
     const pagination = ref({ page: 1, page_size: PAGE_SIZE, total: 0, total_page: 1 })
 
-    const rechargeForm = reactive({ amount: '', channelId: 0, remark: '' })
+    // payWithBalance 为 true 时用钱包余额支付，此时忽略 channelId。
+    const rechargeForm = reactive({ amount: '', channelId: 0, remark: '', payWithBalance: false })
 
     const rechargeEnabled = computed(() => config.value?.recharge_enabled === true)
     const pointsPerUnit = computed(() => config.value?.recharge_points_per_unit ?? 0)
@@ -44,6 +47,15 @@ export function usePoints() {
     const loadAccount = async () => {
         const res = await pointsAPI.account()
         account.value = res.data.data
+    }
+
+    const loadWalletBalance = async () => {
+        try {
+            const res = await walletAPI.account()
+            walletBalance.value = String(res.data.data?.balance ?? '0')
+        } catch {
+            // 钱包余额拉不到不影响主面板，只是余额支付选项无法显示可用额度
+        }
     }
 
     const loadConfig = async () => {
@@ -137,34 +149,56 @@ export function usePoints() {
             alert.value = { level: 'warning', message: t('personalCenter.points.errors.invalidAmount') }
             return
         }
-        if (rechargeForm.channelId <= 0) {
+        if (!rechargeForm.payWithBalance && rechargeForm.channelId <= 0) {
             alert.value = { level: 'warning', message: t('personalCenter.points.errors.channelRequired') }
             return
         }
+        // 余额支付前先在前台挡一道：余额不足直接提示，不必往返一次后端。
+        if (rechargeForm.payWithBalance && Number(walletBalance.value) < Number(amount)) {
+            alert.value = { level: 'warning', message: t('personalCenter.points.errors.balanceInsufficient') }
+            return
+        }
+        const paidByBalance = rechargeForm.payWithBalance
         recharging.value = true
+        // 在线支付才需要新标签；余额支付即时到账、不跳转，不开标签。
+        // 在 await 之前同步占位，避免弹窗被拦。
+        const payWindow = paidByBalance ? null : reservePayWindow()
         try {
-            const res = await pointsAPI.recharge({
-                amount,
-                channel_id: rechargeForm.channelId,
-                remark: rechargeForm.remark.trim() || undefined,
-            })
+            const payload = paidByBalance
+                ? { amount, pay_with_balance: true, remark: rechargeForm.remark.trim() || undefined }
+                : { amount, channel_id: rechargeForm.channelId, remark: rechargeForm.remark.trim() || undefined }
+            const res = await pointsAPI.recharge(payload)
             const result = res.data.data || {}
             rechargeForm.amount = ''
             rechargeForm.remark = ''
             channels.value = []
             rechargeForm.channelId = 0
+            rechargeForm.payWithBalance = false
             await loadRecharges()
-            // 后端只会给 redirect 或 qr 两种模式
-            if (result.redirect_url) {
-                window.location.href = result.redirect_url
+            // 钱包余额支付即时到账：刷新积分账户与余额，直接提示成功。
+            if (paidByBalance || result.status === 'success' || result.interaction_mode === 'balance') {
+                payWindow?.release()
+                await Promise.allSettled([loadAccount(), loadWalletBalance()])
+                alert.value = {
+                    level: 'success',
+                    message: t('personalCenter.points.rechargeBalanceSuccess', { points: result.points_amount ?? 0 }),
+                }
                 return null
             }
+            // 在线支付：后端只会给 redirect 或 qr 两种模式
+            if (result.redirect_url) {
+                if (payWindow) payWindow.navigate(result.redirect_url)
+                else window.location.href = result.redirect_url
+                return null
+            }
+            payWindow?.release()
             if (result.qr_code) {
                 return result
             }
             alert.value = { level: 'success', message: t('personalCenter.points.rechargeCreated') }
             return null
         } catch (err: any) {
+            payWindow?.release()
             alert.value = { level: 'error', message: err?.message || t('personalCenter.points.errors.rechargeFailed') }
             return null
         } finally {
@@ -186,6 +220,7 @@ export function usePoints() {
             loadConfig(),
             loadInvite(),
             loadRecharges(),
+            loadWalletBalance(),
         ])
         const failed = results.find((item) => item.status === 'rejected')
         if (failed && failed.status === 'rejected') {
@@ -209,6 +244,7 @@ export function usePoints() {
         transactions,
         recharges,
         channels,
+        walletBalance,
         alert,
         pagination,
         rechargeForm,

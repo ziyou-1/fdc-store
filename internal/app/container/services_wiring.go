@@ -39,9 +39,13 @@ func (c *Container) wireServiceDependencies() {
 	c.PointsService.SetInviteIssuer(c.AffiliateService)
 	c.MemberLevelService.SetPurchaseCreator(membershipPurchaseCreator{payments: c.PaymentService})
 	c.SupportService.SetUserReader(supportUserReader{users: c.UserStore})
-	if translator := supportapp.NewDeepLTranslator(c.Config.DeepL.AuthKey); translator != nil {
-		c.SupportService.SetUserTextTranslator(translator.Translate)
-	}
+	// 无条件注入：翻译器是可热换的槽位，密钥换没换由槽位内部决定。
+	// 原先写成 `if translator != nil` 才注入，启动时密钥为空就永远不注入，
+	// 于是"运营第一次在后台填密钥"根本不生效，非重启不可。
+	//
+	// 槽位本身在第 2 步 loadRuntimeSettings 里就构造好了（商品写入服务比这里
+	// 早三步构造，也要用它），这里只取方法值注入客服链路。
+	c.SupportService.SetUserTextTranslator(c.DeepLTranslators.Translate)
 	c.UserAuthService.SetReferralServices(inviterResolver{affiliates: c.AffiliateRepo, users: c.UserStore}, c.PointsService)
 	c.FreeClaimService.SetCollaborators(
 		freeClaimOrderCreator{orders: c.OrderService, payments: c.PaymentService},
@@ -204,6 +208,10 @@ func (a pointsRechargeCreator) CreatePointsRecharge(
 	if a.payments == nil {
 		return nil, pointscontract.ErrRechargeDisabled
 	}
+	// 钱包余额支付：走同步扣款+即时到账路径，不经外部支付渠道。
+	if input.PayWithBalance {
+		return a.createPointsRechargeWithBalance(input)
+	}
 	result, err := a.payments.CreateWalletRechargePayment(paymentapp.CreateWalletRechargePaymentInput{
 		UserID:        input.UserID,
 		ChannelID:     input.ChannelID,
@@ -241,6 +249,43 @@ func (a pointsRechargeCreator) CreatePointsRecharge(
 		RedirectURL:     result.Payment.PayURL,
 		QRCode:          result.Payment.QRCode,
 		InteractionMode: result.Payment.InteractionMode,
+		Status:          result.Recharge.Status,
+	}, nil
+}
+
+// createPointsRechargeWithBalance 用钱包余额同步完成积分充值。
+func (a pointsRechargeCreator) createPointsRechargeWithBalance(
+	input pointscontract.RechargePaymentInput,
+) (*pointscontract.RechargeResult, error) {
+	result, err := a.payments.CreateWalletBalanceRecharge(paymentapp.CreateWalletBalanceRechargeInput{
+		UserID:        input.UserID,
+		Amount:        input.Amount,
+		Currency:      input.Currency,
+		Remark:        input.Remark,
+		CreditTarget:  constants.RechargeCreditTargetPoints,
+		PointsAmount:  input.PointsAmount,
+		PointsPerUnit: input.PointsPerUnit,
+	})
+	if err != nil {
+		// 余额不足翻译成 points 语义，让前台能给出"余额不足"的明确提示。
+		if errors.Is(err, walletcontract.ErrInsufficientBalance) {
+			return nil, pointscontract.ErrRechargeInsufficientBalance
+		}
+		return nil, err
+	}
+	if result == nil || result.Recharge == nil || result.Payment == nil {
+		return nil, pointscontract.ErrRechargeNotFound
+	}
+	return &pointscontract.RechargeResult{
+		RechargeNo:      result.Recharge.RechargeNo,
+		PaymentID:       result.Payment.ID,
+		PayableAmount:   result.Recharge.PayableAmount,
+		Currency:        result.Recharge.Currency,
+		PointsAmount:    result.Recharge.PointsAmount,
+		RedirectURL:     "",
+		QRCode:          "",
+		InteractionMode: result.Payment.InteractionMode,
+		Status:          result.Recharge.Status,
 	}, nil
 }
 
@@ -432,4 +477,26 @@ func (a SupportAttachmentUploader) SaveSupportAttachment(
 		return "", "", err
 	}
 	return result.URL, result.MimeType, nil
+}
+
+// productTranslator 把 DeepL 槽位适配成商品写入服务要的形状。
+//
+// 商品侧的端口只说站点 locale（zh-CN / id-ID），不认识 DeepL 的语言码；
+// 这层映射不属于 catalog，也不属于 support——按仓库惯例住在装配层，
+// 塞进任一模块都会造成反向依赖。
+type productTranslator struct {
+	translators *supportapp.TranslatorHolder
+}
+
+func (t productTranslator) TranslateBatch(texts []string, targetLocale, sourceLocale string, richText bool) ([]string, error) {
+	targetLang, err := supportapp.DeepLTargetLang(targetLocale)
+	if err != nil {
+		return nil, err
+	}
+	tagHandling := ""
+	if richText {
+		tagHandling = supportapp.HTMLTagHandling()
+	}
+	// 源语言取不到就传空串，让 DeepL 自动识别——总比拿一个错的语言码去请求好。
+	return t.translators.TranslateBatchTo(texts, targetLang, supportapp.DeepLSourceLang(sourceLocale), tagHandling)
 }

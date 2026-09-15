@@ -55,9 +55,11 @@ func TestBootstrapPackagesStayFocused(t *testing.T) {
 			budget := 4
 			if entry.Name() == "settingshttp" {
 				// Dedicated adapters keep independently hot-reloadable security
-				// settings (SMTP, captcha, Telegram, Google) out of the router;
-				// the Google adapter has a focused concurrency regression test.
-				budget = 6
+				// settings (SMTP, captcha, Telegram, Google, DeepL) out of the
+				// router. Two of them carry focused regression tests: Google for
+				// concurrency, DeepL because its ApplyRuntime must also be able to
+				// switch the translator off, not just swap a key in.
+				budget = 8
 			}
 			assertDirectoryGoFileBudget(t, filepath.Join(bootstrapRoot, entry.Name()), budget)
 		})

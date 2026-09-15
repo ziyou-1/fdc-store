@@ -616,7 +616,12 @@ func (s *OrderService) createOrder(input orderCreateParams) (*orderdomain.Order,
 				}
 			}
 
-			if strings.TrimSpace(plan.Item.FulfillmentType) == constants.FulfillmentTypeAuto {
+			// agiso 卡券库商品的卡存在上游卡券库，本地 card_secrets 表是空的：
+			// 下单阶段不预留本地卡密，否则 rows=0 恒判「卡密不足」导致创建订单失败。
+			// 提卡在支付成功后的履约阶段用 HandPick 完成，库存以 Agiso 实时为准。
+			// 来源按 SKU 生效：同一商品下本地 SKU 仍预留本地卡密，agiso SKU 才跳过。
+			isAgisoSourced := productdomain.EffectiveCardSource(plan.Product, plan.SKU) == constants.CardSourceAgiso
+			if strings.TrimSpace(plan.Item.FulfillmentType) == constants.FulfillmentTypeAuto && !isAgisoSourced {
 				secretRepo := tx.CardSecrets()
 				rows, err := secretRepo.ListAvailableByProductForUpdate(plan.Item.ProductID, plan.Item.SKUID, plan.Item.Quantity)
 				if err != nil {

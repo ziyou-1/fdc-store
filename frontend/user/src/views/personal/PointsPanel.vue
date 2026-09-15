@@ -20,9 +20,12 @@
       :recharging="recharging"
       :channel-loading="channelLoading"
       :points-per-unit="pointsPerUnit"
+      :wallet-balance="walletBalance"
+      :pay-with-balance="rechargeForm.payWithBalance"
       @update:amount="rechargeForm.amount = $event"
       @update:channel-id="rechargeForm.channelId = $event"
       @update:remark="rechargeForm.remark = $event"
+      @update:pay-with-balance="rechargeForm.payWithBalance = $event"
       @amount-blur="loadChannels"
       @submit="onRecharge"
     />
@@ -70,6 +73,7 @@ const {
   invite,
   transactions,
   channels,
+  walletBalance,
   alert,
   pagination,
   rechargeForm,

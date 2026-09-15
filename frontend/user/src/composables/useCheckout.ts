@@ -596,8 +596,16 @@ export function useCheckout() {
         return
       }
 
-      // Redirect to the existing Payment page which handles all payment display
-      router.push(`/pay?order_no=${encodeURIComponent(responseData.order_no)}`)
+      // 带上结算页已经选好的支付方式与余额/积分开关。
+      // 不带的话支付页只能从「已存在的支付记录」里恢复渠道，而订单刚创建时
+      // 还没有支付记录，买家就要把刚选过的支付方式再选一遍。
+      const payQuery = new URLSearchParams({ order_no: responseData.order_no })
+      if (requiresOnlineChannel.value && selectedChannelId.value) {
+        payQuery.set('channel_id', String(selectedChannelId.value))
+      }
+      if (useBalance.value) payQuery.set('use_balance', '1')
+      if (usePoints.value) payQuery.set('use_points', '1')
+      router.push(`/pay?${payQuery.toString()}`)
     } catch (err: any) {
       error.value = err.message || t('checkout.errors.submitFailed')
     } finally {

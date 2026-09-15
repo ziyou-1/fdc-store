@@ -39,6 +39,13 @@ export interface AdminProductSKU {
   manual_stock_sold: number
   auto_stock_available: number
   auto_stock_total: number
+  // 该 SKU 的卡密来源（local / agiso）与交付说明。
+  card_source?: string
+  instructions?: LocalizedText
+  // Agiso 卡券库时该 SKU 绑定的卡种。连接仍是整单共用一条。
+  agiso_connection_id?: number | null
+  agiso_cpk_id?: number | null
+  agiso_stock_cached?: number
   is_active: boolean
   sort_order: number
   created_at: string
@@ -90,6 +97,9 @@ export interface AdminProduct {
   updated_at: string
   category?: AdminCategory
   skus?: AdminProductSKU[]
+  card_source?: string
+  agiso_connection_id?: number | null
+  agiso_cpk_id?: number | null
 }
 
 export interface AdminNotificationLog {

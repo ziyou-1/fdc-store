@@ -29,6 +29,8 @@ const (
 	TaskMembershipExpiryReminder = constants.TaskMembershipExpiryReminder
 	// TaskUpstreamSyncStock 上游库存同步任务
 	TaskUpstreamSyncStock = constants.TaskUpstreamSyncStock
+	// TaskAgisoSyncStock Agiso 卡券库库存同步任务
+	TaskAgisoSyncStock = constants.TaskAgisoSyncStock
 	// TaskProcurementSubmit 采购提交任务
 	TaskProcurementSubmit = constants.TaskProcurementSubmit
 	// TaskProcurementPollStatus 采购状态轮询任务
@@ -157,6 +159,11 @@ func NewMembershipExpiryReminderTask() *asynq.Task {
 // NewUpstreamSyncStockTask 创建上游库存同步任务
 func NewUpstreamSyncStockTask() *asynq.Task {
 	return asynq.NewTask(TaskUpstreamSyncStock, nil)
+}
+
+// NewAgisoSyncStockTask 创建 Agiso 卡券库库存同步任务
+func NewAgisoSyncStockTask() *asynq.Task {
+	return asynq.NewTask(TaskAgisoSyncStock, nil)
 }
 
 // NewProcurementSyncAcceptedTask 创建采购单定时巡检任务

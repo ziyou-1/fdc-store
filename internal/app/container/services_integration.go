@@ -116,6 +116,12 @@ func (c *Container) initIntegrationServices() {
 		AutoFulfill:             autoFulfiller{fulfillments: c.FulfillmentService},
 		SkipPayment:             c.Config != nil && c.Config.App.SkipPayment,
 	})
+	// 注入 Agiso 提卡端口：未注入时所有自动发卡商品都走本地卡密库
+	c.FulfillmentService.SetAgisoCardPicker(agisoCardPicker{
+		products:    c.ProductRepo,
+		connections: c.SiteConnectionService,
+	})
+
 	c.ProcurementOrderService = procurementapp.NewService(procurementapp.Options{
 		Repository:         c.ProcurementOrderRepo,
 		Orders:             procurementorder.New(c.OrderStore),

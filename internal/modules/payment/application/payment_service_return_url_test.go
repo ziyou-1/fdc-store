@@ -26,6 +26,27 @@ func TestResolveTenantReturnURLMainTenantKeepsConfigFallback(t *testing.T) {
 	}
 }
 
+func TestResolveTenantReturnURLMainTenantWithoutConfigGeneratesPay(t *testing.T) {
+	// 主站渠道没自配 return_url 时，用当前请求域名兜一个 /pay，
+	// 否则 Payssion 这类跳转支付付完/取消后买家会被丢在第三方页回不来。
+	ctx := resellercontract.WithTenantContext(context.Background(), resellercontract.MainTenantContext("oiois.top"))
+
+	// 无配置渠道
+	if got := resolveTenantReturnURL(ctx, "https", nil); got != "https://oiois.top/pay" {
+		t.Fatalf("main tenant no config want https://oiois.top/pay got %q", got)
+	}
+	// config 里只有 live_mode（生产实际状态），也算无回跳配置
+	channel := &paymentdomain.PaymentChannel{ConfigJSON: jsonmap.JSON{"live_mode": true}}
+	if got := resolveTenantReturnURL(ctx, "https", channel); got != "https://oiois.top/pay" {
+		t.Fatalf("main tenant live_mode-only want https://oiois.top/pay got %q", got)
+	}
+	// 自配了 return_url 的渠道仍返回空，保持原兜底
+	configured := &paymentdomain.PaymentChannel{ConfigJSON: jsonmap.JSON{"return_url": "https://oiois.top/custom"}}
+	if got := resolveTenantReturnURL(ctx, "https", configured); got != "" {
+		t.Fatalf("main tenant configured want empty got %q", got)
+	}
+}
+
 func TestResolveTenantReturnURLResellerTenantUsesRequestHost(t *testing.T) {
 	ctx := resellercontract.WithTenantContext(context.Background(), resellercontract.ResellerTenantContext("shop.example.com", 7, 3, "primary.example.com"))
 	channel := &paymentdomain.PaymentChannel{ConfigJSON: jsonmap.JSON{"return_url": "https://main.example.com/pay"}}

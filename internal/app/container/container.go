@@ -141,33 +141,36 @@ type Container struct {
 	MemberLevelUserRepo    memberlevelcontract.UserRepository
 
 	// Services
-	AuthzService                  *authz.Service
-	AuthService                   *adminauthapp.Service
-	TOTPService                   *admintotpapp.Service
-	UserTOTPService               *usertotpapp.Service
-	UserAuthService               *userauthapp.Service
-	TelegramAuthService           *telegramauthapp.Service
-	GoogleAuthService             *googleauthapp.Service
-	EmailSender                   *notificationsmtp.Service
-	EmailBrandResolver            mailbrand.Resolver
-	CaptchaService                *captchaapp.Service
-	UploadService                 *uploadapp.Service
-	ProductReadService            *productapplication.Service
-	ProductAdminService           *productadmin.AdminService
-	ProductWriteService           *productwrite.WriteService
-	ContentPostService            *contentapp.PostService
-	ContentPostCategoryService    *contentapp.PostCategoryService
-	ContentBannerService          *contentapp.BannerService
-	ContentMediaService           *contentapp.MediaService
-	CategoryService               *categoryapp.Service
-	SettingService                *settingsapp.Service
-	SitemapService                *sitemapapp.Service
-	CartService                   *cartapp.Service
-	WalletService                 *walletapp.Service
-	PointsService                 *pointsapp.Service
-	FreeClaimService              *freeclaimapp.Service
-	TokenStationService           *tokenstationapp.Service
-	SupportService                *supportapp.Service
+	AuthzService               *authz.Service
+	AuthService                *adminauthapp.Service
+	TOTPService                *admintotpapp.Service
+	UserTOTPService            *usertotpapp.Service
+	UserAuthService            *userauthapp.Service
+	TelegramAuthService        *telegramauthapp.Service
+	GoogleAuthService          *googleauthapp.Service
+	EmailSender                *notificationsmtp.Service
+	EmailBrandResolver         mailbrand.Resolver
+	CaptchaService             *captchaapp.Service
+	UploadService              *uploadapp.Service
+	ProductReadService         *productapplication.Service
+	ProductAdminService        *productadmin.AdminService
+	ProductWriteService        *productwrite.WriteService
+	ContentPostService         *contentapp.PostService
+	ContentPostCategoryService *contentapp.PostCategoryService
+	ContentBannerService       *contentapp.BannerService
+	ContentMediaService        *contentapp.MediaService
+	CategoryService            *categoryapp.Service
+	SettingService             *settingsapp.Service
+	SitemapService             *sitemapapp.Service
+	CartService                *cartapp.Service
+	WalletService              *walletapp.Service
+	PointsService              *pointsapp.Service
+	FreeClaimService           *freeclaimapp.Service
+	TokenStationService        *tokenstationapp.Service
+	SupportService             *supportapp.Service
+	// DeepL 翻译器的热换槽位：后台改了密钥后由 ApplyRuntime 换掉里面的实例，
+	// 业务侧注入的函数指针不变，因此不需要重启进程，也不会和买家请求抢写同一个字段。
+	DeepLTranslators              *supportapp.TranslatorHolder
 	SupportUploadService          *uploadapp.Service
 	OrderRefundService            *orderrefund.Service
 	OrderService                  *orderapp.OrderService

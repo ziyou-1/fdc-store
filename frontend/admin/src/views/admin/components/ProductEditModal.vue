@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, reactive, watch } from 'vue'
+import { computed, ref, reactive, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import type { AdminProduct, AdminCategory, AdminProductSKU, AdminPaymentChannel, LocalizedText } from '@/api/types'
@@ -97,6 +97,12 @@ type SKUFormItem = {
   cost_price_amount: number
   points_price: number
   manual_stock_total: number
+  // 该 SKU 的卡密来源：local / agiso。
+  card_source: string
+  // 该 SKU 单独的交付说明；留空回落商品级说明。
+  instructions: LocalizedText
+  // Agiso 卡券库时该 SKU 绑定的卡种。连接仍是整单共用一条。
+  agiso_cpk_id: number
   is_active: boolean
   sort_order: number
 }
@@ -138,6 +144,12 @@ const createSKUFormItem = (raw?: Partial<AdminProductSKU>): SKUFormItem => ({
   cost_price_amount: Number(raw?.cost_price_amount || 0),
   points_price: asPointsPrice(raw?.points_price),
   manual_stock_total: toSafeStockTotal(raw?.manual_stock_total),
+  card_source: String((raw as any)?.card_source || '') === 'agiso' ? 'agiso' : 'local',
+  instructions: {
+    ...createEmptyLocaleText(),
+    ...((raw as any)?.instructions || {}),
+  } as LocalizedText,
+  agiso_cpk_id: Number(raw?.agiso_cpk_id || 0),
   is_active: raw?.is_active ?? true,
   sort_order: Number(raw?.sort_order || 0),
 })
@@ -160,6 +172,9 @@ const form = reactive({
   max_purchase_quantity: '' as number | '',
   stock_display_mode: 'exact',
   fulfillment_type: 'manual',
+  card_source: 'local',
+  agiso_connection_id: null as number | null,
+  agiso_cpk_id: null as number | null,
   manual_form_timing: 'checkout',
   manual_stock_total: 0,
   skus: [] as SKUFormItem[],
@@ -425,6 +440,76 @@ const removeManualFormField = (index: number) => {
   form.manual_form_schema.fields.splice(index, 1)
 }
 
+const skuEffectiveSource = (sku: SKUFormItem): string =>
+  sku.card_source === 'agiso' ? 'agiso' : 'local'
+const skuIsAgiso = (sku: SKUFormItem): boolean =>
+  form.fulfillment_type === 'auto' && skuEffectiveSource(sku) === 'agiso'
+const anyAgisoSource = computed(
+  () => form.fulfillment_type === 'auto' && form.skus.some((s) => s.card_source === 'agiso')
+)
+const agisoConnections = ref<any[]>([])
+const agisoCardKinds = ref<any[]>([])
+const loadingCardKinds = ref(false)
+
+// 卡种可能几十上百个，下拉里加个关键词过滤。全量已经加载，前端过滤即可，
+// 按名称模糊匹配，不区分大小写。
+const cardKindKeyword = ref('')
+const filteredCardKinds = computed(() => {
+  const kw = cardKindKeyword.value.trim().toLowerCase()
+  if (!kw) return agisoCardKinds.value
+  return agisoCardKinds.value.filter((k: any) =>
+    String(k.title || '').toLowerCase().includes(kw),
+  )
+})
+
+const loadAgisoConnections = async () => {
+  try {
+    const res: any = await adminAPI.getSiteConnections({ page: 1, page_size: 100 })
+    // client.ts 把整个响应信封放在 res.data，列表在 res.data.data，
+    // 全项目都是这个层级（见 SiteConnections.vue）。
+    const rows = res?.data?.data || []
+    agisoConnections.value = (Array.isArray(rows) ? rows : []).filter(
+      (c: any) => c?.protocol === 'agiso'
+    )
+  } catch {
+    agisoConnections.value = []
+  }
+}
+
+// 卡种列表要实时向 Agiso 拉，因为库存是会变的，缓存下来会让运营看到过期数字
+const loadAgisoCardKinds = async () => {
+  agisoCardKinds.value = []
+  cardKindKeyword.value = ''
+  if (!form.agiso_connection_id) return
+  loadingCardKinds.value = true
+  try {
+    const res: any = await adminAPI.getAgisoCardKinds(form.agiso_connection_id)
+    agisoCardKinds.value = res?.data?.data?.items || []
+  } catch (e: any) {
+    notifyError(e?.message || '拉取卡种失败，请先确认该连接能测试通过')
+    agisoCardKinds.value = []
+  } finally {
+    loadingCardKinds.value = false
+  }
+}
+
+// 编辑已有商品时 populateForm 会把连接从 null 改成已存值，从而触发下面这个 watch。
+// 若无条件清空卡种，会把刚载入的商品级默认卡种（以及 SKU 回落所依赖的那份）抹掉。
+// 因此 populate 期间置位此开关：只重新拉卡种列表、保留已存卡种；用户手动改连接时才清空。
+const suppressAgisoCpkReset = ref(false)
+watch(
+  () => form.skus.map((s) => s.card_source).join(','),
+  () => {
+    if (anyAgisoSource.value && agisoConnections.value.length === 0) loadAgisoConnections()
+  },
+)
+watch(() => form.agiso_connection_id, () => {
+  if (!suppressAgisoCpkReset.value) {
+    form.agiso_cpk_id = null
+  }
+  loadAgisoCardKinds()
+})
+
 const addSKU = () => {
   form.skus.push(
     createSKUFormItem({
@@ -468,6 +553,19 @@ const normalizeSKUsForSubmit = () => {
     const manualStockTotal = form.fulfillment_type === 'manual' ? toSafeStockTotal(item.manual_stock_total) : 0
     const specValues = normalizeSpecValues(item.spec_values)
 
+    const skuCardSource = item.card_source === 'agiso' ? 'agiso' : 'local'
+    const isSkuAgiso = form.fulfillment_type === 'auto' && skuCardSource === 'agiso'
+    if (isSkuAgiso && Number(item.agiso_cpk_id) <= 0) {
+      throw new Error(`规格 ${index + 1} 请选择卡种`)
+    }
+    const agisoCpkID = isSkuAgiso ? Number(item.agiso_cpk_id) : null
+    // 交付说明剥掉空语言：全空则传 {}，后端据此回落到商品级说明。
+    const skuInstructions: Record<string, string> = {}
+    Object.keys(item.instructions || {}).forEach((k) => {
+      const v = String((item.instructions as any)?.[k] ?? '').trim()
+      if (v) skuInstructions[k] = v
+    })
+
     return {
       id: item.id > 0 ? item.id : undefined,
       sku_code: skuCode,
@@ -476,6 +574,9 @@ const normalizeSKUsForSubmit = () => {
       cost_price_amount: Number(item.cost_price_amount) || 0,
       points_price: asPointsPrice(item.points_price),
       manual_stock_total: manualStockTotal,
+      card_source: skuCardSource,
+      instructions: skuInstructions,
+      agiso_cpk_id: agisoCpkID,
       is_active: isActive,
       sort_order: Number(item.sort_order) || 0,
     }
@@ -511,6 +612,9 @@ const resetForm = () => {
     max_purchase_quantity: '',
     stock_display_mode: 'exact',
     fulfillment_type: 'manual',
+    card_source: 'local',
+    agiso_connection_id: null,
+    agiso_cpk_id: null,
     manual_form_timing: 'checkout',
     manual_stock_total: 0,
     skus: [],
@@ -524,6 +628,12 @@ const resetForm = () => {
 }
 
 const populateForm = (product: AdminProduct) => {
+  // 见 suppressAgisoCpkReset 说明：populate 期间不让连接 watch 抹掉已存卡种；
+  // nextTick 在本轮 watch 回调之后再解除，之后用户改连接仍会正常清空。
+  suppressAgisoCpkReset.value = true
+  void nextTick(() => {
+    suppressAgisoCpkReset.value = false
+  })
   initialCategoryID.value = Number(product.category_id || 0) || null
   let imagesList: string[] = []
   if (product.images) {
@@ -561,9 +671,20 @@ const populateForm = (product: AdminProduct) => {
     max_purchase_quantity: Number(product.max_purchase_quantity || 0) > 0 ? Math.floor(Number(product.max_purchase_quantity || 0)) : '',
     stock_display_mode: product.stock_display_mode || 'exact',
     fulfillment_type: product.fulfillment_type || 'manual',
+    card_source: product.card_source || 'local',
+    agiso_connection_id: product.agiso_connection_id || null,
+    agiso_cpk_id: product.agiso_cpk_id || null,
     manual_form_timing: product.manual_form_timing === 'after_payment' ? 'after_payment' : 'checkout',
     manual_stock_total: resolveManualStockMetrics(product).total,
-    skus: Array.isArray(product.skus) ? product.skus.map((item: AdminProductSKU) => createSKUFormItem(item)) : [],
+    skus: Array.isArray(product.skus)
+      ? product.skus.map((item: AdminProductSKU) =>
+          createSKUFormItem({
+            ...item,
+            card_source: item.card_source || product.card_source,
+            agiso_cpk_id: Number(item.agiso_cpk_id || 0) > 0 ? item.agiso_cpk_id : product.agiso_cpk_id,
+          }),
+        )
+      : [],
     category_id: Number(product.category_id || 0) || null,
     payment_channel_ids: parsePaymentChannelIDs(product.payment_channel_ids),
     is_affiliate_enabled: Boolean(product.is_affiliate_enabled),
@@ -638,6 +759,9 @@ const handleSubmit = async () => {
       max_purchase_quantity: maxPurchaseQuantityValue,
       stock_display_mode: form.stock_display_mode,
       fulfillment_type: form.fulfillment_type,
+      card_source: 'local',
+      agiso_connection_id: anyAgisoSource.value ? form.agiso_connection_id : null,
+      agiso_cpk_id: null,
       manual_form_timing: form.fulfillment_type === 'manual' ? form.manual_form_timing : 'checkout',
       manual_stock_total: effectiveManualStockTotal,
       skus: normalizedSKUs,
@@ -866,21 +990,6 @@ watch(
             <p v-if="editingIsMapped" class="mt-1 text-xs text-indigo-600">{{ t('admin.products.mappedFulfillmentLocked') }}</p>
           </div>
 
-          <div v-if="form.fulfillment_type !== 'content'" class="col-span-1">
-            <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.manualStockTotal') }}</label>
-            <Input
-              v-model.number="form.manual_stock_total"
-              type="number"
-              min="-1"
-              :placeholder="t('admin.products.form.manualStockTotalPlaceholder')"
-              :disabled="form.skus.length > 0"
-            />
-            <p v-if="form.skus.length > 0" class="mt-1 text-xs text-muted-foreground">
-              {{ t('admin.products.form.manualStockTotalSkuTip') }}
-            </p>
-            <p v-else class="mt-1 text-xs text-muted-foreground">{{ t('admin.products.form.manualStockTotalTip') }}</p>
-          </div>
-
           <div v-if="form.fulfillment_type === 'manual' || editingIsMapped" class="col-span-1 md:col-span-2 rounded-xl border border-border bg-muted/20 p-4 space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -997,6 +1106,21 @@ watch(
               </Button>
             </div>
 
+            <div v-if="anyAgisoSource" class="space-y-1">
+              <label class="block text-xs font-medium text-muted-foreground">卡券库连接</label>
+              <Select v-model="form.agiso_connection_id">
+                <SelectTrigger class="h-9 w-full">
+                  <SelectValue placeholder="选择连接" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="c in agisoConnections" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p v-if="agisoConnections.length === 0" class="text-xs text-amber-600">
+                还没有 agiso 协议的连接，请先到「对接管理 → 连接管理」添加
+              </p>
+            </div>
+
             <div v-if="!form.skus.length" class="rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">
               {{ t('admin.products.form.skuEmpty') }}
             </div>
@@ -1048,6 +1172,68 @@ watch(
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div v-if="form.fulfillment_type === 'auto'">
+                <label class="block text-xs font-medium text-muted-foreground mb-1.5">该规格卡密来源</label>
+                <Select v-model="sku.card_source">
+                  <SelectTrigger class="h-9 w-full">
+                    <SelectValue placeholder="本地卡密库" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="local">本地卡密库</SelectItem>
+                    <SelectItem value="agiso">Agiso 卡券库</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div v-if="skuIsAgiso(sku)">
+                <label class="block text-xs font-medium text-muted-foreground mb-1.5">
+                  该规格卡种{{ loadingCardKinds ? '（加载中…）' : '' }}
+                </label>
+                <Select v-model="sku.agiso_cpk_id" :disabled="loadingCardKinds || !form.agiso_connection_id">
+                  <SelectTrigger class="h-9 w-full">
+                    <SelectValue placeholder="选择卡种" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <div class="sticky top-0 z-10 -mx-1 -mt-1 mb-1 border-b bg-popover px-2 py-1.5">
+                      <input
+                        v-model="cardKindKeyword"
+                        type="text"
+                        placeholder="搜索卡种名称…"
+                        class="h-8 w-full rounded-md border bg-background px-2 text-sm outline-none focus:border-primary"
+                        @keydown.stop
+                        @pointerdown.stop />
+                    </div>
+                    <SelectItem
+                      v-for="k in filteredCardKinds"
+                      :key="k.cpk_id"
+                      :value="k.cpk_id"
+                      :disabled="!k.supported"
+                    >
+                      {{ k.title }}（库存 {{ k.remaining }}，成本 {{ k.pur_price }}）{{ k.supported ? '' : ' · 该卡种类型暂不支持' }}
+                    </SelectItem>
+                    <div v-if="filteredCardKinds.length === 0" class="px-2 py-3 text-center text-xs text-muted-foreground">
+                      没有匹配的卡种
+                    </div>
+                  </SelectContent>
+                </Select>
+                <p v-if="!form.agiso_connection_id" class="mt-1 text-xs text-amber-600">
+                  请先选择卡券库连接
+                </p>
+              </div>
+
+              <!-- 每个 SKU 单独的交付说明：按当前编辑语言填写；留空则回落商品级说明 -->
+              <div>
+                <label class="block text-xs font-medium text-muted-foreground mb-1.5">
+                  该规格交付说明（{{ getCurrentLangName() }}）
+                </label>
+                <textarea
+                  :value="sku.instructions[currentLang] || ''"
+                  @input="(e: any) => sku.instructions[currentLang] = e.target.value"
+                  rows="2"
+                  placeholder="留空则使用商品级交付说明"
+                  class="w-full rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"></textarea>
               </div>
             </div>
           </div>

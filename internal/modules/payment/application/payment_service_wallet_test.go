@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -37,6 +38,9 @@ import (
 
 	userdomain "github.com/dujiao-next/internal/modules/identity/user/domain"
 	userstore "github.com/dujiao-next/internal/modules/identity/user/infrastructure/gormstore"
+	pointsapp "github.com/dujiao-next/internal/modules/points/application"
+	pointsdomain "github.com/dujiao-next/internal/modules/points/domain"
+	pointsgormstore "github.com/dujiao-next/internal/modules/points/infrastructure/gormstore"
 	settingsapp "github.com/dujiao-next/internal/modules/settings/application"
 	settingsstore "github.com/dujiao-next/internal/modules/settings/infrastructure/gormstore"
 	walletapp "github.com/dujiao-next/internal/modules/wallet/application"
@@ -979,6 +983,142 @@ func assertWalletRechargeSuccessState(t *testing.T, db *gorm.DB, paymentID uint,
 
 func ptrTime(v time.Time) *time.Time {
 	return &v
+}
+
+// 用钱包余额购买积分：一个事务内扣余额 + 记积分到账 + 支付/充值单即时成功。
+func TestCreateWalletBalanceRechargeCreditsPointsAndDebitsBalance(t *testing.T) {
+	svc, db := setupPaymentServiceWalletTest(t)
+	if err := db.AutoMigrate(&pointsdomain.Account{}, &pointsdomain.Transaction{}); err != nil {
+		t.Fatalf("migrate points tables failed: %v", err)
+	}
+	pointsRepo := pointsgormstore.New(db)
+	svc.pointsSvc = pointsapp.NewService(pointsRepo, pointsRepo)
+
+	now := time.Now()
+	user := &userdomain.User{
+		Email: "balance_points@example.com", PasswordHash: "hash", Status: constants.UserStatusActive,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := db.Create(user).Error; err != nil {
+		t.Fatalf("create user failed: %v", err)
+	}
+	if err := db.Create(&walletdomain.Account{
+		UserID: user.ID, Balance: money.FromDecimal(decimal.NewFromInt(100)), CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("create wallet account failed: %v", err)
+	}
+
+	result, err := svc.CreateWalletBalanceRecharge(CreateWalletBalanceRechargeInput{
+		UserID:        user.ID,
+		Amount:        money.FromDecimal(decimal.NewFromInt(30)),
+		Currency:      "CNY",
+		CreditTarget:  constants.RechargeCreditTargetPoints,
+		PointsAmount:  3000,
+		PointsPerUnit: 100,
+	})
+	if err != nil {
+		t.Fatalf("create wallet balance recharge failed: %v", err)
+	}
+	if result.Recharge.Status != constants.WalletRechargeStatusSuccess {
+		t.Fatalf("recharge status want success got %s", result.Recharge.Status)
+	}
+	if result.Recharge.CreditTarget != constants.RechargeCreditTargetPoints {
+		t.Fatalf("recharge credit target want points got %s", result.Recharge.CreditTarget)
+	}
+	if result.Payment.Status != constants.PaymentStatusSuccess {
+		t.Fatalf("payment status want success got %s", result.Payment.Status)
+	}
+	if result.Payment.ProviderType != constants.PaymentProviderWallet ||
+		result.Payment.ChannelType != constants.PaymentChannelTypeBalance ||
+		result.Payment.InteractionMode != constants.PaymentInteractionBalance {
+		t.Fatalf("synthetic payment kind mismatch: %+v", result.Payment)
+	}
+
+	// 余额 100 - 30 = 70
+	if got := walletBalance(t, db, user.ID); got != "70.00" {
+		t.Fatalf("wallet balance want 70.00 got %s", got)
+	}
+	// 积分到账 3000
+	var pointsAcc pointsdomain.Account
+	if err := db.Where("user_id = ?", user.ID).First(&pointsAcc).Error; err != nil {
+		t.Fatalf("load points account failed: %v", err)
+	}
+	if pointsAcc.Balance != 3000 {
+		t.Fatalf("points balance want 3000 got %d", pointsAcc.Balance)
+	}
+	// 钱包一笔 points_purchase 的支出流水，金额 30
+	var walletTxn walletdomain.Transaction
+	if err := db.Where("user_id = ? AND type = ?", user.ID, constants.WalletTxnTypePointsPurchase).First(&walletTxn).Error; err != nil {
+		t.Fatalf("load wallet spend txn failed: %v", err)
+	}
+	if walletTxn.Direction != constants.WalletTxnDirectionOut || !walletTxn.Amount.Decimal.Equal(decimal.NewFromInt(30)) {
+		t.Fatalf("wallet spend txn mismatch: dir=%s amount=%s", walletTxn.Direction, walletTxn.Amount.String())
+	}
+	// 充值单已落库为成功
+	var recharge walletdomain.RechargeOrder
+	if err := db.First(&recharge, result.Recharge.ID).Error; err != nil {
+		t.Fatalf("reload recharge failed: %v", err)
+	}
+	if recharge.Status != constants.WalletRechargeStatusSuccess || recharge.PointsAmount != 3000 || recharge.PaidAt == nil {
+		t.Fatalf("recharge not persisted as success: %+v", recharge)
+	}
+}
+
+// 余额不足：整笔回滚，绝不落库任何支付/充值/积分，余额保持不变。
+func TestCreateWalletBalanceRechargeInsufficientBalanceRollsBack(t *testing.T) {
+	svc, db := setupPaymentServiceWalletTest(t)
+	if err := db.AutoMigrate(&pointsdomain.Account{}, &pointsdomain.Transaction{}); err != nil {
+		t.Fatalf("migrate points tables failed: %v", err)
+	}
+	pointsRepo := pointsgormstore.New(db)
+	svc.pointsSvc = pointsapp.NewService(pointsRepo, pointsRepo)
+
+	now := time.Now()
+	user := &userdomain.User{
+		Email: "balance_points_poor@example.com", PasswordHash: "hash", Status: constants.UserStatusActive,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := db.Create(user).Error; err != nil {
+		t.Fatalf("create user failed: %v", err)
+	}
+	if err := db.Create(&walletdomain.Account{
+		UserID: user.ID, Balance: money.FromDecimal(decimal.NewFromInt(10)), CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("create wallet account failed: %v", err)
+	}
+
+	_, err := svc.CreateWalletBalanceRecharge(CreateWalletBalanceRechargeInput{
+		UserID:        user.ID,
+		Amount:        money.FromDecimal(decimal.NewFromInt(30)),
+		Currency:      "CNY",
+		CreditTarget:  constants.RechargeCreditTargetPoints,
+		PointsAmount:  3000,
+		PointsPerUnit: 100,
+	})
+	if !errors.Is(err, walletcontract.ErrInsufficientBalance) {
+		t.Fatalf("want ErrInsufficientBalance got %v", err)
+	}
+
+	if got := walletBalance(t, db, user.ID); got != "10.00" {
+		t.Fatalf("balance should be unchanged 10.00 got %s", got)
+	}
+	for _, tc := range []struct {
+		name  string
+		model interface{}
+	}{
+		{"payment", &paymentdomain.Payment{}},
+		{"recharge", &walletdomain.RechargeOrder{}},
+		{"points_txn", &pointsdomain.Transaction{}},
+		{"wallet_txn", &walletdomain.Transaction{}},
+	} {
+		var count int64
+		if err := db.Model(tc.model).Count(&count).Error; err != nil {
+			t.Fatalf("count %s failed: %v", tc.name, err)
+		}
+		if count != 0 {
+			t.Fatalf("%s should have no rows after rollback, got %d", tc.name, count)
+		}
+	}
 }
 
 func createUnderpaidChannel(t *testing.T, db *gorm.DB, svc *PaymentService, name, channelType string) *paymentdomain.PaymentChannel {

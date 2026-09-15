@@ -216,11 +216,19 @@ func parseTimeQuery(c *gin.Context, key string) time.Time {
 	if raw == "" {
 		return time.Time{}
 	}
-	parsed, err := time.Parse(time.RFC3339Nano, raw)
-	if err != nil {
-		return time.Time{}
+	if parsed, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return parsed
 	}
-	return parsed
+	// 东八区的游标长这样：2026-09-09T16:17:31.405804012+08:00。
+	// query string 里裸的 + 会被解码成空格，客户端不做百分号编码就会走到这里。
+	// RFC3339 本身不含空格，所以把空格换回加号是安全的；不兜这一下的话游标
+	// 永远推不动——每轮都退化成回传全部撤回，看着能用其实没在走增量。
+	if strings.Contains(raw, " ") {
+		if parsed, err := time.Parse(time.RFC3339Nano, strings.ReplaceAll(raw, " ", "+")); err == nil {
+			return parsed
+		}
+	}
+	return time.Time{}
 }
 
 func parseUintQuery(c *gin.Context, key string) uint {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dujiao-next/internal/i18n"
 	"github.com/dujiao-next/internal/logger"
 	"github.com/dujiao-next/internal/queue"
 	"github.com/dujiao-next/internal/shared/mailbrand"
@@ -75,7 +76,7 @@ func (c *Consumer) handleMembershipExpire(_ context.Context, _ *asynq.Task) erro
 	return nil
 }
 
-// membershipExpiryEmailCopy 是到期提醒的三语文案。
+// membershipExpiryEmailCopy 是到期提醒的四语文案。
 // 会员权益文案在后台可配，但这封提醒是系统行为通知而非营销素材，
 // 因此与订单状态邮件一样内置，避免为一封信引入一套模板配置。
 var membershipExpiryEmailCopy = map[string]struct {
@@ -94,14 +95,25 @@ var membershipExpiryEmailCopy = map[string]struct {
 		Subject: "Your membership expires on %s",
 		Body:    "Hello,\n\nYour membership at %s expires on %s. Member pricing stops applying after that date.\n\nYou can renew from Personal Center - Membership. Renewing adds time on top of what is left, so nothing is wasted.\n\n%s",
 	},
+	"id-ID": {
+		Subject: "Keanggotaan Anda berakhir pada %s",
+		Body:    "Halo,\n\nKeanggotaan Anda di %s akan berakhir pada %s. Setelah tanggal tersebut, harga khusus member tidak berlaku lagi.\n\nPerpanjangan dapat dilakukan di halaman Akun Saya - Keanggotaan. Masa perpanjangan ditambahkan di atas sisa waktu Anda, jadi tidak ada yang terbuang.\n\n%s",
+	},
 }
 
 // buildMembershipExpiryEmail 按买家语言渲染到期提醒邮件。
-// 未知语言回落简体中文，与站点默认 locale 一致。
+//
+// 未知语言回落站点默认语言（i18n.DefaultLocale），而不是写死简体中文——
+// 站点默认改成印尼语之后，写死中文会让印尼买家收到一封看不懂的续费提醒。
+// 再兜一层英文：万一默认语言哪天改成文案表里没有的语种，
+// 宁可发英文也不能发出主题和正文都是空串的邮件。
 func buildMembershipExpiryEmail(locale, siteName, siteURL string, expiresAt time.Time) (string, string) {
 	copyText, ok := membershipExpiryEmailCopy[strings.TrimSpace(locale)]
 	if !ok {
-		copyText = membershipExpiryEmailCopy["zh-CN"]
+		copyText, ok = membershipExpiryEmailCopy[i18n.DefaultLocale]
+	}
+	if !ok {
+		copyText = membershipExpiryEmailCopy["en-US"]
 	}
 	date := expiresAt.Format("2006-01-02")
 	return fmt.Sprintf(copyText.Subject, date),

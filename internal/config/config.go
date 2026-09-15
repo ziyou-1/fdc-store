@@ -120,7 +120,12 @@ type GoogleAuthConfig struct {
 }
 
 // DeepLConfig 客服工作台买家文本的自动翻译。auth_key 为空则不翻译。
+// DeepLConfig DeepL 翻译服务配置。
+//
+// 这里的值只是首次启动的回退：运行时以后台设置（settings 表 deepl_config）为准，
+// 后台保存时会由 ApplyRuntime 覆写本结构。
 type DeepLConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
 	AuthKey string `mapstructure:"auth_key"`
 }
 
@@ -362,6 +367,7 @@ func Load() *Config {
 	viper.SetDefault("telegram_auth.replay_ttl_seconds", 300)
 	viper.SetDefault("google_auth.enabled", false)
 	viper.SetDefault("google_auth.client_id", "")
+	viper.SetDefault("deepl.enabled", false)
 	viper.SetDefault("deepl.auth_key", "")
 	viper.SetDefault("redis.enabled", true)
 	viper.SetDefault("redis.host", "127.0.0.1")

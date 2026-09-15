@@ -20,6 +20,12 @@ func (s *WriteService) Create(input CreateProductInput) (*productdomain.Product,
 		return nil, err
 	}
 
+	// 补译必须在开事务之前。这个站点默认跑 SQLite、最大连接数为 1，
+	// 事务期间那唯一一条连接被独占；把 DeepL 调用放进事务里，一次网络慢
+	// 就是整个进程卡死，而 SQLite 的 busy_timeout 只有 5 秒，比 DeepL 的
+	// 10 秒超时还短，并发写入方会直接拿到 SQLITE_BUSY。
+	s.fillProductLocales(&input, nil)
+
 	count, err := s.products.CountBySlug(input.Slug, nil)
 	if err != nil {
 		return nil, err
@@ -41,6 +47,18 @@ func (s *WriteService) Create(input CreateProductInput) (*productdomain.Product,
 		return nil, productcontract.ErrProductPurchaseInvalid
 	}
 	fulfillmentType := productdomain.NormalizeFulfillmentType(input.FulfillmentType)
+	cardSource := productdomain.NormalizeCardSource(input.CardSource)
+	var agisoConnID uint
+	if input.AgisoConnectionID != nil {
+		agisoConnID = *input.AgisoConnectionID
+	}
+	var agisoCpkID int64
+	if input.AgisoCpkID != nil {
+		agisoCpkID = *input.AgisoCpkID
+	}
+	if err := productdomain.ValidateCardSource(fulfillmentType, cardSource); err != nil {
+		return nil, err
+	}
 	if fulfillmentType == "" {
 		return nil, productcontract.ErrFulfillmentInvalid
 	}
@@ -85,11 +103,15 @@ func (s *WriteService) Create(input CreateProductInput) (*productdomain.Product,
 			return nil, productcontract.ErrProductSKUInvalid
 		}
 		var normalizeErr error
-		normalizedSKUs, priceAmount, manualStockTotal, normalizeErr = s.normalizeProductSKUInputs(input.SKUs, fulfillmentType, nil)
+		normalizedSKUs, priceAmount, manualStockTotal, normalizeErr = s.normalizeProductSKUInputs(input.SKUs, fulfillmentType, cardSource, nil)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
 		costPriceAmount = minActiveCostPrice(normalizedSKUs)
+	}
+	// 卡券库商品：按 SKU 有效绑定校验（单规格商品退化为校验商品级绑定）。
+	if err := validateAgisoSKUBindings(cardSource, agisoConnID, agisoCpkID, normalizedSKUs); err != nil {
+		return nil, err
 	}
 	paymentChannelIDs, err := s.filterAvailablePaymentChannelIDs(input.PaymentChannelIDs)
 	if err != nil {
@@ -116,6 +138,9 @@ func (s *WriteService) Create(input CreateProductInput) (*productdomain.Product,
 		MaxPurchaseQuantity:  maxPurchaseQuantity,
 		StockDisplayMode:     stockDisplayMode,
 		FulfillmentType:      fulfillmentType,
+		CardSource:           cardSource,
+		AgisoConnectionID:    agisoConnID,
+		AgisoCpkID:           agisoCpkID,
 		ManualStockTotal:     manualStockTotal,
 		ManualStockLocked:    0,
 		ManualStockSold:      0,

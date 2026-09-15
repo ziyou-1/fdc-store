@@ -12,7 +12,9 @@ export const disabledFeatures = {
   // 后台管理入口本来就是关的，两端现在一致。
   giftCards: true,
   wholesale: false,
-  cashAffiliate: false,
+  // 现金分销（佣金/提现）下线：改成只做积分推广。买家端不再显示佣金面板，
+  // 后端也把 affiliate.enabled 关掉停止佣金累计。积分推广是另一套（points），不受影响。
+  cashAffiliate: true,
   buyerWallet: false,
   vaultTemplate: false,
   coupons: false,
@@ -29,11 +31,13 @@ const DISABLED_PATH_PREFIXES = [
   '/me/api',
   // 礼品卡兑换已下线
   '/me/gift-cards',
+  // 现金分销下线，只保留积分推广
+  '/me/affiliate',
 ] as const
 
 const DISABLED_EXACT_PATHS = [] as const
 
-export const disabledPersonalSections = ['reseller', 'api', 'giftCard'] as const
+export const disabledPersonalSections = ['reseller', 'api', 'giftCard', 'affiliate'] as const
 
 export function normalizeFeaturePath(path: string): string {
   const trimmed = path.trim()

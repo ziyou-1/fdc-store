@@ -177,10 +177,19 @@ export function useProductList(options: UseProductListOptions = {}) {
     }
   })
 
-  watch(searchQuery, () => {
+  watch(searchQuery, (value) => {
     if (initializing) return
     currentPage.value = 1
     debouncedLoadProducts()
+    // 关键词写回 URL：刷新不丢、可分享、浏览器后退能回到上一次搜索
+    const keyword = value.trim()
+    const nextQuery = { ...route.query }
+    if (keyword) {
+      nextQuery.search = keyword
+    } else {
+      delete nextQuery.search
+    }
+    void router.replace({ query: nextQuery })
   })
 
   watch(
@@ -193,6 +202,12 @@ export function useProductList(options: UseProductListOptions = {}) {
   )
 
   const initialize = async () => {
+    // 顶栏搜索是跳到 /products?search=xxx 实现的，这里要把它读回来，
+    // 否则从顶栏搜索过来关键词会丢、列表还是全量。
+    const initialSearch = route.query.search
+    if (typeof initialSearch === 'string' && initialSearch.trim() !== '') {
+      searchQuery.value = initialSearch.trim()
+    }
     await loadCategories()
     if (syncSelectedCategoryFromRoute()) {
       syncExpandedCategoryState()

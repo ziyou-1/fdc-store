@@ -96,14 +96,20 @@ func (s *Service) SendUserMessage(userID uint, input supportcontract.SendMessage
 		}
 		if s.translateUserText != nil {
 			translated, translateErr := s.translateUserText(strings.TrimSpace(input.Content))
-			if translateErr != nil {
+			switch {
+			// 翻译没配置（关掉了或没填密钥）不是故障，照常落库、只是没有译文。
+			// 翻译器改成热换槽位之后这个函数字段恒不为 nil，
+			// 少了这一支，运营一关翻译全站买家就发不出客服消息。
+			case errors.Is(translateErr, ErrTranslatorNotConfigured):
+			case translateErr != nil:
 				return nil, fmt.Errorf("%w: %v", supportcontract.ErrTranslateFailed, translateErr)
+			default:
+				translated = strings.TrimSpace(translated)
+				if translated == "" {
+					return nil, fmt.Errorf("%w: empty translation", supportcontract.ErrTranslateFailed)
+				}
+				input.Translation = translated
 			}
-			translated = strings.TrimSpace(translated)
-			if translated == "" {
-				return nil, fmt.Errorf("%w: empty translation", supportcontract.ErrTranslateFailed)
-			}
-			input.Translation = translated
 		}
 	}
 

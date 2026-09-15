@@ -28,7 +28,10 @@ var packageFileBudgetOverrides = map[string]packageFileBudget{
 	// 生命周期操作（目前是删除）。不并进 payment_service.go，那个文件按
 	// TestPaymentServiceImplementationIsSplitByResponsibility 只许放构造/查询/注入。
 	// total 21 -> 23：多一个生产文件，外加它的 payment_delete_test.go。
-	"internal/modules/payment/application": {production: 13, total: 23},
+	// production 13 -> 14 / total 23 -> 24：新增 payment_service_recharge_balance.go，
+	// 承载"用钱包余额同步支付积分充值"。它不能并进 payment_service_recharge.go，
+	// 那个文件的函数集合被 payment_service_structure_test.go 精确钉死。
+	"internal/modules/payment/application": {production: 14, total: 24},
 }
 
 // completedMigrationPaths are deleted compatibility-free entry points. Once a

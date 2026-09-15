@@ -654,14 +654,16 @@ export interface PointsCheckinResult {
 }
 
 export interface PointsRechargePayload {
-    channel_id: number
+    channel_id?: number
     amount: string
     currency?: string
     remark?: string
+    // 用钱包余额支付时置 true，此时无需 channel_id。
+    pay_with_balance?: boolean
 }
 
-// PointsRechargeResult interaction_mode 只会是 qr 或 redirect
-// （payment_service_provider.go 限定），前台据此决定跳转还是渲染二维码。
+// PointsRechargeResult interaction_mode 是 qr / redirect / balance：
+// 前台据此决定跳转、渲染二维码，还是（balance）直接按已成功处理。
 export interface PointsRechargeResult {
     recharge_no: string
     payment_id: number
@@ -671,6 +673,8 @@ export interface PointsRechargeResult {
     redirect_url: string
     qr_code: string
     interaction_mode: string
+    // 钱包余额支付即时到账，status 为 success；在线支付为 pending。
+    status?: string
 }
 
 export interface PointsRechargeRecordData {

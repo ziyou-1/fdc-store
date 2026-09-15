@@ -283,7 +283,8 @@
     "personalCenter": "Akun Saya",
     "logout": "Keluar",
     "selectLanguage": "Pilih Bahasa",
-    "more": "Lainnya"
+    "more": "Lainnya",
+    "searchPlaceholder": "Cari produk"
   },
   "toast": {
     "addedToCart": "Ditambahkan ke keranjang"
@@ -595,7 +596,8 @@
         "gift_card_redeem": "Tukar gift card",
         "admin_adjust": "Penyesuaian admin",
         "admin_refund": "Pengembalian dana oleh admin",
-        "order_underpaid_credit": "Dana pesanan kurang bayar masuk saldo"
+        "order_underpaid_credit": "Dana pesanan kurang bayar masuk saldo",
+        "points_purchase": "Pembelian poin"
       },
       "errors": {
         "loadFailed": "Gagal memuat data dompet, coba lagi nanti",
@@ -1047,11 +1049,13 @@
       "amountPlaceholder": "Masukkan nominal",
       "estimated": "Kamu akan dapat sekitar {points} poin",
       "channel": "Metode pembayaran",
+      "walletBalance": "Saldo dompet",
       "channelEmpty": "Isi nominal dulu untuk memuat metode pembayaran",
       "remark": "Catatan",
       "remarkPlaceholder": "Opsional",
       "rechargeSubmit": "Lanjut Bayar",
       "rechargeCreated": "Pesanan isi poin sudah dibuat",
+      "rechargeBalanceSuccess": "Isi poin berhasil, {points} poin sudah masuk",
       "scanToPay": "Scan untuk bayar",
       "table": {
         "createdAt": "Waktu",
@@ -1079,6 +1083,7 @@
         "checkinFailed": "Absen gagal",
         "invalidAmount": "Masukkan nominal yang valid",
         "channelRequired": "Pilih metode pembayaran",
+        "balanceInsufficient": "Saldo dompet tidak cukup",
         "rechargeFailed": "Pembayaran tidak bisa dimulai",
         "copyFailed": "Gagal menyalin"
       }
@@ -1304,6 +1309,7 @@
     "title": "Pembayaran",
     "subtitle": "Pilih metode pembayaran lalu lanjutkan",
     "backToOrders": "Kembali ke pesanan",
+    "backToHome": "Kembali ke beranda",
     "orderInfo": "Info Pesanan",
     "itemsTitle": "Rincian Pesanan",
     "orderNo": "No. Pesanan",
@@ -1795,7 +1801,7 @@
   "support": {
     "title": "Dukungan Online",
     "close": "Tutup jendela dukungan",
-    "placeholder": "Ceritakan masalah yang kamu alami…",
+    "placeholder": "Ceritakan masalahmu…",
     "send": "Kirim",
     "attach": "Kirim gambar atau video",
     "empty": "Belum ada pesan. Ceritakan masalahmu ke kami.",

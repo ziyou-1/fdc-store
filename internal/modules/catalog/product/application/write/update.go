@@ -44,6 +44,13 @@ func (s *WriteService) Update(id string, input CreateProductInput) (*productdoma
 	product.CategoryID = input.CategoryID
 	product.Category = categorydomain.Category{}
 	product.Slug = input.Slug
+	// 以旧商品的同语言值作为第一填充源，只有旧值也空才真去调翻译服务。
+	// 两个原因：一是省配额、也避免同一段文字每次保存都被重译一遍导致译文漂移；
+	// 二是挡住"只提交部分语言的调用方把上次译好的内容洗掉"——
+	// 下面这几行是无条件覆盖，本文件里批发价专门用 *[]T 做了 nil-means-keep 保护，
+	// 多语言 JSON 字段没有等价保护。
+	s.fillProductLocales(&input, product)
+
 	product.SeoMetaJSON = jsonmap.JSON(input.SeoMetaJSON)
 	product.TitleJSON = jsonmap.JSON(input.TitleJSON)
 	product.DescriptionJSON = jsonmap.JSON(input.DescriptionJSON)
@@ -101,6 +108,26 @@ func (s *WriteService) Update(id string, input CreateProductInput) (*productdoma
 		fulfillmentType = constants.FulfillmentTypeUpstream
 	}
 	product.FulfillmentType = fulfillmentType
+
+	// 卡密来源必须和新增路径同样处理：归一化、校验、写回。
+	// 之前编辑路径漏了这三个字段——后台把商品改成 Agiso 卡券库保存后被静默丢弃，
+	// 商品仍是 local，重新打开又显示「本地卡密库」。
+	cardSource := productdomain.NormalizeCardSource(input.CardSource)
+	var agisoConnID uint
+	if input.AgisoConnectionID != nil {
+		agisoConnID = *input.AgisoConnectionID
+	}
+	var agisoCpkID int64
+	if input.AgisoCpkID != nil {
+		agisoCpkID = *input.AgisoCpkID
+	}
+	if err := productdomain.ValidateCardSource(fulfillmentType, cardSource); err != nil {
+		return nil, err
+	}
+	product.CardSource = cardSource
+	product.AgisoConnectionID = agisoConnID
+	product.AgisoCpkID = agisoCpkID
+
 	product.PointsPrice = input.PointsPrice
 	if fulfillmentType == constants.FulfillmentTypeManual {
 		normalizedSchemaJSON, err := manualform.NormalizeSchema(jsonmap.JSON(input.ManualFormSchemaJSON))
@@ -135,10 +162,14 @@ func (s *WriteService) Update(id string, input CreateProductInput) (*productdoma
 			existingSKUMap[sku.ID] = sku
 		}
 		var normalizeErr error
-		normalizedSKUs, priceAmount, manualStockTotal, normalizeErr = s.normalizeProductSKUInputs(input.SKUs, fulfillmentType, existingSKUMap)
+		normalizedSKUs, priceAmount, manualStockTotal, normalizeErr = s.normalizeProductSKUInputs(input.SKUs, fulfillmentType, cardSource, existingSKUMap)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
+	}
+	// 卡券库商品：按 SKU 有效绑定校验（单规格商品退化为校验商品级绑定）。
+	if err := validateAgisoSKUBindings(cardSource, agisoConnID, agisoCpkID, normalizedSKUs); err != nil {
+		return nil, err
 	}
 
 	product.PriceAmount = money.FromDecimal(priceAmount)

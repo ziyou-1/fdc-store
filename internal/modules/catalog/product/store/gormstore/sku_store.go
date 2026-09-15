@@ -119,6 +119,14 @@ func (r *SKUStore) Update(item *productdomain.ProductSKU) error {
 	return r.db.Save(item).Error
 }
 
+// QuickUpdate 快速更新指定 SKU 的部分字段（用于库存缓存回写，避免整行 Save 覆盖其它列）
+func (r *SKUStore) QuickUpdate(id uint, fields map[string]interface{}) error {
+	if id == 0 {
+		return errors.New("invalid sku id")
+	}
+	return r.db.Model(&productdomain.ProductSKU{}).Where("id = ? AND deleted_at IS NULL", id).Updates(fields).Error
+}
+
 // Delete 硬删除单个 SKU（绕过软删除，避免唯一索引冲突）
 func (r *SKUStore) Delete(id uint) error {
 	if id == 0 {

@@ -286,7 +286,8 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 			FulfillmentType:              fulfillmentType,
 			ManualFormSchemaSnapshotJSON: manualSchemaSnapshot,
 			ManualFormSubmissionJSON:     manualSubmission,
-			InstructionsJSON:             product.InstructionsJSON,
+			// 交付说明按 SKU 生效：该 SKU 填了自己的说明就用它，否则回落商品级。
+			InstructionsJSON:             productdomain.EffectiveInstructions(product, sku),
 			CreatedAt:                    now,
 			UpdatedAt:                    now,
 		}

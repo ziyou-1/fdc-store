@@ -88,6 +88,8 @@ type RechargeInput struct {
 	ClientIP      string
 	Context       context.Context
 	RequestScheme string
+	// PayWithBalance 为 true 时用钱包余额同步支付，忽略 ChannelID，无外部网关。
+	PayWithBalance bool
 }
 
 // RechargePaymentInput 是 points 请求支付模块建单时传出的入参。
@@ -102,6 +104,8 @@ type RechargePaymentInput struct {
 	RequestScheme string
 	PointsAmount  int64
 	PointsPerUnit int64
+	// PayWithBalance 为 true 时改走钱包余额同步支付路径。
+	PayWithBalance bool
 }
 
 // RechargeResult 建单结果，字段刻意保持原始类型，避免 points 依赖支付模块的类型。
@@ -114,6 +118,8 @@ type RechargeResult struct {
 	RedirectURL     string       `json:"redirect_url"`
 	QRCode          string       `json:"qr_code"`
 	InteractionMode string       `json:"interaction_mode"`
+	// Status 便于前台区分"待支付(pending)"与钱包余额支付的"即时成功(success)"。
+	Status string `json:"status"`
 }
 
 // RechargeRecord 积分充值记录的只读视图。字段保持原始类型，

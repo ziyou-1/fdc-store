@@ -186,15 +186,19 @@ func (h *AdminProductHandler) GetAdminProduct(c *gin.Context) {
 // ====================  商品管理  ====================
 
 type ProductSKURequest struct {
-	ID               uint                   `json:"id"`
-	SKUCode          string                 `json:"sku_code" binding:"required"`
-	SpecValuesJSON   map[string]interface{} `json:"spec_values"`
-	PriceAmount      float64                `json:"price_amount" binding:"required"`
-	CostPriceAmount  float64                `json:"cost_price_amount"`
-	PointsPrice      int64                  `json:"points_price"`
-	ManualStockTotal int                    `json:"manual_stock_total"`
-	IsActive         *bool                  `json:"is_active"`
-	SortOrder        int                    `json:"sort_order"`
+	ID                uint                   `json:"id"`
+	SKUCode           string                 `json:"sku_code" binding:"required"`
+	SpecValuesJSON    map[string]interface{} `json:"spec_values"`
+	PriceAmount       float64                `json:"price_amount" binding:"required"`
+	CostPriceAmount   float64                `json:"cost_price_amount"`
+	PointsPrice       int64                  `json:"points_price"`
+	ManualStockTotal  int                    `json:"manual_stock_total"`
+	CardSource        string                 `json:"card_source"`
+	InstructionsJSON  map[string]interface{} `json:"instructions"`
+	AgisoConnectionID *uint                  `json:"agiso_connection_id"`
+	AgisoCpkID        *int64                 `json:"agiso_cpk_id"`
+	IsActive          *bool                  `json:"is_active"`
+	SortOrder         int                    `json:"sort_order"`
 }
 
 type WholesalePriceRequest struct {
@@ -226,6 +230,9 @@ type CreateProductRequest struct {
 	MaxPurchaseQuantity *int                     `json:"max_purchase_quantity"`
 	StockDisplayMode    string                   `json:"stock_display_mode"`
 	FulfillmentType     string                   `json:"fulfillment_type"`
+	CardSource          string                   `json:"card_source"`
+	AgisoConnectionID   *uint                    `json:"agiso_connection_id"`
+	AgisoCpkID          *int64                   `json:"agiso_cpk_id"`
 	ManualStockTotal    *int                     `json:"manual_stock_total"`
 	SKUs                []ProductSKURequest      `json:"skus"`
 	PaymentChannelIDs   []uint                   `json:"payment_channel_ids"`
@@ -259,15 +266,19 @@ func toProductSKUInputs(items []ProductSKURequest) []productwrite.ProductSKUInpu
 	result := make([]productwrite.ProductSKUInput, 0, len(items))
 	for _, item := range items {
 		result = append(result, productwrite.ProductSKUInput{
-			ID:               item.ID,
-			SKUCode:          item.SKUCode,
-			SpecValuesJSON:   item.SpecValuesJSON,
-			PriceAmount:      decimal.NewFromFloat(item.PriceAmount),
-			CostPriceAmount:  decimal.NewFromFloat(item.CostPriceAmount),
-			PointsPrice:      item.PointsPrice,
-			ManualStockTotal: item.ManualStockTotal,
-			IsActive:         item.IsActive,
-			SortOrder:        item.SortOrder,
+			ID:                item.ID,
+			SKUCode:           item.SKUCode,
+			SpecValuesJSON:    item.SpecValuesJSON,
+			CardSource:        item.CardSource,
+			InstructionsJSON:  item.InstructionsJSON,
+			PriceAmount:       decimal.NewFromFloat(item.PriceAmount),
+			CostPriceAmount:   decimal.NewFromFloat(item.CostPriceAmount),
+			PointsPrice:       item.PointsPrice,
+			ManualStockTotal:  item.ManualStockTotal,
+			AgisoConnectionID: item.AgisoConnectionID,
+			AgisoCpkID:        item.AgisoCpkID,
+			IsActive:          item.IsActive,
+			SortOrder:         item.SortOrder,
 		})
 	}
 	return result
@@ -302,6 +313,9 @@ func (h *AdminProductHandler) CreateProduct(c *gin.Context) {
 		MaxPurchaseQuantity:  req.MaxPurchaseQuantity,
 		StockDisplayMode:     req.StockDisplayMode,
 		FulfillmentType:      req.FulfillmentType,
+		CardSource:           req.CardSource,
+		AgisoConnectionID:    req.AgisoConnectionID,
+		AgisoCpkID:           req.AgisoCpkID,
 		ManualStockTotal:     req.ManualStockTotal,
 		SKUs:                 toProductSKUInputs(req.SKUs),
 		PaymentChannelIDs:    req.PaymentChannelIDs,
@@ -340,6 +354,14 @@ func (h *AdminProductHandler) CreateProduct(c *gin.Context) {
 		}
 		if errors.Is(err, productcontract.ErrProductPurchaseLimitInvalid) {
 			ginutil.RespondError(c, response.CodeBadRequest, "error.product_purchase_limit_invalid", nil)
+			return
+		}
+		if errors.Is(err, productdomain.ErrCardSourceNotAuto) {
+			ginutil.RespondError(c, response.CodeBadRequest, "error.card_source_not_auto", nil)
+			return
+		}
+		if errors.Is(err, productdomain.ErrCardSourceIncomplete) {
+			ginutil.RespondError(c, response.CodeBadRequest, "error.card_source_incomplete", nil)
 			return
 		}
 		if errors.Is(err, productcontract.ErrProductStockDisplayInvalid) {
@@ -396,6 +418,9 @@ func (h *AdminProductHandler) UpdateProduct(c *gin.Context) {
 		MaxPurchaseQuantity:  req.MaxPurchaseQuantity,
 		StockDisplayMode:     req.StockDisplayMode,
 		FulfillmentType:      req.FulfillmentType,
+		CardSource:           req.CardSource,
+		AgisoConnectionID:    req.AgisoConnectionID,
+		AgisoCpkID:           req.AgisoCpkID,
 		ManualStockTotal:     req.ManualStockTotal,
 		SKUs:                 toProductSKUInputs(req.SKUs),
 		PaymentChannelIDs:    req.PaymentChannelIDs,
@@ -438,6 +463,14 @@ func (h *AdminProductHandler) UpdateProduct(c *gin.Context) {
 		}
 		if errors.Is(err, productcontract.ErrProductPurchaseLimitInvalid) {
 			ginutil.RespondError(c, response.CodeBadRequest, "error.product_purchase_limit_invalid", nil)
+			return
+		}
+		if errors.Is(err, productdomain.ErrCardSourceNotAuto) {
+			ginutil.RespondError(c, response.CodeBadRequest, "error.card_source_not_auto", nil)
+			return
+		}
+		if errors.Is(err, productdomain.ErrCardSourceIncomplete) {
+			ginutil.RespondError(c, response.CodeBadRequest, "error.card_source_incomplete", nil)
 			return
 		}
 		if errors.Is(err, productcontract.ErrProductStockDisplayInvalid) {

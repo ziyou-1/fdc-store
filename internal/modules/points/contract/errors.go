@@ -29,10 +29,11 @@ var (
 	ErrSKUDailyLimitExceeded    = errors.New("points sku daily exchange limit exceeded")
 
 	// 积分充值相关
-	ErrRechargeDisabled       = errors.New("points recharge disabled")
-	ErrRechargeRateInvalid    = errors.New("points recharge rate invalid")
-	ErrRechargeNotFound       = errors.New("points recharge not found")
-	ErrRechargeChannelInvalid = errors.New("points recharge channel invalid")
+	ErrRechargeDisabled           = errors.New("points recharge disabled")
+	ErrRechargeRateInvalid        = errors.New("points recharge rate invalid")
+	ErrRechargeNotFound           = errors.New("points recharge not found")
+	ErrRechargeChannelInvalid     = errors.New("points recharge channel invalid")
+	ErrRechargeInsufficientBalance = errors.New("points recharge insufficient wallet balance")
 
 	// 推荐奖励相关
 	ErrReferralLimitRequired = errors.New("points referral daily limit required")

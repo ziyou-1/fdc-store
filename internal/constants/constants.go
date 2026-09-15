@@ -22,8 +22,15 @@ const (
 
 // 交付类型与状态常量
 const (
-	FulfillmentTypeAuto     = "auto"
-	FulfillmentTypeManual   = "manual"
+	FulfillmentTypeAuto   = "auto"
+	FulfillmentTypeManual = "manual"
+
+	// 自动发卡的卡密来源。仅当 fulfillment_type=auto 时有意义。
+	//
+	//	local —— 从本站卡密库取（默认，保持既有行为）
+	//	agiso —— 下单时向 Agiso 卡券库实时提卡，本站不存卡密
+	CardSourceLocal         = "local"
+	CardSourceAgiso         = "agiso"
 	FulfillmentTypeUpstream = "upstream"
 	// FulfillmentTypeContent 纯内容交付：支付成功后立即完成，交付物是商品的使用教程，
 	// 不占用卡密库存也不占用人工库存。
@@ -162,6 +169,8 @@ const (
 	WalletTxnTypeGiftCard    = "gift_card_redeem"
 	// WalletTxnTypeOrderUnderpaidCredit 记录"支付成功但金额不足以履约订单"时转入用户余额的款项。
 	WalletTxnTypeOrderUnderpaidCredit = "order_underpaid_credit"
+	// WalletTxnTypePointsPurchase 记录"用钱包余额购买积分"时从余额扣出的款项。
+	WalletTxnTypePointsPurchase = "points_purchase"
 )
 
 // 钱包交易方向常量
@@ -427,6 +436,7 @@ const (
 	TaskProcurementSyncAccepted     = "procurement:sync_accepted"
 	TaskUpstreamSyncProducts        = "upstream:sync_products"
 	TaskUpstreamSyncStock           = "upstream:sync_stock"
+	TaskAgisoSyncStock              = "agiso:sync_stock"
 	TaskReconciliationRun           = "reconciliation:run"
 	TaskDownstreamCallback          = "downstream:callback"
 	TaskBotNotify                   = "bot:notify"
@@ -467,6 +477,9 @@ const (
 // 对接协议类型常量
 const (
 	ConnectionProtocolDujiaoNext = "dujiao-next"
+	// ConnectionProtocolAgiso 阿奇索（91卡券）开放平台。它是卡密仓库而非发卡站，
+	// 提卡同步且不可撤销，因此不能接入「下单后轮询」的采购流程。
+	ConnectionProtocolAgiso = "agiso"
 )
 
 // API 凭证状态常量
@@ -505,6 +518,7 @@ const (
 	SettingKeyCaptchaConfig             = "captcha_config"
 	SettingKeyTelegramAuthConfig        = "telegram_auth_config"
 	SettingKeyGoogleAuthConfig          = "google_auth_config"
+	SettingKeyDeepLConfig               = "deepl_config"
 	SettingKeyDashboardConfig           = "dashboard_config"
 	SettingKeyNotificationCenterConfig  = "notification_center_config"
 	SettingKeyAffiliateConfig           = "affiliate_config"

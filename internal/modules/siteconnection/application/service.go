@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -56,8 +57,17 @@ func (s *Service) Create(input CreateInput) (*siteconnectiondomain.Connection, e
 	if protocol == "" {
 		protocol = constants.ConnectionProtocolDujiaoNext
 	}
+	if !isSupportedProtocol(protocol) {
+		// 不做白名单的话，协议名打错会静默存下来，直到测试连接时才报
+		// "unsupported protocol"，排查成本高。
+		return nil, siteconnectioncontract.ErrInvalid
+	}
 
-	encryptedSecret, err := crypto.Encrypt(s.encryptKey, input.ApiSecret)
+	secretPayload, err := buildSecretPayload(protocol, input.ApiSecret, input.AccessToken)
+	if err != nil {
+		return nil, err
+	}
+	encryptedSecret, err := crypto.Encrypt(s.encryptKey, secretPayload)
 	if err != nil {
 		return nil, err
 	}
@@ -122,15 +132,25 @@ func (s *Service) Update(id uint, input UpdateInput) (*siteconnectiondomain.Conn
 	if strings.TrimSpace(input.ApiKey) != "" {
 		conn.ApiKey = strings.TrimSpace(input.ApiKey)
 	}
-	if strings.TrimSpace(input.ApiSecret) != "" {
-		encrypted, err := crypto.Encrypt(s.encryptKey, input.ApiSecret)
+	if strings.TrimSpace(input.Protocol) != "" {
+		next := strings.TrimSpace(input.Protocol)
+		if !isSupportedProtocol(next) {
+			return nil, siteconnectioncontract.ErrInvalid
+		}
+		conn.Protocol = next
+	}
+	// 密钥要在协议确定之后再处理：agiso 需要把两个密钥打包，
+	// 而打包与否取决于本次更新后的协议值。
+	if strings.TrimSpace(input.ApiSecret) != "" || strings.TrimSpace(input.AccessToken) != "" {
+		payload, err := buildSecretPayload(conn.Protocol, input.ApiSecret, input.AccessToken)
+		if err != nil {
+			return nil, err
+		}
+		encrypted, err := crypto.Encrypt(s.encryptKey, payload)
 		if err != nil {
 			return nil, err
 		}
 		conn.ApiSecret = encrypted
-	}
-	if strings.TrimSpace(input.Protocol) != "" {
-		conn.Protocol = strings.TrimSpace(input.Protocol)
 	}
 	if input.CallbackURL != "" {
 		conn.CallbackURL = strings.TrimSpace(input.CallbackURL)
@@ -300,4 +320,37 @@ func (s *Service) normalizeExchangeRate(rate float64) decimal.Decimal {
 		return decimal.NewFromInt(1)
 	}
 	return decimal.NewFromFloat(rate)
+}
+
+// isSupportedProtocol 报告协议是否受支持。
+func isSupportedProtocol(p string) bool {
+	switch p {
+	case constants.ConnectionProtocolDujiaoNext, constants.ConnectionProtocolAgiso:
+		return true
+	default:
+		return false
+	}
+}
+
+// buildSecretPayload 生成待加密的密钥载荷。
+//
+// dujiao-next 只有一个密钥，原样返回；agiso 需要 AppSecret 与 AccessToken 两个，
+// 打包成 JSON 后整体加密——Connection 上只有 ApiSecret 一个加密字段，
+// 而 ApiKey 会明文出现在后台响应里，不能拿来放 AccessToken。
+func buildSecretPayload(protocol, apiSecret, accessToken string) (string, error) {
+	if protocol != constants.ConnectionProtocolAgiso {
+		return apiSecret, nil
+	}
+	packed, err := upstream.EncodeAgisoCredentials(apiSecret, accessToken)
+	if err != nil {
+		return "", err
+	}
+	// 保存时就校验两个密钥齐全。只在读取时校验的话，缺 AccessToken 的连接能存进去，
+	// 要等到点「测试连接」才报错，而且报的是底层的凭据错误，运营看不懂。
+	if _, err := upstream.ParseAgisoCredentials(packed); err != nil {
+		// 归到 ErrInvalid：handler 只把它映射成 400，其余错误一律 500。
+		// 少填一个密钥属于用户输入问题，不该报成服务器错误。
+		return "", fmt.Errorf("%w: %v", siteconnectioncontract.ErrInvalid, err)
+	}
+	return packed, nil
 }

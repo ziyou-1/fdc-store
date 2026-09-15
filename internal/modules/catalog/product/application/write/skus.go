@@ -96,18 +96,22 @@ func pickSingleModeTargetSKUIndex(skus []productdomain.ProductSKU) int {
 }
 
 type normalizedProductSKU struct {
-	ID               uint
-	SKUCode          string
-	SpecValuesJSON   jsonmap.JSON
-	PriceAmount      money.Amount
-	CostPriceAmount  money.Amount
-	PointsPrice      int64
-	ManualStockTotal int
-	IsActive         bool
-	SortOrder        int
+	ID                uint
+	SKUCode           string
+	SpecValuesJSON    jsonmap.JSON
+	PriceAmount       money.Amount
+	CostPriceAmount   money.Amount
+	PointsPrice       int64
+	ManualStockTotal  int
+	CardSource        string // 该 SKU 单独来源（local/agiso）；空=跟随商品级
+	InstructionsJSON  jsonmap.JSON
+	AgisoConnectionID uint
+	AgisoCpkID        int64
+	IsActive          bool
+	SortOrder         int
 }
 
-func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfillmentType string, existingSKUMap map[uint]productdomain.ProductSKU) ([]normalizedProductSKU, decimal.Decimal, int, error) {
+func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfillmentType, cardSource string, existingSKUMap map[uint]productdomain.ProductSKU) ([]normalizedProductSKU, decimal.Decimal, int, error) {
 	if len(inputs) == 0 {
 		return nil, decimal.Zero, 0, productcontract.ErrProductSKUInvalid
 	}
@@ -161,16 +165,50 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 			specValues = jsonmap.JSON(input.SpecValuesJSON)
 		}
 
+		// 该 SKU 单独指定的卡密来源：local / agiso / 空（跟随商品级）。
+		// 非法值一律按空处理（跟随商品级），保证既有数据行为不变。
+		skuCardSource := strings.ToLower(strings.TrimSpace(input.CardSource))
+		if skuCardSource != constants.CardSourceLocal && skuCardSource != constants.CardSourceAgiso {
+			skuCardSource = ""
+		}
+		// 有效来源 = SKU 自己选的（非空）否则商品级。用于决定是否保留 agiso 绑定。
+		effectiveSource := skuCardSource
+		if effectiveSource == "" {
+			effectiveSource = cardSource
+		}
+
+		// SKU 级卡种绑定只在该 SKU 有效来源为 agiso 时保留；切回本地时一并清空，
+		// 否则残留的卡种会让提卡/库存逻辑误以为还接着卡券库。
+		var agisoConnID uint
+		var agisoCpkID int64
+		if effectiveSource == constants.CardSourceAgiso {
+			if input.AgisoConnectionID != nil {
+				agisoConnID = *input.AgisoConnectionID
+			}
+			if input.AgisoCpkID != nil && *input.AgisoCpkID > 0 {
+				agisoCpkID = *input.AgisoCpkID
+			}
+		}
+
+		var skuInstructions jsonmap.JSON
+		if input.InstructionsJSON != nil {
+			skuInstructions = jsonmap.JSON(input.InstructionsJSON)
+		}
+
 		normalized = append(normalized, normalizedProductSKU{
-			ID:               input.ID,
-			SKUCode:          skuCode,
-			SpecValuesJSON:   specValues,
-			PriceAmount:      money.FromDecimal(priceAmount),
-			CostPriceAmount:  money.FromDecimal(costPriceAmount),
-			PointsPrice:      input.PointsPrice,
-			ManualStockTotal: manualTotal,
-			IsActive:         isActive,
-			SortOrder:        input.SortOrder,
+			ID:                input.ID,
+			SKUCode:           skuCode,
+			SpecValuesJSON:    specValues,
+			PriceAmount:       money.FromDecimal(priceAmount),
+			CostPriceAmount:   money.FromDecimal(costPriceAmount),
+			PointsPrice:       input.PointsPrice,
+			ManualStockTotal:  manualTotal,
+			CardSource:        skuCardSource,
+			InstructionsJSON:  skuInstructions,
+			AgisoConnectionID: agisoConnID,
+			AgisoCpkID:        agisoCpkID,
+			IsActive:          isActive,
+			SortOrder:         input.SortOrder,
 		})
 
 		if isActive {
@@ -197,6 +235,40 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 		manualStockTotal = constants.ManualStockUnlimited
 	}
 	return normalized, minActivePrice, manualStockTotal, nil
+}
+
+// validateAgisoSKUBindings 校验卡券库商品每个 SKU 的有效绑定是否完整。
+//
+// 卡种绑定已下沉到 SKU 级：SKU 自己配了卡种就用 SKU 的，没配则回落到商品级。
+// 因此完整性要按「每个活跃 SKU 的有效绑定」逐个判，而不是只看商品级那一份。
+// 没有显式 SKU（单规格商品）时，商品级绑定就是唯一那份，直接校验它。
+func validateAgisoSKUBindings(cardSource string, productConnID uint, productCpkID int64, skus []normalizedProductSKU) error {
+	// 单规格（无显式 SKU）：商品级来源就是唯一那份。
+	if len(skus) == 0 {
+		if cardSource != constants.CardSourceAgiso {
+			return nil
+		}
+		return productdomain.ValidateAgisoBinding(productConnID, productCpkID)
+	}
+	// 多规格：逐个按「该 SKU 的有效来源」判。来源为 agiso 的 SKU 才要求绑定完整，
+	// 因此同一商品下本地 SKU 与卡券库 SKU 可以共存。
+	for _, sku := range skus {
+		if !sku.IsActive {
+			continue
+		}
+		effectiveSource := sku.CardSource
+		if effectiveSource == "" {
+			effectiveSource = cardSource
+		}
+		if effectiveSource != constants.CardSourceAgiso {
+			continue
+		}
+		connID, cpkID := productdomain.ResolveAgisoBinding(productConnID, productCpkID, sku.AgisoConnectionID, sku.AgisoCpkID)
+		if err := productdomain.ValidateAgisoBinding(connID, cpkID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // minActiveCostPrice 从已标准化的 SKU 列表中取最低活跃 SKU 的成本价
@@ -253,6 +325,10 @@ func (s *WriteService) applyProductSKUsWithStockGuard(
 			existing.CostPriceAmount = row.CostPriceAmount
 			existing.PointsPrice = row.PointsPrice
 			existing.ManualStockTotal = row.ManualStockTotal
+			existing.CardSource = row.CardSource
+			existing.InstructionsJSON = row.InstructionsJSON
+			existing.AgisoConnectionID = row.AgisoConnectionID
+			existing.AgisoCpkID = row.AgisoCpkID
 			existing.IsActive = row.IsActive
 			existing.SortOrder = row.SortOrder
 			if err := skuRepo.Update(&existing); err != nil {
@@ -270,6 +346,10 @@ func (s *WriteService) applyProductSKUsWithStockGuard(
 			existing.CostPriceAmount = row.CostPriceAmount
 			existing.PointsPrice = row.PointsPrice
 			existing.ManualStockTotal = row.ManualStockTotal
+			existing.CardSource = row.CardSource
+			existing.InstructionsJSON = row.InstructionsJSON
+			existing.AgisoConnectionID = row.AgisoConnectionID
+			existing.AgisoCpkID = row.AgisoCpkID
 			existing.IsActive = row.IsActive
 			existing.SortOrder = row.SortOrder
 			if err := skuRepo.Update(&existing); err != nil {
@@ -293,6 +373,10 @@ func (s *WriteService) applyProductSKUsWithStockGuard(
 			ManualStockTotal:  row.ManualStockTotal,
 			ManualStockLocked: 0,
 			ManualStockSold:   0,
+			CardSource:        row.CardSource,
+			InstructionsJSON:  row.InstructionsJSON,
+			AgisoConnectionID: row.AgisoConnectionID,
+			AgisoCpkID:        row.AgisoCpkID,
 			IsActive:          row.IsActive,
 			SortOrder:         row.SortOrder,
 		}

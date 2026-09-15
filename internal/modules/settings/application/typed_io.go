@@ -219,6 +219,38 @@ func (s *Service) PatchTelegramAuthSetting(defaultCfg config.TelegramAuthConfig,
 	return next, nil
 }
 
+// GetDeepLSetting 获取 DeepL 翻译设置（优先 settings，空时回退 config.yml）。
+func (s *Service) GetDeepLSetting(defaultCfg config.DeepLConfig) (settingssecurity.DeepLSetting, error) {
+	fallback := settingssecurity.DefaultDeepLSetting(defaultCfg)
+	if s == nil {
+		return fallback, nil
+	}
+	value, err := s.GetByKey(constants.SettingKeyDeepLConfig)
+	if err != nil {
+		return fallback, err
+	}
+	if value == nil {
+		return fallback, nil
+	}
+	return settingssecurity.DecodeDeepLSetting(value, fallback), nil
+}
+
+// PatchDeepLSetting 基于补丁更新 DeepL 翻译设置。
+func (s *Service) PatchDeepLSetting(defaultCfg config.DeepLConfig, patch settingssecurity.DeepLSettingPatch) (settingssecurity.DeepLSetting, error) {
+	current, err := s.GetDeepLSetting(defaultCfg)
+	if err != nil {
+		return settingssecurity.DeepLSetting{}, err
+	}
+	next := settingssecurity.NormalizeDeepLSetting(settingssecurity.ApplyDeepLSettingPatch(current, patch))
+	if err := settingssecurity.ValidateDeepLSetting(next); err != nil {
+		return settingssecurity.DeepLSetting{}, err
+	}
+	if _, err := s.Update(constants.SettingKeyDeepLConfig, map[string]interface{}(settingssecurity.EncodeDeepLSetting(next))); err != nil {
+		return settingssecurity.DeepLSetting{}, err
+	}
+	return next, nil
+}
+
 // GetGoogleAuthSetting 获取 Google Identity Services 登录配置。
 func (s *Service) GetGoogleAuthSetting(defaultCfg config.GoogleAuthConfig) (settingssecurity.GoogleAuthSetting, error) {
 	fallback := settingssecurity.DefaultGoogleAuthSetting(defaultCfg)

@@ -2,10 +2,13 @@ package application
 
 // CreateInput 创建对接连接输入。
 type CreateInput struct {
-	Name               string  `json:"name"`
-	BaseURL            string  `json:"base_url"`
-	ApiKey             string  `json:"api_key"`
-	ApiSecret          string  `json:"api_secret"`
+	Name      string `json:"name"`
+	BaseURL   string `json:"base_url"`
+	ApiKey    string `json:"api_key"`
+	ApiSecret string `json:"api_secret"`
+	// AccessToken 仅 agiso 协议使用：Agiso 需要 AppSecret 与 AccessToken 两个密钥，
+	// 前者填在 api_secret，后者填在这里，服务层会打包后整体加密存入 ApiSecret。
+	AccessToken        string  `json:"access_token"`
 	Protocol           string  `json:"protocol"`
 	CallbackURL        string  `json:"callback_url"`
 	RetryMax           int     `json:"retry_max"`
@@ -21,7 +24,8 @@ type UpdateInput struct {
 	Name               string   `json:"name"`
 	BaseURL            string   `json:"base_url"`
 	ApiKey             string   `json:"api_key"`
-	ApiSecret          string   `json:"api_secret"` // 为空则不更新
+	ApiSecret          string   `json:"api_secret"`   // 为空则不更新
+	AccessToken        string   `json:"access_token"` // 仅 agiso 协议；为空则不更新
 	Protocol           string   `json:"protocol"`
 	CallbackURL        string   `json:"callback_url"`
 	RetryMax           int      `json:"retry_max"`

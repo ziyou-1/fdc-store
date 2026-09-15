@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -32,7 +33,24 @@ type Service struct {
 	defaultEmailConfig    config.EmailConfig
 	downstreamCallbackSvc DownstreamCallbackEnqueuer
 	userOAuthIdentityRepo externalidentitycontract.Store
+	agisoPicker           AgisoCardPicker
 }
+
+// AgisoCardPicker 是「从 Agiso 卡券库提卡」的最小端口。
+//
+// 用端口而不是直接依赖 catalog / siteconnection，是为了避免模块间编译循环——
+// 与 SetDownstreamCallbackService 同一套做法。
+type AgisoCardPicker interface {
+	// IsAgisoItem 报告该订单项（商品+SKU）的卡密是否来自 Agiso 卡券库。
+	// 来源按 SKU 生效，因此同一商品下不同 SKU 可以分属本地 / 卡券库。
+	IsAgisoItem(productID, skuID uint) (bool, error)
+	// PickForOrder 按订单项对应的 SKU 向 Agiso 提卡并返回渲染好的卡密文本，条数应等于 quantity。
+	// orderNo 作为幂等键传给 Agiso，重复调用返回同一批卡、不重复扣库存。
+	PickForOrder(ctx context.Context, productID, skuID uint, quantity int, orderNo string) ([]string, error)
+}
+
+// SetAgisoCardPicker 注入 Agiso 提卡端口。未注入时所有商品都按本地卡密库处理。
+func (s *Service) SetAgisoCardPicker(p AgisoCardPicker) { s.agisoPicker = p }
 
 type BotNotifier interface {
 	EnqueueOrderFulfilled(telegramUserID string, orderID uint) error
@@ -236,6 +254,14 @@ func (s *Service) CreateAuto(orderID uint) (*fulfillmentdomain.Fulfillment, erro
 		}
 	}
 
+	// 先在事务之外把 Agiso 的卡提回来。
+	// 提卡是 HTTP 调用且不可撤销，放进事务一旦回滚就等于白扣一张卡；
+	// 而本方法由 asynq 任务驱动、可重试，配合订单号幂等键，先提后写是安全的。
+	agisoLines, err := s.pickAgisoCards(order)
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 	var fulfillment *fulfillmentdomain.Fulfillment
 	err = s.orderStore.WithinTransaction(func(tx ordercontract.Transaction) error {
@@ -256,11 +282,18 @@ func (s *Service) CreateAuto(orderID uint) (*fulfillmentdomain.Fulfillment, erro
 			reservedByKey[key] = append(reservedByKey[key], reserved)
 		}
 		var secrets []cardsecretdomain.Secret
+		// 按订单项顺序拼装最终交付内容：Agiso 商品用事务外提回的卡，
+		// 其余商品照旧从本地卡密库取。
+		orderedLines := make([]string, 0, len(order.Items))
 		for _, item := range order.Items {
 			if item.ProductID == 0 || item.Quantity <= 0 {
 				return ErrFulfillmentInvalid
 			}
 			key := orderdomain.ItemKey(item.ProductID, item.SKUID)
+			if lines, ok := agisoLines[key]; ok {
+				orderedLines = append(orderedLines, lines...)
+				continue
+			}
 			cachedReserved := reservedByKey[key]
 			selected := make([]cardsecretdomain.Secret, 0, item.Quantity)
 			if len(cachedReserved) > 0 {
@@ -292,6 +325,8 @@ func (s *Service) CreateAuto(orderID uint) (*fulfillmentdomain.Fulfillment, erro
 			ids = append(ids, secret.ID)
 			secretLines = append(secretLines, secret.Secret)
 		}
+		// Agiso 的卡不经过本地卡密表，单独并进交付内容
+		secretLines = append(orderedLines, secretLines...)
 
 		affected, err := secretRepo.MarkUsed(ids, orderID, now)
 		if err != nil {
@@ -644,4 +679,41 @@ func toStringValue(raw interface{}) string {
 	default:
 		return ""
 	}
+}
+
+// pickAgisoCards 在事务之外把订单里所有「卡密来自 Agiso」的商品提好卡。
+// 返回值按订单项 key 分组；没有此类商品时返回空 map，调用方无需特判。
+func (s *Service) pickAgisoCards(order *orderdomain.Order) (map[string][]string, error) {
+	out := map[string][]string{}
+	if s.agisoPicker == nil {
+		return out, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	for _, item := range order.Items {
+		if item.ProductID == 0 || item.Quantity <= 0 {
+			continue
+		}
+		isAgiso, err := s.agisoPicker.IsAgisoItem(item.ProductID, item.SKUID)
+		if err != nil {
+			return nil, err
+		}
+		if !isAgiso {
+			continue
+		}
+		// 幂等键用订单号加商品与 SKU：一个订单里可能有多个 Agiso 商品，
+		// 只用订单号会让第二个商品命中第一个的幂等结果，拿到错误的卡。
+		pickNo := fmt.Sprintf("%s-%d-%d", order.OrderNo, item.ProductID, item.SKUID)
+		lines, err := s.agisoPicker.PickForOrder(ctx, item.ProductID, item.SKUID, item.Quantity, pickNo)
+		if err != nil {
+			return nil, err
+		}
+		if len(lines) != item.Quantity {
+			// 数量对不上就是部分失败，宁可整单转人工，也不要发出去一半
+			return nil, ErrCardSecretInsufficient
+		}
+		out[orderdomain.ItemKey(item.ProductID, item.SKUID)] = lines
+	}
+	return out, nil
 }

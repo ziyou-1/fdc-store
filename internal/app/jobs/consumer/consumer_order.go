@@ -16,6 +16,7 @@ import (
 
 	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/htmltext"
+	"github.com/dujiao-next/internal/i18n"
 	"github.com/dujiao-next/internal/logger"
 	notificationcontract "github.com/dujiao-next/internal/modules/notification/contract"
 	settingsmessaging "github.com/dujiao-next/internal/modules/settings/schema/messaging"
@@ -386,7 +387,11 @@ func localizedInstructionsText(raw jsonmap.JSON, locale string) string {
 	if len(raw) == 0 {
 		return ""
 	}
-	candidates := []string{strings.TrimSpace(locale), "zh-CN", "en-US", "zh-TW"}
+	// 回落顺序：买家语言 -> 站点默认语言 -> 英文 -> 中文。
+	// 原先第二顺位写死 zh-CN，站点默认改成印尼语之后，
+	// 印尼买家在说明缺印尼文时会拿到中文而不是站点该有的语言。
+	// 中文保留在链尾，是为了让改语言之前录入的老商品说明仍能取到值。
+	candidates := []string{strings.TrimSpace(locale), i18n.DefaultLocale, "en-US", "zh-CN", "zh-TW"}
 	for _, key := range candidates {
 		if key == "" {
 			continue

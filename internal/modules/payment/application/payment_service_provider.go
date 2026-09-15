@@ -353,12 +353,18 @@ func (s *PaymentService) ValidateChannel(channel *paymentdomain.PaymentChannel) 
 	return nil
 }
 
-// resolveTenantReturnURL 在分销站/自定义域名场景下按当前 tenant 域名生成同步回跳地址。
-// 主站 tenant 返回空串，保持渠道配置 return_url/success_url 的固定值兜底行为；
-// 分销 tenant 若回跳到主站域名，游客订单会因 tenant 隔离查不到（见 order_reseller_snapshot_test.go）。
+// resolveTenantReturnURL 按当前 tenant 域名生成同步回跳地址。
+// 主站：渠道自己配了固定 return_url/success_url 时返回空串，保持交给 adapter 读 cfg 的原兜底行为；
+// 没配时用当前请求域名兜一个 /pay 回跳——否则 Payssion 这类跳转支付付完/取消后，
+// 买家会被丢在第三方托管页（只有一个 X）回不到商城（adapter 只认 input.ReturnURL，不读 cfg）。
+// 分销 tenant：按自身域名回跳；若回跳到主站域名，游客订单会因 tenant 隔离查不到（见 order_reseller_snapshot_test.go）。
 func resolveTenantReturnURL(ctx context.Context, requestScheme string, channel *paymentdomain.PaymentChannel) string {
 	tenant, ok := resellercontract.TenantFromContext(ctx)
-	if !ok || tenant.IsMain || tenant.Unavailable {
+	if !ok || tenant.Unavailable {
+		return ""
+	}
+	// 主站且渠道已自配回跳地址：保持原行为不变，交给 adapter 的 cfg 兜底。
+	if tenant.IsMain && channelHasConfiguredReturnURL(channel) {
 		return ""
 	}
 	host := strings.TrimSpace(tenant.Host)
@@ -373,6 +379,20 @@ func resolveTenantReturnURL(ctx context.Context, requestScheme string, channel *
 		scheme = "https"
 	}
 	return scheme + "://" + host + tenantReturnPath(channel)
+}
+
+// channelHasConfiguredReturnURL 报告渠道是否自配了 return_url/success_url。
+// 主站在站长已自配时不覆盖，避免改变原有固定回跳行为。
+func channelHasConfiguredReturnURL(channel *paymentdomain.PaymentChannel) bool {
+	if channel == nil {
+		return false
+	}
+	for _, key := range []string{"return_url", "success_url"} {
+		if raw, _ := channel.ConfigJSON[key].(string); strings.TrimSpace(raw) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // tenantReturnPath 沿用渠道配置回跳地址中的路径与 query（站长可能自定义了路径），

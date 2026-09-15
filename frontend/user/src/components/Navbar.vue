@@ -37,6 +37,25 @@
 
       <!-- Right Side Actions -->
       <div class="flex items-center shrink-0 space-x-2 lg:space-x-4">
+        <!-- 全局商品搜索：桌面直接给输入框，手机给图标（点开在下方展开一行） -->
+        <form class="hidden lg:flex items-center" role="search" @submit.prevent="submitSearch">
+          <div class="relative">
+            <Search class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              v-model="searchTerm"
+              type="search"
+              enterkeyhint="search"
+              @keyup.enter="submitSearch"
+              :placeholder="t('navbar.searchPlaceholder')"
+              :aria-label="t('navbar.searchPlaceholder')"
+              class="h-9 w-44 xl:w-56 rounded-xl border bg-background pl-8 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary" />
+          </div>
+        </form>
+        <Button variant="ghost" size="sm" class="lg:hidden px-2 text-muted-foreground"
+          :aria-label="t('navbar.searchPlaceholder')" @click="toggleMobileSearch">
+          <Search class="w-5 h-5" />
+        </Button>
+
         <!-- Cart (desktop only, mobile has bottom nav) -->
         <Button as-child variant="ghost" size="sm" class="hidden lg:flex relative gap-2 text-muted-foreground">
           <router-link to="/cart">
@@ -105,6 +124,23 @@
       </div>
     </div>
 
+    <!-- 手机端展开的搜索行：顶栏放不下输入框，点图标后单独占一行 -->
+    <div v-if="showMobileSearch" class="lg:hidden border-t px-4 py-2.5">
+      <form role="search" @submit.prevent="submitSearch">
+        <div class="relative">
+          <Search class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            ref="mobileSearchInput"
+            v-model="searchTerm"
+            type="search"
+            enterkeyhint="search"
+            @keyup.enter="submitSearch"
+            :placeholder="t('navbar.searchPlaceholder')"
+            :aria-label="t('navbar.searchPlaceholder')"
+            class="h-10 w-full rounded-xl border bg-background pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary" />
+        </div>
+      </form>
+    </div>
   </nav>
 
   <!-- Teleport drawer outside nav to avoid backdrop-filter containing block bug -->
@@ -189,7 +225,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '../stores/app'
 import { useCartStore } from '../stores/cart'
@@ -199,7 +236,7 @@ import { getImageUrl } from '../utils/image'
 import { useNavConfig } from '../composables/useNavConfig'
 import {
   Sun, Moon, ShoppingCart, LogIn, User, LogOut, Languages,
-  EllipsisVertical, X,
+  EllipsisVertical, X, Search,
 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -210,6 +247,36 @@ const cartStore = useCartStore()
 const userAuthStore = useUserAuthStore()
 const { theme, toggleTheme } = useTheme()
 const { primaryNavItems, secondaryNavItems } = useNavConfig()
+
+const router = useRouter()
+const route = useRoute()
+
+const searchTerm = ref('')
+const showMobileSearch = ref(false)
+const mobileSearchInput = ref<HTMLInputElement | null>(null)
+
+// 停在商品页时顶栏输入框跟随页面关键词，避免两处显示不一致
+watch(
+  () => route.query.search,
+  (value) => {
+    searchTerm.value = typeof value === 'string' ? value : ''
+  },
+  { immediate: true },
+)
+
+const toggleMobileSearch = async () => {
+  showMobileSearch.value = !showMobileSearch.value
+  if (!showMobileSearch.value) return
+  await nextTick()
+  mobileSearchInput.value?.focus()
+}
+
+const submitSearch = () => {
+  const keyword = searchTerm.value.trim()
+  showMobileSearch.value = false
+  // 空关键词也跳，等同于「看全部商品」，比什么都不做更符合预期
+  router.push({ path: '/products', query: keyword ? { search: keyword } : {} })
+}
 
 const showMobileMenu = ref(false)
 const langOpen = ref(false)

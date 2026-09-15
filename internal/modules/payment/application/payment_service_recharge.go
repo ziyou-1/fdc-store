@@ -127,7 +127,18 @@ func (s *PaymentService) CreateWalletRechargePayment(input CreateWalletRechargeP
 	paymentAmount, feeAmount, feePolicy := calculatePaymentAmounts(amount, feeRate, fixedFee, feeConfig.CustomerFeeEnabled)
 	currency := strings.ToUpper(strings.TrimSpace(input.Currency))
 	if currency == "" {
-		currency = "CNY"
+		// 调用方没指定币种时按站点币种兜底，而不是硬编码 CNY：
+		// 会员购买（memberlevel）不传 currency，若默认成 CNY，会与 IDR 等
+		// 非人民币站点的 Payssion 渠道币种不符，被 validatePaymentCurrencyForChannel
+		// 拒掉，最终报「请求参数错误」。站点设置什么币种就用什么。
+		currency = constants.SiteCurrencyDefault
+		if s.settingService != nil {
+			if siteCurrency, err := s.settingService.GetSiteCurrency(constants.SiteCurrencyDefault); err == nil {
+				if siteCurrency = strings.ToUpper(strings.TrimSpace(siteCurrency)); siteCurrency != "" {
+					currency = siteCurrency
+				}
+			}
+		}
 	}
 	if err := validatePaymentCurrencyForChannel(currency, channel); err != nil {
 		return nil, err
@@ -174,28 +185,28 @@ func (s *PaymentService) CreateWalletRechargePayment(input CreateWalletRechargeP
 			}
 		}
 		recharge = &walletdomain.RechargeOrder{
-			RechargeNo:      rechargeNo,
-			UserID:          input.UserID,
-			PaymentID:       payment.ID,
-			ChannelID:       channel.ID,
-			ProviderType:    channel.ProviderType,
-			ChannelType:     channel.ChannelType,
-			InteractionMode: channel.InteractionMode,
-			Amount:          money.FromDecimal(amount),
-			PayableAmount:   money.FromDecimal(paymentAmount),
-			FeeRate:         money.FromDecimal(feeRate),
-			FeeAmount:       money.FromDecimal(feeAmount),
-			Currency:        currency,
-			Status:          constants.WalletRechargeStatusPending,
-			Remark:          remark,
+			RechargeNo:             rechargeNo,
+			UserID:                 input.UserID,
+			PaymentID:              payment.ID,
+			ChannelID:              channel.ID,
+			ProviderType:           channel.ProviderType,
+			ChannelType:            channel.ChannelType,
+			InteractionMode:        channel.InteractionMode,
+			Amount:                 money.FromDecimal(amount),
+			PayableAmount:          money.FromDecimal(paymentAmount),
+			FeeRate:                money.FromDecimal(feeRate),
+			FeeAmount:              money.FromDecimal(feeAmount),
+			Currency:               currency,
+			Status:                 constants.WalletRechargeStatusPending,
+			Remark:                 remark,
 			CreditTarget:           creditTarget,
 			PointsAmount:           input.PointsAmount,
 			PointsPerUnit:          input.PointsPerUnit,
 			MembershipPeriod:       strings.TrimSpace(input.MembershipPeriod),
 			MembershipDurationDays: input.MembershipDurationDays,
 			MembershipDiscountRate: input.MembershipDiscountRate,
-			CreatedAt:       now,
-			UpdatedAt:       now,
+			CreatedAt:              now,
+			UpdatedAt:              now,
 		}
 		if err := rechargeRepo.CreateRechargeOrder(recharge); err != nil {
 			return ErrPaymentCreateFailed

@@ -28,6 +28,15 @@ func RegisterAdminGoogleAuthRoutes(admin gin.IRoutes, handler *GoogleAuthHandler
 	admin.PUT("/settings/google-auth", handler.UpdateGoogleAuth)
 }
 
+// RegisterAdminDeepLRoutes 注册 DeepL 翻译设置路由。
+// test 是先验后存的探针：密钥填错时翻译是 fail-closed 的，
+// 买家会直接发不出客服消息，所以给运营一个存之前自查的入口。
+func RegisterAdminDeepLRoutes(admin gin.IRoutes, handler *DeepLHandler) {
+	admin.GET("/settings/deepl", handler.GetDeepL)
+	admin.PUT("/settings/deepl", handler.UpdateDeepL)
+	admin.POST("/settings/deepl/test", handler.TestDeepL)
+}
+
 func RegisterAdminAffiliateRoutes(admin gin.IRoutes, handler *AffiliateHandler) {
 	admin.GET("/settings/affiliate", handler.GetAffiliate)
 	admin.PUT("/settings/affiliate", handler.UpdateAffiliate)

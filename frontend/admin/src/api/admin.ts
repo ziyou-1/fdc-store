@@ -397,6 +397,9 @@ export const adminAPI = {
   testSMTPSettings: (data: Record<string, unknown>) => api.post('/admin/settings/smtp/test', data),
   getCaptchaSettings: () => api.get('/admin/settings/captcha'),
   updateCaptchaSettings: (data: Record<string, unknown>) => api.put('/admin/settings/captcha', data),
+  getDeepLSettings: () => api.get('/admin/settings/deepl'),
+  updateDeepLSettings: (data: Record<string, unknown>) => api.put('/admin/settings/deepl', data),
+  testDeepLSettings: (data: Record<string, unknown>) => api.post('/admin/settings/deepl/test', data),
   getTelegramAuthSettings: () => api.get('/admin/settings/telegram-auth'),
   updateTelegramAuthSettings: (data: Record<string, unknown>) => api.put('/admin/settings/telegram-auth', data),
   getGoogleAuthSettings: () => api.get('/admin/settings/google-auth'),
@@ -603,6 +606,7 @@ export const adminAPI = {
   updateSiteConnection: (id: number, data: Partial<AdminSiteConnection>) => api.put(`/admin/site-connections/${id}`, data),
   deleteSiteConnection: (id: number) => api.delete(`/admin/site-connections/${id}`),
   pingSiteConnection: (id: number) => api.post(`/admin/site-connections/${id}/ping`),
+  getAgisoCardKinds: (id: number, keyword?: string) => api.get(`/admin/site-connections/${id}/agiso/card-kinds`, { params: keyword ? { keyword } : undefined }),
   updateSiteConnectionStatus: (id: number, data: { is_active?: boolean; status?: string }) => api.put(`/admin/site-connections/${id}/status`, data),
   reapplyConnectionMarkup: (id: number) => api.post(`/admin/site-connections/${id}/reapply-markup`),
   // Product Mappings

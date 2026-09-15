@@ -7,6 +7,8 @@ import (
 	"github.com/dujiao-next/internal/logger"
 	"github.com/dujiao-next/internal/queue"
 
+	"github.com/dujiao-next/internal/app/container"
+
 	"github.com/hibiken/asynq"
 )
 
@@ -101,6 +103,22 @@ func (c *Consumer) handleDownstreamCallback(ctx context.Context, task *asynq.Tas
 			"ref_id", payload.DownstreamOrderRefID,
 			"error", err,
 		)
+		return err
+	}
+	return nil
+}
+
+// handleAgisoSyncStock 刷新卡券库商品的库存缓存。
+//
+// 与上游库存同步共用一个周期设置：两者性质相同（都是把外部库存拉进本地展示），
+// 多加一个独立开关只会让运营多记一个参数。
+func (c *Consumer) handleAgisoSyncStock(_ context.Context, _ *asynq.Task) error {
+	if c == nil || c.Container == nil {
+		logger.Debugw("worker_agiso_sync_stock_skip_nil", "consumer_nil", c == nil)
+		return nil
+	}
+	if err := (container.AgisoStockSyncer{}).WithContainer(c.Container).SyncAll(); err != nil {
+		logger.Warnw("worker_agiso_sync_stock_failed", "error", err)
 		return err
 	}
 	return nil

@@ -82,16 +82,17 @@ func (s *Service) CreateRecharge(input pointscontract.RechargeInput) (*pointscon
 	}
 
 	return s.rechargeCreator.CreatePointsRecharge(pointscontract.RechargePaymentInput{
-		UserID:        input.UserID,
-		ChannelID:     input.ChannelID,
-		Amount:        input.Amount,
-		Currency:      input.Currency,
-		Remark:        input.Remark,
-		ClientIP:      input.ClientIP,
-		Context:       input.Context,
-		RequestScheme: input.RequestScheme,
-		PointsAmount:  points,
-		PointsPerUnit: config.RechargePointsPerUnit,
+		UserID:         input.UserID,
+		ChannelID:      input.ChannelID,
+		Amount:         input.Amount,
+		Currency:       input.Currency,
+		Remark:         input.Remark,
+		ClientIP:       input.ClientIP,
+		Context:        input.Context,
+		RequestScheme:  input.RequestScheme,
+		PointsAmount:   points,
+		PointsPerUnit:  config.RechargePointsPerUnit,
+		PayWithBalance: input.PayWithBalance,
 	})
 }
 

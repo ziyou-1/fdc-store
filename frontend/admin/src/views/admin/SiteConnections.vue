@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import type { AdminSiteConnection } from '@/api/types'
@@ -34,6 +34,7 @@ const form = reactive({
   base_url: '',
   api_key: '',
   api_secret: '',
+  access_token: '',
   protocol: 'dujiao-next',
   callback_url: '',
   retry_max: 3,
@@ -43,6 +44,9 @@ const form = reactive({
   price_rounding_mode: 'none',
   auto_sync_price: 'false',
 })
+
+// agiso 协议要多填一个 AccessToken，且 api_secret 的语义变成 AppSecret
+const isAgiso = computed(() => form.protocol === 'agiso')
 const reapplyingId = ref<number | null>(null)
 
 const siteConnectionSchema = {
@@ -93,6 +97,7 @@ const resetForm = () => {
     base_url: '',
     api_key: '',
     api_secret: '',
+    access_token: '',
     protocol: 'dujiao-next',
     callback_url: '',
     retry_max: 3,
@@ -120,6 +125,7 @@ const openEditModal = (conn: AdminSiteConnection) => {
     base_url: conn.base_url || '',
     api_key: conn.api_key || '',
     api_secret: conn.api_secret || '',
+    access_token: '',
     protocol: conn.protocol || 'dujiao-next',
     callback_url: conn.callback_url || '',
     retry_max: conn.retry_max ?? 3,
@@ -158,6 +164,7 @@ const buildPayload = () => {
     base_url: form.base_url,
     api_key: form.api_key,
     api_secret: form.api_secret,
+    access_token: form.access_token,
     protocol: form.protocol,
     callback_url: form.callback_url,
     retry_max: Number(form.retry_max) || 3,
@@ -390,8 +397,19 @@ onMounted(() => {
               <p v-if="errors.api_key" class="text-xs text-destructive mt-1">{{ errors.api_key }}</p>
             </div>
             <div>
-              <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('siteConnections.form.apiSecret') }}</label>
-              <Input v-model="form.api_secret" type="password" :placeholder="t('siteConnections.form.apiSecretPlaceholder')" />
+              <label class="mb-1.5 block text-xs font-medium text-muted-foreground">
+                {{ isAgiso ? 'AppSecret' : t('siteConnections.form.apiSecret') }}
+              </label>
+              <Input v-model="form.api_secret" type="password" :placeholder="isAgiso ? '开发者应用的 AppSecret' : t('siteConnections.form.apiSecretPlaceholder')" />
+              <p v-if="isAgiso" class="text-xs text-muted-foreground mt-1">在 Agiso 开放平台「我的应用」中查看</p>
+            </div>
+            <!-- Agiso 需要两个密钥：AppSecret 用于签名，AccessToken 标识操作哪个商家的卡券库 -->
+            <div v-if="isAgiso">
+              <label class="mb-1.5 block text-xs font-medium text-muted-foreground">AccessToken</label>
+              <Input v-model="form.access_token" type="password" placeholder="商家授权后得到的 Token" />
+              <p class="text-xs text-muted-foreground mt-1">
+                商家在 mai.91kami.com 授权页授权后获得；有效期与 Agiso 软件购买时长一致，到期后发卡会中断
+              </p>
             </div>
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('siteConnections.form.protocol') }}</label>
@@ -401,6 +419,7 @@ onMounted(() => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="dujiao-next">dujiao-next</SelectItem>
+                  <SelectItem value="agiso">agiso（91卡券）</SelectItem>
                 </SelectContent>
               </Select>
             </div>

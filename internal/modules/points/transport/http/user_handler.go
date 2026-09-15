@@ -149,11 +149,13 @@ func (h *UserHandler) Checkin(c *gin.Context) {
 }
 
 // rechargeRequest 用户发起积分充值的请求体。
+// channel_id 与 pay_with_balance 二选一：选钱包余额支付时无需渠道。
 type rechargeRequest struct {
-	ChannelID uint   `json:"channel_id" binding:"required"`
-	Amount    string `json:"amount" binding:"required"`
-	Currency  string `json:"currency"`
-	Remark    string `json:"remark" binding:"max=200"`
+	ChannelID      uint   `json:"channel_id"`
+	Amount         string `json:"amount" binding:"required"`
+	Currency       string `json:"currency"`
+	Remark         string `json:"remark" binding:"max=200"`
+	PayWithBalance bool   `json:"pay_with_balance"`
 }
 
 // CreateRecharge 发起积分充值。渠道白名单与金额校验完全复用钱包充值链路，
@@ -173,16 +175,22 @@ func (h *UserHandler) CreateRecharge(c *gin.Context) {
 		ginutil.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
 		return
 	}
+	// 非钱包余额支付时必须指定支付渠道。
+	if !request.PayWithBalance && request.ChannelID == 0 {
+		ginutil.RespondError(c, response.CodeBadRequest, "error.points_recharge_channel_invalid", nil)
+		return
+	}
 
 	result, err := h.points.CreateRecharge(pointscontract.RechargeInput{
-		UserID:        uid,
-		ChannelID:     request.ChannelID,
-		Amount:        money.FromDecimal(amount.Round(2)),
-		Currency:      strings.TrimSpace(request.Currency),
-		Remark:        request.Remark,
-		ClientIP:      c.ClientIP(),
-		Context:       c.Request.Context(),
-		RequestScheme: requestScheme(c),
+		UserID:         uid,
+		ChannelID:      request.ChannelID,
+		Amount:         money.FromDecimal(amount.Round(2)),
+		Currency:       strings.TrimSpace(request.Currency),
+		Remark:         request.Remark,
+		ClientIP:       c.ClientIP(),
+		Context:        c.Request.Context(),
+		RequestScheme:  requestScheme(c),
+		PayWithBalance: request.PayWithBalance,
 	})
 	if err != nil {
 		respondRechargeError(c, err)
@@ -212,6 +220,8 @@ func respondRechargeError(c *gin.Context, err error) {
 		ginutil.RespondError(c, response.CodeBadRequest, "error.points_recharge_disabled", err)
 	case errors.Is(err, pointscontract.ErrRechargeChannelInvalid):
 		ginutil.RespondError(c, response.CodeBadRequest, "error.points_recharge_channel_invalid", err)
+	case errors.Is(err, pointscontract.ErrRechargeInsufficientBalance):
+		ginutil.RespondError(c, response.CodeBadRequest, "error.points_recharge_insufficient_balance", err)
 	case errors.Is(err, pointscontract.ErrRechargeRateInvalid):
 		ginutil.RespondError(c, response.CodeBadRequest, "error.points_recharge_rate_invalid", err)
 	case errors.Is(err, pointscontract.ErrInvalidAmount):

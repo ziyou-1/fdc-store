@@ -6,9 +6,16 @@
           <h1 class="text-3xl font-black text-foreground mb-2">{{ t('payment.title') }}</h1>
           <p class="text-muted-foreground text-sm">{{ t('payment.subtitle') }}</p>
         </div>
-        <router-link :to="backLink"
-          class="text-muted-foreground hover:text-foreground transition-colors text-sm">{{
-            t('payment.backToOrders') }}</router-link>
+        <div class="flex items-center gap-2">
+          <!-- 返回网站首页：跳转类支付（如 Payssion）会把买家带到第三方页，
+               这里给一个明确的返回入口，避免付完/放弃后回不到商城 -->
+          <router-link to="/"
+            class="inline-flex items-center rounded-xl border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted">{{
+              t('payment.backToHome') }}</router-link>
+          <router-link :to="backLink"
+            class="text-muted-foreground hover:text-foreground transition-colors text-sm">{{
+              t('payment.backToOrders') }}</router-link>
+        </div>
       </div>
 
       <CheckoutSteps class="mb-8" current-step="payment" />
@@ -362,8 +369,10 @@
                   </span>
                 </div>
               </div>
+              <!-- 结算页已经选过支付方式时不再展示选择区：
+                   让买家在两个页面各选一次，既多余又可能选成不同渠道 -->
               <PaymentChannelSelector
-                v-if="!walletOnlyPayment && requiresOnlineChannel"
+                v-if="!walletOnlyPayment && requiresOnlineChannel && !channelPreselected"
                 :channels="channels"
                 :model-value="selectedChannelId"
                 :show-balance-option="showBalanceOption"
@@ -506,7 +515,7 @@ import { usePayment } from '../composables/usePayment'
 const { t } = useI18n()
 
 const {
-  loading, submitting, order, paymentResult, selectedChannelId, copied, walletAddressCopied,
+  loading, submitting, order, paymentResult, selectedChannelId, channelPreselected, copied, walletAddressCopied,
   openedPayWindow, cachedPayment, walletLoading, useBalance,
   usePoints, pointsLoading, pointsBalance, orderPointsAmount, pointsInsufficient,
   backLink, skipPayment, walletOnlyPayment, showBalanceOption, showPointsOption, configReady, channels,

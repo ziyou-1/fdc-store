@@ -60,6 +60,8 @@ type Options struct {
 	Categories      CategoryRepository
 	PaymentChannels PaymentChannelStoresitory
 	Transactions    UnitOfWork
+	// Translator 可为 nil：没配翻译服务时商品照常保存，只是不补译。
+	Translator Translator
 }
 
 // WriteService 编排商品创建、更新和 SKU 同步。
@@ -69,6 +71,7 @@ type WriteService struct {
 	categories      CategoryRepository
 	paymentChannels PaymentChannelStoresitory
 	transactions    UnitOfWork
+	translator      Translator
 }
 
 // NewWriteService 创建商品写入应用服务。
@@ -79,6 +82,7 @@ func NewWriteService(options Options) *WriteService {
 		categories:      options.Categories,
 		paymentChannels: options.PaymentChannels,
 		transactions:    options.Transactions,
+		translator:      options.Translator,
 	}
 }
 
@@ -105,6 +109,9 @@ type CreateProductInput struct {
 	MaxPurchaseQuantity *int
 	StockDisplayMode    string
 	FulfillmentType     string
+	CardSource          string
+	AgisoConnectionID   *uint
+	AgisoCpkID          *int64
 	ManualStockTotal    *int
 	SKUs                []ProductSKUInput
 	PaymentChannelIDs   []uint
@@ -122,6 +129,14 @@ type ProductSKUInput struct {
 	CostPriceAmount  decimal.Decimal
 	PointsPrice      int64
 	ManualStockTotal int
+	// AgisoConnectionID / AgisoCpkID 为该 SKU 单独绑定的卡券库连接与卡种；
+	// nil 或 0 表示不单独绑定，回落到商品级卡种。仅（该 SKU 有效来源为）agiso 时生效。
+	AgisoConnectionID *uint
+	AgisoCpkID        *int64
+	// CardSource 为该 SKU 单独指定的卡密来源（local / agiso / 空=跟随商品级）。
+	CardSource string
+	// InstructionsJSON 为该 SKU 单独的交付说明（多语言）；为空回落商品级。
+	InstructionsJSON map[string]interface{}
 	IsActive         *bool
 	SortOrder        int
 }

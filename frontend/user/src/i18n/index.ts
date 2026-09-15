@@ -3,8 +3,10 @@ import { createI18n } from 'vue-i18n'
 // 本站面向印尼市场，默认语言即印尼语：它是绝大多数买家的首屏语言，
 // 静态打包能省掉一次语言包往返；中文/英文改为按需懒加载。
 import idID from './locales/id-ID.json'
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES, resolveInitialLocale } from '../utils/locale'
 
-const supportedLocales = ['zh-CN', 'zh-TW', 'en-US', 'id-ID']
+// 语言清单与默认语言的唯一真源在 utils/locale.ts —— 那里能被 node --test 跑到。
+const supportedLocales = SUPPORTED_LOCALES as readonly string[]
 
 // 非默认语言的懒加载器：切换语言时才下载对应语言包 chunk
 const localeLoaders: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {
@@ -15,32 +17,17 @@ const localeLoaders: Record<string, () => Promise<{ default: Record<string, unkn
 
 const loadedLocales = new Set(['id-ID'])
 
+export { DEFAULT_LOCALE }
+
+/** 首屏语言。判定规则见 utils/locale.ts 的 resolveInitialLocale。 */
 export function detectLocale(): string {
-    const saved = localStorage.getItem('locale')
-    if (saved && supportedLocales.includes(saved)) return saved
-
-    const browserLang = navigator.language || ''
-    if (supportedLocales.includes(browserLang)) return browserLang
-
-    const langPrefix = browserLang.split('-')[0]
-    if (langPrefix === 'zh') {
-        if (browserLang.includes('TW') || browserLang.includes('HK') || browserLang.includes('Hant')) {
-            return 'zh-TW'
-        }
-        return 'zh-CN'
-    }
-    if (langPrefix === 'en') return 'en-US'
-    // 印尼语：浏览器发 id / id-ID；旧 ISO 码 in 仍见于部分 Android 客户端
-    if (langPrefix === 'id' || langPrefix === 'in') return 'id-ID'
-
-    // 识别不出来就用站点默认语言（印尼语），而不是中文
-    return 'id-ID'
+    return resolveInitialLocale(localStorage.getItem('locale'))
 }
 
 const i18n = createI18n({
     legacy: false,
-    locale: 'id-ID',
-    fallbackLocale: 'id-ID',
+    locale: DEFAULT_LOCALE,
+    fallbackLocale: DEFAULT_LOCALE,
     // 键断言为 string，避免 locale 类型被收窄为 "id-ID" 字面量（其余语言在运行时动态注入）
     messages: { 'id-ID': idID } as Record<string, typeof idID>,
 })

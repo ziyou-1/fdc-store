@@ -28,7 +28,7 @@ func TestPaymentServiceImplementationIsSplitByResponsibility(t *testing.T) {
 			"shouldUseGatewayOrderNo", "buildGatewayOrderNo", "resolveGatewayOrderNo",
 			"resolveProviderOrderNo", "matchesBusinessOrderNo", "buildPaymentReturnQuery",
 			"applyProviderPayment", "TestChannelSecurity", "ValidateChannel", "resolveTenantReturnURL",
-			"tenantReturnPath", "resolveTokenPayOrderUserKey",
+			"tenantReturnPath", "channelHasConfiguredReturnURL", "resolveTokenPayOrderUserKey",
 		},
 		"payment_service_rules.go": {
 			"normalizeOrderAmount", "calculatePaymentAmounts", "paymentCoveredOrderAmount", "paymentExchangeRate", "pickFirstNonEmpty",

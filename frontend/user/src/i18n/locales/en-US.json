@@ -283,7 +283,8 @@
     "personalCenter": "Personal Center",
     "logout": "Logout",
     "selectLanguage": "Select Language",
-    "more": "More"
+    "more": "More",
+    "searchPlaceholder": "Search products"
   },
   "toast": {
     "addedToCart": "Added to cart"
@@ -595,7 +596,8 @@
         "gift_card_redeem": "Gift card redeem",
         "admin_adjust": "Admin adjustment",
         "admin_refund": "Admin refund",
-        "order_underpaid_credit": "Underpaid order credit"
+        "order_underpaid_credit": "Underpaid order credit",
+        "points_purchase": "Points purchase"
       },
       "errors": {
         "loadFailed": "Failed to load wallet data, please try again later",
@@ -1047,11 +1049,13 @@
       "amountPlaceholder": "Enter an amount",
       "estimated": "You will receive about {points} points",
       "channel": "Payment method",
+      "walletBalance": "Wallet balance",
       "channelEmpty": "Enter an amount to load available payment methods",
       "remark": "Note",
       "remarkPlaceholder": "Optional",
       "rechargeSubmit": "Continue to payment",
       "rechargeCreated": "Recharge order created",
+      "rechargeBalanceSuccess": "Recharge successful, {points} points credited",
       "scanToPay": "Scan to pay",
       "table": {
         "createdAt": "Time",
@@ -1079,6 +1083,7 @@
         "checkinFailed": "Check-in failed",
         "invalidAmount": "Enter a valid amount",
         "channelRequired": "Select a payment method",
+        "balanceInsufficient": "Insufficient wallet balance",
         "rechargeFailed": "Could not start the payment",
         "copyFailed": "Copy failed"
       }
@@ -1304,6 +1309,7 @@
     "title": "Payment",
     "subtitle": "Choose payment method and proceed",
     "backToOrders": "Back to orders",
+    "backToHome": "Back to home",
     "orderInfo": "Order Info",
     "itemsTitle": "Order Items",
     "orderNo": "Order No",
@@ -1795,7 +1801,7 @@
   "support": {
     "title": "Live Support",
     "close": "Close support window",
-    "placeholder": "Describe the issue you ran into…",
+    "placeholder": "Describe your issue…",
     "send": "Send",
     "attach": "Send an image or video",
     "empty": "No messages yet. Tell us what went wrong.",

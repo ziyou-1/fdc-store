@@ -100,9 +100,8 @@ void chat.poll()
   <Transition name="support-panel">
     <section
       v-if="isOpen"
-      class="fixed right-4 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+      class="support-panel fixed right-4 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
       :class="panelPosition"
-      style="height: min(32rem, calc(100vh - 8rem))"
       role="dialog"
       :aria-label="t('support.title')"
     >
@@ -171,6 +170,29 @@ void chat.poll()
 </template>
 
 <style scoped>
+/*
+ * 面板高度。
+ *
+ * iOS Safari（以及微信/QQ 等内置浏览器）的 100vh 取的是「工具栏收起时」的大视口，
+ * 比用户真正看得见的那块高 100~150px。面板照着它算高度，就会顶出可见区域——
+ * iPhone SE 上实测面板 512px、可用空间只有 473px，顶端被切掉 39px。
+ *
+ * svh 取的是「工具栏展开时」的小视口，是永远看得见的那部分，面板不会超出。
+ * 不用 dvh：dvh 随工具栏收放连续变化，滚动时面板高度会跟着抖。
+ *
+ * 用 @supports 而不是写两遍 height：构建链里的 Lightning CSS 会按 browserslist
+ * 判断要不要保留重复声明，@supports 是显式的、不会被优化掉。
+ */
+.support-panel {
+  height: min(32rem, calc(100vh - 8rem));
+}
+
+@supports (height: 100svh) {
+  .support-panel {
+    height: min(32rem, calc(100svh - 8rem));
+  }
+}
+
 .support-panel-enter-active,
 .support-panel-leave-active {
   transition: opacity 180ms ease, transform 180ms ease;

@@ -116,6 +116,28 @@ func registerPeriodicTasks(scheduler *asynq.Scheduler, consumer *jobconsumer.Con
 			logger.Infow("scheduler_register_upstream_sync_stock_ok", "entry_id", entryID, "interval", syncInterval)
 		}
 	}
+
+	// Agiso 卡券库库存同步：与上游库存同步共用周期设置。
+	// 它不依赖 ProductMappingService，所以放在外层单独注册。
+	{
+		agisoInterval := "5m"
+		if cfg != nil && cfg.UpstreamSyncInterval != "" {
+			agisoInterval = cfg.UpstreamSyncInterval
+		}
+		task := queue.NewAgisoSyncStockTask()
+		entryID, err := scheduler.Register("@every "+agisoInterval, task, asynq.Queue(queue.DefaultQueue))
+		if err != nil {
+			logger.Warnw("scheduler_register_agiso_sync_stock_failed", "error", err)
+		} else {
+			logger.Infow("scheduler_register_agiso_sync_stock_ok", "entry_id", entryID, "interval", agisoInterval)
+		}
+		// 启动时先补一次：否则重启后要等满一个周期，期间卡券库商品全部显示售罄
+		if consumer.QueueClient != nil {
+			if err := consumer.QueueClient.EnqueueAgisoSyncStock(); err != nil {
+				logger.Warnw("enqueue_initial_agiso_sync_failed", "error", err)
+			}
+		}
+	}
 	if consumer.NotificationService != nil {
 		task, err := queue.NewNotificationInventoryAlertCheckTask()
 		if err != nil {

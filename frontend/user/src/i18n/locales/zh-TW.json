@@ -283,7 +283,8 @@
     "personalCenter": "個人中心",
     "logout": "退出",
     "selectLanguage": "選擇語言",
-    "more": "更多"
+    "more": "更多",
+    "searchPlaceholder": "搜尋商品"
   },
   "toast": {
     "addedToCart": "已加入購物車"
@@ -595,7 +596,8 @@
         "gift_card_redeem": "禮品卡兌換",
         "admin_adjust": "管理員調帳",
         "admin_refund": "管理員退款",
-        "order_underpaid_credit": "訂單收款不足轉入"
+        "order_underpaid_credit": "訂單收款不足轉入",
+        "points_purchase": "購買積分"
       },
       "errors": {
         "loadFailed": "錢包資料載入失敗，請稍後重試",
@@ -1047,11 +1049,13 @@
       "amountPlaceholder": "請輸入金額",
       "estimated": "預計入帳 {points} 積分",
       "channel": "付款方式",
+      "walletBalance": "錢包餘額",
       "channelEmpty": "請先填寫金額以載入可用付款方式",
       "remark": "備註",
       "remarkPlaceholder": "選填",
       "rechargeSubmit": "前往付款",
       "rechargeCreated": "儲值訂單已建立",
+      "rechargeBalanceSuccess": "儲值成功，{points} 積分已到帳",
       "scanToPay": "掃碼付款",
       "table": {
         "createdAt": "時間",
@@ -1079,6 +1083,7 @@
         "checkinFailed": "簽到失敗",
         "invalidAmount": "請輸入有效的儲值金額",
         "channelRequired": "請選擇付款方式",
+        "balanceInsufficient": "錢包餘額不足",
         "rechargeFailed": "儲值發起失敗",
         "copyFailed": "複製失敗"
       }
@@ -1304,6 +1309,7 @@
     "title": "發起支付",
     "subtitle": "選擇支付方式並完成支付",
     "backToOrders": "返回訂單",
+    "backToHome": "返回首頁",
     "orderInfo": "訂單資訊",
     "itemsTitle": "訂單明細",
     "orderNo": "訂單號",
@@ -1795,7 +1801,7 @@
   "support": {
     "title": "線上客服",
     "close": "關閉客服視窗",
-    "placeholder": "描述你遇到的問題…",
+    "placeholder": "說說你的問題…",
     "send": "傳送",
     "attach": "傳送圖片或影片",
     "empty": "還沒有訊息，把你遇到的問題傳給我們吧。",

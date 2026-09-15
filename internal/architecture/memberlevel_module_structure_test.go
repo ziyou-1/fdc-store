@@ -42,7 +42,9 @@ func TestMemberLevelImplementationLivesInBoundedContextDirectories(t *testing.T)
 	if production != 0 || total != 0 {
 		t.Fatalf("memberlevel module root must remain structural only, got production=%d total=%d", production, total)
 	}
-	assertDirectoryGoFileBudget(t, domainRoot, 3)
+	// 4 = level.go + plan.go + price.go + plan_locale_test.go。
+	// 套餐名与描述同样是多语言 JSON，缺语言只会静默回落，靠测试钉住。
+	assertDirectoryGoFileBudget(t, domainRoot, 4)
 	assertDirectoryGoFileBudget(t, contractRoot, 3)
 	assertDirectoryGoFileBudget(t, applicationRoot, 2)
 	assertDirectoryGoFileBudget(t, storeRoot, 5)

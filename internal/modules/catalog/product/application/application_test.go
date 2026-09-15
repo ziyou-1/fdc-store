@@ -148,3 +148,97 @@ func TestApplyAutoStockCountsAssignsLegacyStockToOneSKU(t *testing.T) {
 		t.Fatalf("DEFAULT SKU available want 5 got %d", products[0].SKUs[1].AutoStockAvailable)
 	}
 }
+
+// 卡券库商品的卡不在本地卡密表里，按本地聚合永远是 0、前台会显示售罄。
+// 库存必须来自定时任务刷新的 Agiso 缓存字段。
+func TestApplyAutoStockCountsUsesAgisoCacheForCardLibraryProducts(t *testing.T) {
+	service := NewService(Options{Stock: stockCounterStub{counts: []cardsecretcontract.SKUStockCount{
+		// 本地卡密表里恰好有这个商品的残留数据，不能被采信
+		{ProductID: 40, SKUID: 0, Status: cardsecretdomain.StatusAvailable, Total: 7},
+	}}})
+	products := []productdomain.Product{{
+		ID:               40,
+		FulfillmentType:  constants.FulfillmentTypeAuto,
+		CardSource:       constants.CardSourceAgiso,
+		AgisoStockCached: 13,
+	}}
+
+	if err := service.ApplyAutoStockCounts(products); err != nil {
+		t.Fatalf("ApplyAutoStockCounts: %v", err)
+	}
+	if products[0].AutoStockAvailable != 13 {
+		t.Fatalf("应取 Agiso 缓存 13，实际 %d", products[0].AutoStockAvailable)
+	}
+	if products[0].AutoStockTotal != 13 {
+		t.Fatalf("总量应等于可用量，实际 %d", products[0].AutoStockTotal)
+	}
+	// 卡券库没有「本地锁定/已售」的概念，残留统计不能漏进来
+	if products[0].AutoStockLocked != 0 || products[0].AutoStockSold != 0 {
+		t.Fatalf("锁定与已售应为 0，实际 %d/%d", products[0].AutoStockLocked, products[0].AutoStockSold)
+	}
+}
+
+// 前台按 SKU 累加算库存，只填商品级字段的话前台仍会显示售罄。
+// 同时多个 SKU 共用一个卡池，逐个填会让累加结果翻倍。
+func TestApplyAutoStockCountsFillsSingleSKUForAgiso(t *testing.T) {
+	service := NewService(Options{Stock: stockCounterStub{}})
+	products := []productdomain.Product{{
+		ID:               43,
+		FulfillmentType:  constants.FulfillmentTypeAuto,
+		CardSource:       constants.CardSourceAgiso,
+		AgisoStockCached: 11,
+		SKUs: []productdomain.ProductSKU{
+			{ID: 201, SKUCode: productdomain.DefaultSKUCode, IsActive: true},
+			{ID: 202, SKUCode: "SECOND", IsActive: true},
+		},
+	}}
+	if err := service.ApplyAutoStockCounts(products); err != nil {
+		t.Fatalf("ApplyAutoStockCounts: %v", err)
+	}
+	var sum int64
+	for _, sku := range products[0].SKUs {
+		sum += sku.AutoStockAvailable
+	}
+	if sum != 11 {
+		t.Fatalf("SKU 累加应等于卡池 11（不能翻倍），实际 %d", sum)
+	}
+	if products[0].AutoStockAvailable != 11 {
+		t.Fatalf("商品级应为 11，实际 %d", products[0].AutoStockAvailable)
+	}
+}
+
+// 本地来源的商品不受影响，仍按卡密表聚合。
+func TestApplyAutoStockCountsKeepsLocalSourceUnchanged(t *testing.T) {
+	service := NewService(Options{Stock: stockCounterStub{counts: []cardsecretcontract.SKUStockCount{
+		{ProductID: 41, SKUID: 0, Status: cardsecretdomain.StatusAvailable, Total: 5},
+	}}})
+	products := []productdomain.Product{{
+		ID:               41,
+		FulfillmentType:  constants.FulfillmentTypeAuto,
+		CardSource:       constants.CardSourceLocal,
+		AgisoStockCached: 999, // 即便有残留缓存也不该被使用
+	}}
+	if err := service.ApplyAutoStockCounts(products); err != nil {
+		t.Fatalf("ApplyAutoStockCounts: %v", err)
+	}
+	if products[0].AutoStockAvailable != 5 {
+		t.Fatalf("本地来源应取卡密表的 5，实际 %d", products[0].AutoStockAvailable)
+	}
+}
+
+// 缓存为负（异常数据）时按 0 处理，不能出现负库存。
+func TestApplyAutoStockCountsClampsNegativeAgisoCache(t *testing.T) {
+	service := NewService(Options{Stock: stockCounterStub{}})
+	products := []productdomain.Product{{
+		ID:               42,
+		FulfillmentType:  constants.FulfillmentTypeAuto,
+		CardSource:       constants.CardSourceAgiso,
+		AgisoStockCached: -3,
+	}}
+	if err := service.ApplyAutoStockCounts(products); err != nil {
+		t.Fatalf("ApplyAutoStockCounts: %v", err)
+	}
+	if products[0].AutoStockAvailable != 0 {
+		t.Fatalf("负缓存应夹到 0，实际 %d", products[0].AutoStockAvailable)
+	}
+}

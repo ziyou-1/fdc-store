@@ -43,6 +43,11 @@ export function usePayment() {
   const paymentResult = ref<any>(null)
   const error = ref('')
   const selectedChannelId = ref<number | null>(null)
+  // 渠道是不是结算页带过来的。是的话支付页就不再展示选择区，
+  // 买家在结算页已经选过一次，再让他选第二遍既多余又容易选成不同的渠道。
+  const channelPreselected = ref(false)
+  // 自动发起只做一次，避免轮询刷新订单时反复触发
+  const autoPayTriggered = ref(false)
   const copied = ref(false)
   const walletAddressCopied = ref(false)
   const capturing = ref(false)
@@ -115,6 +120,19 @@ export function usePayment() {
     if (orderNo !== '') return orderNo
     return readRouteQueryValue('out_trade_no')
   })
+  // 从 URL 恢复结算页的选择。放在 computed 之前定义，
+  // initialize 里调用一次即可，之后由用户操作接管。
+  const applyPreselectionFromQuery = () => {
+    const rawChannel = readRouteQueryValue('channel_id')
+    const channelId = Number(rawChannel)
+    if (rawChannel !== '' && Number.isFinite(channelId) && channelId > 0) {
+      selectedChannelId.value = channelId
+      channelPreselected.value = true
+    }
+    if (readRouteQueryValue('use_balance') === '1') useBalance.value = true
+    if (readRouteQueryValue('use_points') === '1') usePoints.value = true
+  }
+
   const orderNoResolved = computed(() => {
     return order.value?.order_no || orderNoQuery.value || ''
   })
@@ -645,6 +663,18 @@ export function usePayment() {
             latestLoaded.value = true
             await loadLatestPayment()
           }
+          // 结算页已选好渠道时直接发起支付，买家不需要在这一页再点一次「确认支付」。
+          // 只在还没有支付结果时触发一次；performPayment 自身对已有同渠道的支付
+          // 记录会复用而不是重复创建，所以刷新页面也不会重复下单。
+          if (
+            channelPreselected.value &&
+            !autoPayTriggered.value &&
+            !paymentResult.value &&
+            order.value.status === 'pending_payment'
+          ) {
+            autoPayTriggered.value = true
+            void performPayment()
+          }
         }
       } finally {
         if (!silent) {
@@ -1167,6 +1197,8 @@ export function usePayment() {
       return
     }
     if (!orderNoQuery.value) return
+    // 先恢复结算页的选择，再加载订单——loadOrder 之后的逻辑会读 selectedChannelId
+    applyPreselectionFromQuery()
     loadOrder()
     void loadWallet()
     void loadPoints()
@@ -1290,6 +1322,7 @@ export function usePayment() {
     order,
     paymentResult,
     selectedChannelId,
+    channelPreselected,
     copied,
     walletAddressCopied,
     openedPayWindow,

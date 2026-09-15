@@ -40,8 +40,14 @@ export const resolvePaymentPresentationMode = (mode: unknown): PaymentPresentati
   return isRedirectPaymentInteractionMode(mode) ? 'redirect' : 'qr'
 }
 
-export const resolvePaymentLinkNavigationTarget = (automatic: boolean): PaymentLinkNavigationTarget => {
-  return automatic ? 'current-tab' : 'new-window'
+export const resolvePaymentLinkNavigationTarget = (_automatic: boolean): PaymentLinkNavigationTarget => {
+  // 一律新窗口打开支付站，不整窗替换当前标签页。
+  // 原先自动跳转用 current-tab 会把买家整窗带到 Payssion 这类第三方托管页，
+  // 而那种页面只有一个二维码、没有返回入口，买家付完/放弃都回不到商城。
+  // 改成 new-window 后我方 /pay 页始终留守（带返回首页按钮 + 轮询支付状态）：
+  // 新窗成功则支付站在新标签打开、我方页仍在；被浏览器拦截则我方页显示「去支付」按钮，
+  // 买家点一下（用户手势不会被拦）再打开。两种情况买家都不会被困在第三方页。
+  return 'new-window'
 }
 
 export const resolvePaymentInteractionLabelKey = (mode: unknown): PaymentInteractionLabelKey | null => {

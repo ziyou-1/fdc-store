@@ -121,17 +121,17 @@ func DefaultStorefrontCategories() []UpsertInput {
 		{
 			Slug:      "games",
 			SortOrder: 30,
-			NameJSON:  map[string]interface{}{"zh-CN": "游戏", "zh-TW": "遊戲", "en-US": "Games"},
+			NameJSON:  map[string]interface{}{"zh-CN": "游戏", "zh-TW": "遊戲", "en-US": "Games", "id-ID": "Game"},
 		},
 		{
 			Slug:      "software",
 			SortOrder: 20,
-			NameJSON:  map[string]interface{}{"zh-CN": "软件", "zh-TW": "軟體", "en-US": "Software"},
+			NameJSON:  map[string]interface{}{"zh-CN": "软件", "zh-TW": "軟體", "en-US": "Software", "id-ID": "Perangkat Lunak"},
 		},
 		{
 			Slug:      "ai",
 			SortOrder: 10,
-			NameJSON:  map[string]interface{}{"zh-CN": "AI", "zh-TW": "AI", "en-US": "AI"},
+			NameJSON:  map[string]interface{}{"zh-CN": "AI", "zh-TW": "AI", "en-US": "AI", "id-ID": "AI"},
 		},
 	}
 }

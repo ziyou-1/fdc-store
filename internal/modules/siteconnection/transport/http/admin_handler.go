@@ -22,6 +22,8 @@ type AdminService interface {
 	Delete(id uint) error
 	Ping(id uint) (*siteconnectionapp.PingResult, error)
 	SetStatus(id uint, status string) error
+	// DecryptSecret 解密连接密钥。agiso 卡种列表接口要用它直连开放平台。
+	DecryptSecret(encrypted string) (string, error)
 }
 
 // MarkupReapplier 对连接已映射商品重新应用加价。
@@ -126,6 +128,12 @@ func (h *AdminHandler) UpdateSiteConnection(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, siteconnectioncontract.ErrNotFound) {
 			ginutil.RespondError(c, response.CodeNotFound, "error.connection_not_found", nil)
+			return
+		}
+		// 参数不合法要按 400 报，别落进 500 的兜底：
+		// agiso 少填一个密钥属于用户输入问题，报「更新失败」运营无从下手。
+		if errors.Is(err, siteconnectioncontract.ErrInvalid) {
+			ginutil.RespondError(c, response.CodeBadRequest, "error.connection_invalid", nil)
 			return
 		}
 		ginutil.RespondError(c, response.CodeInternal, "error.connection_update_failed", err)

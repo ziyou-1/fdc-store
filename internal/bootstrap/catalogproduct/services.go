@@ -70,6 +70,8 @@ type Dependencies struct {
 	ProductMappings   MappingStore
 	Orders            OrderReader
 	PaymentChannels   paymentcontract.ChannelStore
+	// Translator 可为 nil：没配翻译服务时商品照常保存，只是不补译。
+	Translator productwrite.Translator
 }
 
 // Services 是 Product 查询、管理和写入用例的显式集合。
@@ -209,6 +211,7 @@ func New(dependencies Dependencies) Services {
 		Categories:      dependencies.Categories,
 		PaymentChannels: dependencies.PaymentChannels,
 		Transactions:    newProductWriteUnitOfWork(dependencies.Products, dependencies.SKUs, dependencies.CardSecrets),
+		Translator:      dependencies.Translator,
 	})
 	return Services{Read: read, Admin: admin, Write: write}
 }

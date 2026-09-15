@@ -103,7 +103,9 @@ func TestCatalogCategoryImplementationLivesInBoundedContextDirectories(t *testin
 	assertDirectoryGoFileBudget(t, catalogRoot, 2)
 	assertDirectoryGoFileBudget(t, domainRoot, 1)
 	assertDirectoryGoFileBudget(t, contractRoot, 1)
-	assertDirectoryGoFileBudget(t, applicationRoot, 1)
+	// 2 = service.go + category_locale_test.go。默认分类的名称是多语言 JSON，
+	// 少一门语言不会报错、只会静默回落成别的语言，所以用测试钉住覆盖面。
+	assertDirectoryGoFileBudget(t, applicationRoot, 2)
 	assertDirectoryGoFileBudget(t, storeRoot, 2)
 	assertDirectoryGoFileBudget(t, transportRoot, 3)
 	assertDirectoryGoFileBudget(t, presenterRoot, 2)
@@ -260,7 +262,12 @@ func TestCatalogProductImplementationLivesInNestedBoundedContext(t *testing.T) {
 	assertDirectoryGoFileBudget(t, contractRoot, 2)
 	assertDirectoryGoFileBudget(t, applicationRoot, 4)
 	assertDirectoryGoFileBudget(t, adminRoot, 4)
-	assertDirectoryGoFileBudget(t, writeRoot, 6)
+	// 9 = create/service/skus/update + translate.go + 四份测试
+	//（skus_test / translate_test / update_cardsource_test / update_sku_agiso_test）。
+	// translate.go 承载"保存时把缺失语言补译上"的逻辑，三条语义必须被钉住
+	//（只补空缺、fail-open、绝不进事务）；卡券库来源下沉到 SKU 级后，
+	// update_cardsource_test 与 update_sku_agiso_test 分别钉住商品级持久化与每-SKU 绑定/回落，同理必需。
+	assertDirectoryGoFileBudget(t, writeRoot, 9)
 	assertDirectoryGoFileBudget(t, domainRoot, 9)
 	assertDirectoryGoFileBudget(t, manualFormRoot, 2)
 	assertDirectoryGoFileBudget(t, storeRoot, 4)

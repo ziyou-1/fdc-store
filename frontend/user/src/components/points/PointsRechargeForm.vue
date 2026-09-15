@@ -15,17 +15,39 @@ const props = defineProps<{
   recharging: boolean
   channelLoading: boolean
   pointsPerUnit: number
+  walletBalance: string
+  payWithBalance: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:amount', value: string): void
   (e: 'update:channelId', value: number): void
   (e: 'update:remark', value: string): void
+  (e: 'update:payWithBalance', value: boolean): void
   (e: 'amountBlur'): void
   (e: 'submit'): void
 }>()
 
 const { t } = useI18n()
+
+// 钱包余额是否足够支付当前金额；金额为空时不算不足，避免默认就显示禁用。
+const balanceInsufficient = computed(() => {
+  const value = Number(props.amount)
+  if (!Number.isFinite(value) || value <= 0) return false
+  return Number(props.walletBalance) < value
+})
+
+// 选钱包余额支付
+const selectBalance = () => {
+  emit('update:payWithBalance', true)
+  emit('update:channelId', 0)
+}
+
+// 选某个在线支付渠道
+const selectChannel = (id: number) => {
+  emit('update:payWithBalance', false)
+  emit('update:channelId', id)
+}
 
 // 预估到账积分：仅作展示，真实数量以后端按下单时的规则为准
 const estimatedPoints = computed(() => {
@@ -38,7 +60,10 @@ const estimatedPoints = computed(() => {
 const estimatedPointsDisplay = computed(() => new Intl.NumberFormat().format(estimatedPoints.value))
 
 const canSubmit = computed(
-  () => props.amount.trim() !== '' && props.channelId > 0 && !props.recharging,
+  () =>
+    props.amount.trim() !== '' &&
+    (props.payWithBalance ? !balanceInsufficient.value : props.channelId > 0) &&
+    !props.recharging,
 )
 </script>
 
@@ -71,6 +96,26 @@ const canSubmit = computed(
 
       <div class="space-y-2">
         <Label>{{ t('personalCenter.points.channel') }}</Label>
+
+        <!-- 钱包余额支付：即时到账，不经外部渠道 -->
+        <button
+          type="button"
+          class="flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          :class="payWithBalance
+            ? 'border-primary bg-primary/5 text-foreground'
+            : 'border-border hover:bg-accent'"
+          :disabled="balanceInsufficient"
+          @click="selectBalance"
+        >
+          <span class="truncate">{{ t('personalCenter.points.walletBalance') }}</span>
+          <span class="ml-2 shrink-0 text-xs text-muted-foreground">
+            ¥{{ walletBalance }}
+            <span v-if="balanceInsufficient" class="text-destructive">
+              · {{ t('personalCenter.points.errors.balanceInsufficient') }}
+            </span>
+          </span>
+        </button>
+
         <p v-if="channelLoading" class="text-sm text-muted-foreground">
           {{ t('common.loading') }}
         </p>
@@ -83,10 +128,10 @@ const canSubmit = computed(
             :key="channel.id"
             type="button"
             class="flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors"
-            :class="channelId === channel.id
+            :class="!payWithBalance && channelId === channel.id
               ? 'border-primary bg-primary/5 text-foreground'
               : 'border-border hover:bg-accent'"
-            @click="emit('update:channelId', channel.id)"
+            @click="selectChannel(channel.id)"
           >
             <span class="truncate">{{ channel.name || channel.channel_type }}</span>
           </button>

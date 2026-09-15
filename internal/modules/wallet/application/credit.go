@@ -84,6 +84,86 @@ func (s *Service) CreditInTransaction(
 	return account, transaction, nil
 }
 
+// SpendInTransaction 在调用方事务内从余额扣款。
+//
+// 与 ApplyOrderBalance 的"能扣多少扣多少"不同：买积分/会员这类必须全额由余额覆盖，
+// 余额不足直接 ErrInsufficientBalance。reference 去重：同一 reference 已扣过则幂等返回原交易，
+// 让调用方可以在写库失败后安全重试。
+func (s *Service) SpendInTransaction(
+	tx walletcontract.Transaction,
+	input walletcontract.CreditInput,
+) (*walletdomain.Account, *walletdomain.Transaction, error) {
+	if tx == nil {
+		return nil, nil, walletcontract.ErrTransactionRequired
+	}
+	if input.UserID == 0 {
+		return nil, nil, walletcontract.ErrAccountNotFound
+	}
+	amount := input.Amount.Decimal.Round(2)
+	if amount.LessThanOrEqual(decimal.Zero) {
+		return nil, nil, walletcontract.ErrInvalidAmount
+	}
+	reference := strings.TrimSpace(input.Reference)
+	if reference == "" {
+		return nil, nil, walletcontract.ErrTransactionCreateFailed
+	}
+	transactionType := strings.TrimSpace(input.Type)
+	if transactionType == "" {
+		transactionType = constants.WalletTxnTypeOrderPay
+	}
+	repository := tx.Wallets()
+	if repository == nil {
+		return nil, nil, walletcontract.ErrTransactionRequired
+	}
+
+	existing, err := repository.GetTransactionByReference(reference)
+	if err != nil {
+		return nil, nil, err
+	}
+	if existing != nil {
+		account, accountErr := repository.GetAccountByUserID(input.UserID)
+		if accountErr != nil {
+			return nil, nil, accountErr
+		}
+		if account == nil {
+			account, accountErr = ensureAccountForUpdate(repository, input.UserID, time.Now())
+			if accountErr != nil {
+				return nil, nil, accountErr
+			}
+		}
+		return account, existing, nil
+	}
+
+	now := time.Now()
+	account, err := ensureAccountForUpdate(repository, input.UserID, now)
+	if err != nil {
+		return nil, nil, err
+	}
+	before := account.Balance.Decimal.Round(2)
+	after := before.Sub(amount).Round(2)
+	if after.LessThan(decimal.Zero) {
+		return nil, nil, walletcontract.ErrInsufficientBalance
+	}
+	account.Balance = money.FromDecimal(after)
+	account.UpdatedAt = now
+	if err := repository.UpdateAccount(account); err != nil {
+		return nil, nil, walletcontract.ErrAccountUpdateFailed
+	}
+
+	transaction := &walletdomain.Transaction{
+		UserID: input.UserID, OrderID: input.OrderID,
+		Type: transactionType, Direction: constants.WalletTxnDirectionOut,
+		Amount: money.FromDecimal(amount), BalanceBefore: money.FromDecimal(before),
+		BalanceAfter: money.FromDecimal(after), Currency: normalizeCurrency(input.Currency),
+		Reference: reference, Remark: cleanRemark(input.Remark, "钱包扣款"),
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := repository.CreateTransaction(transaction); err != nil {
+		return nil, nil, walletcontract.ErrTransactionCreateFailed
+	}
+	return account, transaction, nil
+}
+
 func (s *Service) changeBalance(
 	userID uint,
 	delta decimal.Decimal,

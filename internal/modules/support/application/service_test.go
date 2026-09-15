@@ -371,7 +371,7 @@ func TestListUserMessagesSupportsIncrementalCursor(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	if len(result.Messages) != 1 || result.Messages[0].Content != "二" {
-		t.Fatalf("expected only result.Messages after cursor, got %#v", result.Messages)
+		t.Fatalf("expected only messages after cursor, got %#v", result.Messages)
 	}
 }
 
@@ -416,7 +416,7 @@ func TestSendUserMessageAutoRepliesMatchingFAQ(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	if len(result.Messages) != 2 {
-		t.Fatalf("expected buyer question plus FAQ solution, got %d result.Messages: %#v", len(result.Messages), result.Messages)
+		t.Fatalf("expected buyer question plus FAQ solution, got %d messages: %#v", len(result.Messages), result.Messages)
 	}
 	if result.Messages[1].SenderType != supportdomain.SenderTypeAgent {
 		t.Fatalf("solution must be an agent message on the left, got %s", result.Messages[1].SenderType)
@@ -618,6 +618,32 @@ func TestSendUserMessageStoresDeepLTranslation(t *testing.T) {
 	}
 	if message.Translation != "您好，抱歉，我先取消一下哦" {
 		t.Fatalf("unexpected translation %q", message.Translation)
+	}
+}
+
+// 翻译未配置（后台关掉了或没填密钥）时，买家的消息必须照常发出去，只是没有译文。
+//
+// 翻译器改成"恒不为 nil 的热换槽位"之后，未配置会以 ErrTranslatorNotConfigured
+// 的形式流到这里。若把它当普通翻译失败处理，运营一关翻译，
+// 全站买家就再也发不出任何文本客服消息。
+func TestSendUserMessageSkipsTranslationWhenTranslatorNotConfigured(t *testing.T) {
+	repo := newFakeRepo()
+	service := NewService(repo)
+	service.SetUserTextTranslator(func(string) (string, error) {
+		return "", ErrTranslatorNotConfigured
+	})
+
+	message, err := service.SendUserMessage(51, supportcontract.SendMessageInput{
+		Content: "halo, pesanan saya belum masuk",
+	})
+	if err != nil {
+		t.Fatalf("翻译未配置时买家仍应能发出消息，实得错误: %v", err)
+	}
+	if message == nil {
+		t.Fatal("消息未落库")
+	}
+	if message.Translation != "" {
+		t.Fatalf("未配置翻译时不该有译文，实得 %q", message.Translation)
 	}
 }
 

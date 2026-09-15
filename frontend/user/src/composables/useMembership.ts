@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { memberLevelAPI, membershipAPI, walletAPI } from '../api'
 import type { MembershipPlan, MembershipPurchaseResult } from '../api/types'
 import type { PageAlert } from '../utils/alerts'
+import { reservePayWindow } from '../utils/payWindow'
 import { isMembershipActive } from '../utils/membership'
 
 export { isMembershipActive }
@@ -72,6 +73,8 @@ export function useMembership() {
       return null
     }
     purchasing.value = true
+    // await 之前同步占一个新标签，跳转支付站时用它，避免整窗替换当前页。
+    const payWindow = reservePayWindow()
     try {
       const res = await membershipAPI.purchase({
         period: selectedPeriod.value,
@@ -79,15 +82,17 @@ export function useMembership() {
       })
       const result = res.data.data || {}
       if (result.redirect_url) {
-        window.location.href = result.redirect_url
+        payWindow.navigate(result.redirect_url)
         return null
       }
+      payWindow.release()
       if (result.qr_code) {
         qrResult.value = result
         return result
       }
       return result
     } catch (err: any) {
+      payWindow.release()
       alert.value = { level: 'error', message: err?.message || t('personalCenter.membership.purchaseFailed') }
       return null
     } finally {

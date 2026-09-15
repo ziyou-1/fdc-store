@@ -25,6 +25,7 @@ import (
 	settingsapp "github.com/dujiao-next/internal/modules/settings/application"
 	settingsmessaging "github.com/dujiao-next/internal/modules/settings/schema/messaging"
 	settingssecurity "github.com/dujiao-next/internal/modules/settings/schema/security"
+	supportapp "github.com/dujiao-next/internal/modules/support/application"
 	uploadapp "github.com/dujiao-next/internal/modules/upload/application"
 	uploadlocal "github.com/dujiao-next/internal/modules/upload/infrastructure/localstore"
 	"github.com/dujiao-next/internal/platform/database/gormdb"
@@ -84,6 +85,25 @@ func (c *Container) loadRuntimeSettings() {
 		c.Config.TelegramAuth = settingssecurity.TelegramAuthSettingToConfig(telegramAuthSetting)
 	}
 
+	// DeepL 必须在这里回灌，否则后台保存的密钥只在"本次保存到下次重启"之间有效：
+	// wireServiceDependencies 用 c.Config.DeepL 建翻译器，而 c.Config.DeepL 来自
+	// config.yml。读失败时保持 config.yml 的值不动——翻译不是安全开关，
+	// 读不到就停翻译只会让客服工作台无声无息地少掉译文。
+	//
+	// 这一段同时承担老配置的兼容：升级前的 config.yml 只有 auth_key 没有 enabled，
+	// DefaultDeepLSetting 会把"填了密钥"推断为已启用，装配路径直读 cfg.Enabled 则不会。
+	deepLSetting, err := c.SettingService.GetDeepLSetting(c.Config.DeepL)
+	if err != nil {
+		logger.Warnw("provider_load_deepl_setting_failed", "error", err)
+	} else {
+		c.Config.DeepL = settingssecurity.DeepLSettingToConfig(deepLSetting)
+	}
+
+	// 翻译器槽位必须在这里构造，不能等到最后一步的 wireServiceDependencies：
+	// 商品写入服务在下一步就要构造，而它需要拿到这个槽位才能在保存时补译。
+	// 放在 DeepL 配置刚回灌完的这一行之后，槽位拿到的就是数据库里的最终值。
+	c.DeepLTranslators = supportapp.NewTranslatorHolder(c.Config.DeepL.Enabled, c.Config.DeepL.AuthKey)
+
 	googleAuthSetting, err := c.SettingService.GetGoogleAuthSetting(c.Config.GoogleAuth)
 	if err != nil {
 		// Database-backed settings are the administrative source of truth. A
@@ -140,6 +160,7 @@ func (c *Container) initIdentityAndCatalogServices() {
 		ProductMappings:   c.ProductMappingRepo,
 		Orders:            c.OrderStore,
 		PaymentChannels:   c.PaymentChannelStore,
+		Translator:        productTranslator{translators: c.DeepLTranslators},
 	})
 	c.ProductReadService = productServices.Read
 	c.ProductAdminService = productServices.Admin

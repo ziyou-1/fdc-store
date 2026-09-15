@@ -10,6 +10,7 @@ func RegisterAdminRoutes(admin gin.IRoutes, handler *AdminHandler) {
 	admin.PUT("/site-connections/:id", handler.UpdateSiteConnection)
 	admin.DELETE("/site-connections/:id", handler.DeleteSiteConnection)
 	admin.POST("/site-connections/:id/ping", handler.PingSiteConnection)
+	admin.GET("/site-connections/:id/agiso/card-kinds", handler.ListAgisoCardKinds)
 	admin.PUT("/site-connections/:id/status", handler.UpdateSiteConnectionStatus)
 	admin.POST("/site-connections/:id/reapply-markup", handler.ReapplyConnectionMarkup)
 }

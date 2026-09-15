@@ -15,6 +15,10 @@ var (
 	ErrMaxPurchaseExceeded     = errors.New("product max purchase exceeded")
 	ErrMinPurchaseNotMet       = errors.New("product min purchase not met")
 	ErrCategoryInvalid         = errors.New("product category invalid")
+	// ErrCardSourceNotAuto 非自动发卡的商品配了卡券库来源。
+	ErrCardSourceNotAuto = errors.New("card source requires auto fulfillment")
+	// ErrCardSourceIncomplete 选了 Agiso 卡券库但没指定连接或卡种。
+	ErrCardSourceIncomplete = errors.New("card source connection and cpk id required")
 )
 
 // CategoryAssignmentRepository 是商品分类归属校验所需的最小端口。
@@ -141,6 +145,55 @@ func ValidatePurchaseQuantity(product *Product, quantity int) error {
 	}
 	if maxLimit := productMaxPurchaseQuantity(product); maxLimit > 0 && quantity > maxLimit {
 		return ErrMaxPurchaseExceeded
+	}
+	return nil
+}
+
+// NormalizeCardSource 归一化卡密来源。空值与非法值一律回落到 local，
+// 保证既有商品（没有这个字段）行为完全不变。
+func NormalizeCardSource(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case constants.CardSourceAgiso:
+		return constants.CardSourceAgiso
+	default:
+		return constants.CardSourceLocal
+	}
+}
+
+// ValidateCardSource 校验卡密来源与交付类型是否自洽。
+//
+// 只有自动发卡才谈得上卡密来源：人工交付的库存在商品自身，
+// 上游代销的货在上游站。给它们配一个卡券库会让运营以为生效了，实际不会被读到。
+//
+// 连接/卡种是否完整不在这里判：卡种绑定已下沉到 SKU 级（每个 SKU 可绑不同卡种），
+// 完整性要按「每个活跃 SKU 的有效绑定」来校验，见 ValidateAgisoBinding，
+// 由写入用例在归一化 SKU 之后逐个调用。
+func ValidateCardSource(fulfillmentType, cardSource string) error {
+	if cardSource != constants.CardSourceAgiso {
+		return nil
+	}
+	if fulfillmentType != constants.FulfillmentTypeAuto {
+		return ErrCardSourceNotAuto
+	}
+	return nil
+}
+
+// ResolveAgisoBinding 计算一个 SKU 的有效绑定：SKU 自己配了卡种就用 SKU 的
+// （连接缺省则继承商品级），否则整体回落到商品级绑定。
+func ResolveAgisoBinding(productConnID uint, productCpkID int64, skuConnID uint, skuCpkID int64) (uint, int64) {
+	if skuCpkID > 0 {
+		if skuConnID == 0 {
+			skuConnID = productConnID
+		}
+		return skuConnID, skuCpkID
+	}
+	return productConnID, productCpkID
+}
+
+// ValidateAgisoBinding 校验一份有效绑定是否完整（连接与卡种都已指定）。
+func ValidateAgisoBinding(connID uint, cpkID int64) error {
+	if connID == 0 || cpkID <= 0 {
+		return ErrCardSourceIncomplete
 	}
 	return nil
 }

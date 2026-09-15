@@ -70,6 +70,22 @@ func (c *Client) EnqueueOrderStatusEmail(payload OrderStatusEmailPayload, opts .
 	return err
 }
 
+// EnqueueAgisoSyncStock 立即推送一次 Agiso 库存同步。
+//
+// 定时任务是 @every 5m，首次执行要等满一个周期。若不在启动时补一次，
+// 每次重启后卡券库商品都会有最长 5 分钟显示售罄——而重启在每次发版时都会发生。
+func (c *Client) EnqueueAgisoSyncStock(opts ...asynq.Option) error {
+	if !c.Enabled() {
+		return nil
+	}
+	options := append([]asynq.Option{
+		asynq.Queue(c.defaultQueue),
+		asynq.MaxRetry(2),
+	}, opts...)
+	_, err := c.client.Enqueue(NewAgisoSyncStockTask(), options...)
+	return err
+}
+
 // EnqueueOrderAutoFulfill 推送自动交付任务
 func (c *Client) EnqueueOrderAutoFulfill(payload OrderAutoFulfillPayload, opts ...asynq.Option) error {
 	if !c.Enabled() {

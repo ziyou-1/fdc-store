@@ -42,49 +42,111 @@ func (s *Service) ApplyAutoStockCounts(products []productdomain.Product) error {
 		if products[i].FulfillmentType != constants.FulfillmentTypeAuto {
 			continue
 		}
-		pMap := stockMap[products[i].ID]
-		if pMap == nil {
-			continue
+		prod := &products[i]
+		pMap := stockMap[prod.ID]
+
+		// 每个 SKU 按其「有效来源」独立算库存：agiso 来源用卡券库缓存，
+		// 本地来源用本地卡密聚合。同一商品下两种来源可以混合。
+		agisoProductAvailable := int64(prod.AgisoStockCached)
+		if agisoProductAvailable < 0 {
+			agisoProductAvailable = 0
 		}
+		// 回落 SKU（未单独绑卡种、共用商品级卡池）与本地历史卡密（skuID=0）的
+		// 承载目标，只在各自来源的 SKU 中挑，避免混合时算错。
+		agisoInheritTarget := resolveAgisoInheritTargetSKUIndex(prod)
+		legacyTargetIdx := resolveLegacyStockTargetSKUIndex(prod)
 
 		var pAvailable, pLocked, pUsed int64
-		for _, statusMap := range pMap {
-			pAvailable += statusMap[cardsecretdomain.StatusAvailable]
-			pLocked += statusMap[cardsecretdomain.StatusReserved]
-			pUsed += statusMap[cardsecretdomain.StatusUsed]
-		}
-		products[i].AutoStockAvailable = pAvailable
-		products[i].AutoStockTotal = pAvailable + pLocked
-		products[i].AutoStockLocked = pLocked
-		products[i].AutoStockSold = pUsed
 
-		legacyTargetIdx := resolveLegacyStockTargetSKUIndex(products[i].SKUs)
-		for j := range products[i].SKUs {
-			skuID := products[i].SKUs[j].ID
-			statusMap := pMap[skuID]
-
-			available := statusMap[cardsecretdomain.StatusAvailable]
-			locked := statusMap[cardsecretdomain.StatusReserved]
-			used := statusMap[cardsecretdomain.StatusUsed]
-
-			// 如果 skuID 为 0 的历史卡密存在，优先归并到 DEFAULT SKU。
-			// 若不存在 DEFAULT SKU，则回退到首个启用 SKU，避免重复叠加到所有 SKU。
-			if j == legacyTargetIdx && pMap[0] != nil {
-				available += pMap[0][cardsecretdomain.StatusAvailable]
-				locked += pMap[0][cardsecretdomain.StatusReserved]
-				used += pMap[0][cardsecretdomain.StatusUsed]
+		if len(prod.SKUs) == 0 {
+			// 单规格：按商品级来源。
+			if productdomain.EffectiveCardSource(prod, nil) == constants.CardSourceAgiso {
+				pAvailable = agisoProductAvailable
+			} else if pMap != nil {
+				for _, statusMap := range pMap {
+					pAvailable += statusMap[cardsecretdomain.StatusAvailable]
+					pLocked += statusMap[cardsecretdomain.StatusReserved]
+					pUsed += statusMap[cardsecretdomain.StatusUsed]
+				}
 			}
-
-			products[i].SKUs[j].AutoStockAvailable = available
-			products[i].SKUs[j].AutoStockTotal = available + locked
-			products[i].SKUs[j].AutoStockLocked = locked
-			products[i].SKUs[j].AutoStockSold = used
+		} else {
+			for j := range prod.SKUs {
+				sku := &prod.SKUs[j]
+				var available, locked, used int64
+				if productdomain.EffectiveCardSource(prod, sku) == constants.CardSourceAgiso {
+					// 卡券库来源：SKU 自己绑了卡种用自己的缓存，否则回落 SKU 承载商品级卡池。
+					if sku.AgisoCpkID > 0 {
+						available = int64(sku.AgisoStockCached)
+						if available < 0 {
+							available = 0
+						}
+					} else if j == agisoInheritTarget {
+						available = agisoProductAvailable
+					}
+				} else if pMap != nil {
+					// 本地来源：按本地卡密聚合。
+					statusMap := pMap[sku.ID]
+					available = statusMap[cardsecretdomain.StatusAvailable]
+					locked = statusMap[cardsecretdomain.StatusReserved]
+					used = statusMap[cardsecretdomain.StatusUsed]
+					// skuID=0 的历史卡密归并到本地来源的承载 SKU。
+					if j == legacyTargetIdx && pMap[0] != nil {
+						available += pMap[0][cardsecretdomain.StatusAvailable]
+						locked += pMap[0][cardsecretdomain.StatusReserved]
+						used += pMap[0][cardsecretdomain.StatusUsed]
+					}
+				}
+				sku.AutoStockAvailable = available
+				sku.AutoStockTotal = available + locked
+				sku.AutoStockLocked = locked
+				sku.AutoStockSold = used
+				pAvailable += available
+				pLocked += locked
+				pUsed += used
+			}
 		}
+
+		prod.AutoStockAvailable = pAvailable
+		prod.AutoStockTotal = pAvailable + pLocked
+		prod.AutoStockLocked = pLocked
+		prod.AutoStockSold = pUsed
 	}
 	return nil
 }
 
-func resolveLegacyStockTargetSKUIndex(skus []productdomain.ProductSKU) int {
+// resolveAgisoInheritTargetSKUIndex 在「未单独绑定卡种、回落到商品级卡池」的活跃
+// SKU 里挑一个承载商品级库存的目标：优先 DEFAULT，其次首个活跃回落 SKU。
+// 若所有活跃 SKU 都各自绑了卡种（无人回落），返回 -1，商品级缓存不再展示。
+func resolveAgisoInheritTargetSKUIndex(product *productdomain.Product) int {
+	if product == nil {
+		return -1
+	}
+	skus := product.SKUs
+	defaultCode := strings.ToUpper(strings.TrimSpace(productdomain.DefaultSKUCode))
+	firstActive := -1
+	for idx := range skus {
+		// 只在「有效来源为 agiso、且未单独绑卡种（回落商品级卡池）」的活跃 SKU 中挑。
+		if skus[idx].AgisoCpkID > 0 || !skus[idx].IsActive {
+			continue
+		}
+		if productdomain.EffectiveCardSource(product, &skus[idx]) != constants.CardSourceAgiso {
+			continue
+		}
+		if firstActive < 0 {
+			firstActive = idx
+		}
+		if strings.ToUpper(strings.TrimSpace(skus[idx].SKUCode)) == defaultCode {
+			return idx
+		}
+	}
+	return firstActive
+}
+
+func resolveLegacyStockTargetSKUIndex(product *productdomain.Product) int {
+	if product == nil {
+		return -1
+	}
+	skus := product.SKUs
 	if len(skus) == 0 {
 		return -1
 	}
@@ -92,7 +154,11 @@ func resolveLegacyStockTargetSKUIndex(skus []productdomain.ProductSKU) int {
 	defaultCode := strings.ToUpper(strings.TrimSpace(productdomain.DefaultSKUCode))
 	firstActiveIdx := -1
 	for idx := range skus {
+		// 只在「有效来源为本地」的活跃 SKU 中挑，避免把历史卡密归并到 agiso SKU。
 		if !skus[idx].IsActive {
+			continue
+		}
+		if productdomain.EffectiveCardSource(product, &skus[idx]) == constants.CardSourceAgiso {
 			continue
 		}
 		if firstActiveIdx < 0 {
@@ -106,8 +172,11 @@ func resolveLegacyStockTargetSKUIndex(skus []productdomain.ProductSKU) int {
 		return firstActiveIdx
 	}
 
-	// 防御性回退：没有启用 SKU 时，仍尽量归并到 DEFAULT SKU。
+	// 防御性回退：没有本地来源的启用 SKU 时，仍尽量归并到 DEFAULT SKU。
 	for idx := range skus {
+		if productdomain.EffectiveCardSource(product, &skus[idx]) == constants.CardSourceAgiso {
+			continue
+		}
 		if strings.ToUpper(strings.TrimSpace(skus[idx].SKUCode)) == defaultCode {
 			return idx
 		}

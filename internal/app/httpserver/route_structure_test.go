@@ -142,6 +142,7 @@ func TestRouteDomainFilesPreserveTrustBoundaries(t *testing.T) {
 				`settingstransport.RegisterAdminCaptchaRoutes(authorized,`,
 				`settingstransport.RegisterAdminTelegramAuthRoutes(authorized,`,
 				`settingstransport.RegisterAdminGoogleAuthRoutes(authorized,`,
+				`settingstransport.RegisterAdminDeepLRoutes(authorized,`,
 				`settingstransport.RegisterAdminOrderEmailTemplateRoutes(authorized,`,
 				`settingstransport.RegisterAdminAffiliateRoutes(authorized,`,
 				`settingstransport.RegisterAdminTelegramBotRoutes(authorized,`,
