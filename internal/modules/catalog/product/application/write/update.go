@@ -56,6 +56,8 @@ func (s *WriteService) Update(id string, input CreateProductInput) (*productdoma
 	product.DescriptionJSON = jsonmap.JSON(input.DescriptionJSON)
 	product.ContentJSON = jsonmap.JSON(input.ContentJSON)
 	product.InstructionsJSON = jsonmap.JSON(input.InstructionsJSON)
+	// 对接商品的人工表单由上游同步而来，保存时原样保留；其余情况按下方规则重算。
+	existingManualFormSchema := product.ManualFormSchemaJSON
 	product.ManualFormSchemaJSON = jsonmap.JSON{}
 	product.PriceAmount = money.FromDecimal(priceAmount)
 	product.SortOrder = input.SortOrder
@@ -129,16 +131,6 @@ func (s *WriteService) Update(id string, input CreateProductInput) (*productdoma
 	product.AgisoCpkID = agisoCpkID
 
 	product.PointsPrice = input.PointsPrice
-	if fulfillmentType == constants.FulfillmentTypeManual {
-		normalizedSchemaJSON, err := manualform.NormalizeSchema(jsonmap.JSON(input.ManualFormSchemaJSON))
-		if err != nil {
-			return nil, err
-		}
-		product.ManualFormSchemaJSON = normalizedSchemaJSON
-		product.ManualFormTiming = productdomain.NormalizeManualFormTiming(input.ManualFormTiming)
-	} else {
-		product.ManualFormTiming = constants.ManualFormTimingCheckout
-	}
 
 	manualStockTotal := product.ManualStockTotal
 	if input.ManualStockTotal != nil {
@@ -162,14 +154,33 @@ func (s *WriteService) Update(id string, input CreateProductInput) (*productdoma
 			existingSKUMap[sku.ID] = sku
 		}
 		var normalizeErr error
-		normalizedSKUs, priceAmount, manualStockTotal, normalizeErr = s.normalizeProductSKUInputs(input.SKUs, fulfillmentType, cardSource, existingSKUMap)
+		normalizedSKUs, priceAmount, manualStockTotal, normalizeErr = s.normalizeProductSKUInputs(input.SKUs, fulfillmentType, cardSource, product.IsMapped, existingSKUMap)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
 	}
 	// 卡券库商品：按 SKU 有效绑定校验（单规格商品退化为校验商品级绑定）。
-	if err := validateAgisoSKUBindings(cardSource, agisoConnID, agisoCpkID, normalizedSKUs); err != nil {
+	if err := validateAgisoSKUBindings(fulfillmentType, cardSource, agisoConnID, agisoCpkID, normalizedSKUs); err != nil {
 		return nil, err
+	}
+
+	// 人工交付表单是商品级共享配置：商品默认走人工，或任一 SKU 单独走人工，
+	// 都要保留表单结构与采集时机。对接商品没有人工 SKU 时保留上游同步来的表单
+	// （上游侧人工交付的商品要靠它在下单时采集信息）；其余情况清空。
+	switch {
+	case fulfillmentType == constants.FulfillmentTypeManual ||
+		anyNormalizedSKUFulfillment(fulfillmentType, normalizedSKUs, constants.FulfillmentTypeManual):
+		normalizedSchemaJSON, err := manualform.NormalizeSchema(jsonmap.JSON(input.ManualFormSchemaJSON))
+		if err != nil {
+			return nil, err
+		}
+		product.ManualFormSchemaJSON = normalizedSchemaJSON
+		product.ManualFormTiming = productdomain.NormalizeManualFormTiming(input.ManualFormTiming)
+	case product.IsMapped:
+		product.ManualFormSchemaJSON = existingManualFormSchema
+		product.ManualFormTiming = constants.ManualFormTimingCheckout
+	default:
+		product.ManualFormTiming = constants.ManualFormTimingCheckout
 	}
 
 	product.PriceAmount = money.FromDecimal(priceAmount)

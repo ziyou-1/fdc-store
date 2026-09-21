@@ -11,6 +11,7 @@ import (
 	"github.com/dujiao-next/internal/constants"
 	cardsecretcontract "github.com/dujiao-next/internal/modules/cardsecret/contract"
 	cardsecretdomain "github.com/dujiao-next/internal/modules/cardsecret/domain"
+	productdomain "github.com/dujiao-next/internal/modules/catalog/product/domain"
 )
 
 // ExportAvailableCardSecretInput 可用卡密出库导出输入。
@@ -189,7 +190,14 @@ func (s *Service) validateAutoCardSecretExportScope(productID, skuID uint) error
 	if product == nil {
 		return ErrProductNotFound
 	}
-	if strings.TrimSpace(product.FulfillmentType) != constants.FulfillmentTypeAuto {
+	// 交付方式已下沉到 SKU 级：商品默认自动发卡，或任一 SKU 单独走自动发卡，都允许导出。
+	skus, err := s.productSKURepo.ListByProduct(productID, false)
+	if err != nil {
+		return err
+	}
+	product.SKUs = skus
+	if !productdomain.ProductHasFulfillmentType(product, constants.FulfillmentTypeAuto) &&
+		strings.TrimSpace(product.FulfillmentType) != constants.FulfillmentTypeAuto {
 		return ErrInvalid
 	}
 	if skuID == 0 {
@@ -200,6 +208,9 @@ func (s *Service) validateAutoCardSecretExportScope(productID, skuID uint) error
 		return err
 	}
 	if sku == nil || sku.ProductID != productID || !sku.IsActive {
+		return ErrProductSKUInvalid
+	}
+	if productdomain.EffectiveFulfillmentType(product, sku) != constants.FulfillmentTypeAuto {
 		return ErrProductSKUInvalid
 	}
 	return nil

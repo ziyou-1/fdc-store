@@ -69,7 +69,11 @@ func (r *ProductStore) List(filter productcontract.ListFilter) ([]productdomain.
 		query = query.Where("products.id NOT IN ?", filter.ExcludeProductIDs)
 	}
 	if fulfillmentType := strings.TrimSpace(filter.FulfillmentType); fulfillmentType != "" {
-		query = query.Where("fulfillment_type = ?", fulfillmentType)
+		// 交付方式已下沉到 SKU 级：商品级默认值匹配，或任一未删除的 SKU 单独指定了该方式，都算命中。
+		query = query.Where(
+			"(products.fulfillment_type = ? OR EXISTS (SELECT 1 FROM product_skus ps WHERE ps.product_id = products.id AND ps.deleted_at IS NULL AND ps.fulfillment_type = ?))",
+			fulfillmentType, fulfillmentType,
+		)
 	}
 	if search := strings.TrimSpace(filter.Search); search != "" {
 		like := "%" + search + "%"

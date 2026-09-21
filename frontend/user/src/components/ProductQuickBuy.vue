@@ -91,8 +91,8 @@
                 </h3>
 
                 <div class="mt-1.5 flex flex-wrap items-center gap-1">
-                  <Badge :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'" size="xs">
-                    {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
+                  <Badge :variant="selectedFulfillmentType === 'auto' ? 'info' : 'neutral'" size="xs">
+                    {{ getFulfillmentTypeLabel(selectedFulfillmentType) }}
                   </Badge>
                   <Badge :variant="getStockBadgeVariant(product.stock_status)" size="xs">
                     {{ getStockStatusLabel(product) }}
@@ -360,6 +360,7 @@ import { isSkipPaymentEnabled, requiresCheckoutTimeManualForm } from '../utils/s
 import { createSkipPaymentOrder } from '../utils/skipPaymentOrder'
 import { createPointsRedeemOrder } from '../utils/pointsRedeemOrder'
 import { canRedeemWithPoints, redeemPointsCost } from '../utils/productPoints'
+import { resolveSkuFulfillmentType } from '../utils/fulfillment'
 import { X, Image as ImageIcon, Tag, Minus, Plus, ShoppingCart } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -577,12 +578,16 @@ const effectiveMin = computed(() => {
   return productMin && productMin > 0 ? productMin : 1
 })
 
+// 所选规格实际生效的交付方式（交付方式已下沉到 SKU，商品级只是默认值）。
+const selectedFulfillmentType = computed(() => resolveSkuFulfillmentType(props.product, selectedSku.value))
+
 const shouldEnforceSkuStock = (sku: any) => {
   if (!sku) return false
   if (sku?.stock_quantity_hidden === true || props.product?.stock_quantity_hidden === true) return false
-  if (props.product?.fulfillment_type === 'auto') return true
-  if (props.product?.fulfillment_type === 'upstream') return true
-  if (props.product?.fulfillment_type !== 'manual') return false
+  const fulfillmentType = resolveSkuFulfillmentType(props.product, sku)
+  if (fulfillmentType === 'auto') return true
+  if (fulfillmentType === 'upstream') return true
+  if (fulfillmentType !== 'manual') return false
   const total = normalizeManualStockTotal(sku?.manual_stock_total)
   return total !== -1
 }
@@ -783,7 +788,7 @@ const handleAddToCart = () => {
     minPurchaseQuantity: normalizeOptionalLimitNumber(props.product.min_purchase_quantity) ?? undefined,
     maxPurchaseQuantity: normalizeOptionalLimitNumber(props.product.max_purchase_quantity) ?? undefined,
     purchaseType: props.product.purchase_type,
-    fulfillmentType: props.product.fulfillment_type,
+    fulfillmentType: selectedFulfillmentType.value,
     manualFormTiming: props.product.manual_form_timing,
     manualFormSchema: props.product.manual_form_schema || {},
     paymentChannelIds: Array.isArray(props.product.payment_channel_ids) && props.product.payment_channel_ids.length > 0 ? props.product.payment_channel_ids : undefined,
@@ -815,7 +820,7 @@ const handleRedeemWithPoints = async () => {
       productId: Number(props.product.id),
       skuId: normalizeSkuId(selectedSku.value?.id),
       quantity: quantity.value,
-      fulfillmentType: props.product.fulfillment_type,
+      fulfillmentType: selectedFulfillmentType.value,
     })
     close()
     router.push(`/orders/${encodeURIComponent(created.order_no)}`)
@@ -849,6 +854,7 @@ const handleBuyNow = async () => {
   if (isSkipPaymentEnabled(appStore.config) && !requiresCheckoutTimeManualForm({
     manualFormTiming: props.product.manual_form_timing,
     manualFormSchema: props.product.manual_form_schema,
+    fulfillmentType: selectedFulfillmentType.value,
   })) {
     buyNowSubmitting.value = true
     try {
@@ -856,7 +862,7 @@ const handleBuyNow = async () => {
         productId: Number(props.product.id),
         skuId: normalizeSkuId(sku?.id),
         quantity: quantity.value,
-        fulfillmentType: props.product.fulfillment_type,
+        fulfillmentType: selectedFulfillmentType.value,
       })
       close()
       router.push(`/orders/${encodeURIComponent(created.order_no)}`)
@@ -894,7 +900,7 @@ const handleBuyNow = async () => {
     minPurchaseQuantity: normalizeOptionalLimitNumber(props.product.min_purchase_quantity) ?? undefined,
     maxPurchaseQuantity: normalizeOptionalLimitNumber(props.product.max_purchase_quantity) ?? undefined,
     purchaseType: props.product.purchase_type,
-    fulfillmentType: props.product.fulfillment_type,
+    fulfillmentType: selectedFulfillmentType.value,
     manualFormTiming: props.product.manual_form_timing,
     manualFormSchema: props.product.manual_form_schema || {},
     paymentChannelIds: Array.isArray(props.product.payment_channel_ids) && props.product.payment_channel_ids.length > 0 ? props.product.payment_channel_ids : undefined,

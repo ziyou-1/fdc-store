@@ -96,8 +96,14 @@ const currentProductLabel = computed(() => {
 
 const availableSkus = computed(() => {
   const rows = Array.isArray(productInfo.value?.skus) ? productInfo.value.skus : []
+  // 交付方式已下沉到 SKU：只列出实际走自动发卡的规格（自己标了 auto，或未标而商品默认 auto）。
+  const productDefault = String(productInfo.value?.fulfillment_type || '').trim()
+  const isAutoSku = (sku: AdminProductSKU) => {
+    const own = String(sku?.fulfillment_type || '').trim()
+    return own ? own === 'auto' : productDefault === 'auto'
+  }
   return rows
-    .filter((sku: AdminProductSKU) => Boolean(sku?.is_active))
+    .filter((sku: AdminProductSKU) => Boolean(sku?.is_active) && isAutoSku(sku))
     .map((sku: AdminProductSKU) => ({
       ...sku,
       id: Number(sku.id),
@@ -145,7 +151,7 @@ const loadProductOptions = async () => {
         fulfillment_type: 'auto',
       })
       const list = Array.isArray(response.data.data) ? response.data.data : []
-      rows.push(...list.filter((item: AdminProduct) => String(item?.fulfillment_type || '').trim() === 'auto'))
+      rows.push(...list.filter((item: AdminProduct) => String(item?.fulfillment_type || '').trim() === 'auto' || (Array.isArray(item?.fulfillment_types) && item.fulfillment_types.includes('auto'))))
       totalPage = Number(response.data?.pagination?.total_page || 1)
       page += 1
     } while (page <= totalPage && page <= 20)

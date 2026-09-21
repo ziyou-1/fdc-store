@@ -200,10 +200,10 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 		baseTotal := basePrice.Mul(decimal.NewFromInt(int64(item.Quantity))).Round(2)
 		total := unitPriceAmount.Mul(decimal.NewFromInt(int64(item.Quantity))).Round(2)
 		originalAmount = originalAmount.Add(baseTotal).Round(2)
-		fulfillmentType := strings.TrimSpace(product.FulfillmentType)
-		if fulfillmentType == "" {
-			fulfillmentType = constants.FulfillmentTypeManual
-		}
+		// 交付方式按 SKU 生效：该 SKU 单独指定了就用它的，否则回落商品级。
+		// 这是订单项 FulfillmentType 快照的唯一源头，后续预留库存、发货、
+		// 采购、通知全按订单项走，因此同一订单内不同规格可以分属不同交付方式。
+		fulfillmentType := productdomain.EffectiveFulfillmentType(product, sku)
 		if fulfillmentType != constants.FulfillmentTypeManual &&
 			fulfillmentType != constants.FulfillmentTypeAuto &&
 			fulfillmentType != constants.FulfillmentTypeUpstream &&

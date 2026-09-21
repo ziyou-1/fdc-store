@@ -12,6 +12,44 @@ import (
 	"gorm.io/gorm"
 )
 
+// splitProductByFulfillmentType 把商品按活跃 SKU 的有效交付方式拆成若干份副本：
+// 每份只含该交付方式的 SKU，且 FulfillmentType 置为该方式，供下方按「商品交付方式」
+// 写的统计逻辑原样复用。交付方式已下沉到 SKU 级，同一商品可能同时出现在 auto 与
+// manual 两份里。没有活跃 SKU 时退化为一份商品级副本（不含 SKU）。
+func splitProductByFulfillmentType(product productdomain.Product) []productdomain.Product {
+	activeSKUs := activeProductSKUs(product.SKUs)
+	if len(activeSKUs) == 0 {
+		part := product
+		part.SKUs = nil
+		part.FulfillmentType = productdomain.EffectiveFulfillmentType(&product, nil)
+		return []productdomain.Product{part}
+	}
+	order := []string{
+		constants.FulfillmentTypeAuto,
+		constants.FulfillmentTypeManual,
+		constants.FulfillmentTypeUpstream,
+		constants.FulfillmentTypeContent,
+	}
+	grouped := make(map[string][]productdomain.ProductSKU)
+	for _, sku := range activeSKUs {
+		skuCopy := sku
+		fulfillmentType := productdomain.EffectiveFulfillmentType(&product, &skuCopy)
+		grouped[fulfillmentType] = append(grouped[fulfillmentType], skuCopy)
+	}
+	parts := make([]productdomain.Product, 0, len(grouped))
+	for _, fulfillmentType := range order {
+		skus, ok := grouped[fulfillmentType]
+		if !ok {
+			continue
+		}
+		part := product
+		part.FulfillmentType = fulfillmentType
+		part.SKUs = skus
+		parts = append(parts, part)
+	}
+	return parts
+}
+
 func resolveDashboardManualAvailableStock(product productdomain.Product) (int64, bool) {
 	activeSKUs := activeProductSKUs(product.SKUs)
 	if len(activeSKUs) == 0 {
@@ -56,7 +94,12 @@ func (r *Store) GetStockStats(lowStockThreshold int64) (dashboard.StockStatsRow,
 	autoProductIDs := make([]uint, 0)
 	allActiveSKUIDs := make([]uint, 0)
 	autoProductActiveSKUs := make(map[uint][]uint) // product_id -> active sku_ids
+	// 交付方式已下沉到 SKU 级：把每个商品按 SKU 交付方式拆开，各份走各自的统计口径。
+	parts := make([]productdomain.Product, 0, len(products))
 	for _, product := range products {
+		parts = append(parts, splitProductByFulfillmentType(product)...)
+	}
+	for _, product := range parts {
 		fulfillmentType := strings.TrimSpace(product.FulfillmentType)
 		if fulfillmentType == constants.FulfillmentTypeAuto {
 			autoProductIDs = append(autoProductIDs, product.ID)
@@ -187,8 +230,13 @@ func (r *Store) GetInventoryAlertItems(lowStockThreshold int64) ([]dashboard.Inv
 		return nil, err
 	}
 
-	autoProductIDs := make([]uint, 0)
+	// 交付方式已下沉到 SKU 级：把每个商品按 SKU 交付方式拆开，各份走各自的预警口径。
+	parts := make([]productdomain.Product, 0, len(products))
 	for _, product := range products {
+		parts = append(parts, splitProductByFulfillmentType(product)...)
+	}
+	autoProductIDs := make([]uint, 0)
+	for _, product := range parts {
 		if strings.TrimSpace(product.FulfillmentType) == constants.FulfillmentTypeAuto {
 			autoProductIDs = append(autoProductIDs, product.ID)
 		}
@@ -218,7 +266,7 @@ func (r *Store) GetInventoryAlertItems(lowStockThreshold int64) ([]dashboard.Inv
 	}
 
 	result := make([]dashboard.InventoryAlertRow, 0)
-	for _, product := range products {
+	for _, product := range parts {
 		switch strings.TrimSpace(product.FulfillmentType) {
 		case constants.FulfillmentTypeAuto:
 			result = append(result, collectAutoInventoryAlertRows(product, autoAvailableMap[product.ID], lowStockThreshold)...)

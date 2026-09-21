@@ -19,6 +19,7 @@ import { isSkipPaymentEnabled, requiresCheckoutTimeManualForm } from '../utils/s
 import { createSkipPaymentOrder } from '../utils/skipPaymentOrder'
 import { createPointsRedeemOrder } from '../utils/pointsRedeemOrder'
 import { canRedeemWithPoints, redeemPointsCost } from '../utils/productPoints'
+import { resolveSkuFulfillmentType } from '../utils/fulfillment'
 
 /**
  * 商品详情页的全部业务逻辑（数据加载、SKU/数量、促销/会员/批发定价、库存约束、
@@ -228,12 +229,16 @@ export function useProductDetail(options: { onLoaded?: () => void } = {}) {
     return integerValue
   }
 
+  // 所选规格实际生效的交付方式（交付方式已下沉到 SKU，商品级只是默认值）。
+  const selectedFulfillmentType = computed(() => resolveSkuFulfillmentType(product.value, selectedSku.value))
+
   const shouldEnforceSkuStock = (sku: any) => {
     if (!sku) return false
     if (sku?.stock_quantity_hidden === true || product.value?.stock_quantity_hidden === true) return false
-    if (product.value?.fulfillment_type === 'auto') return true
-    if (product.value?.fulfillment_type === 'upstream') return true
-    if (product.value?.fulfillment_type !== 'manual') return false
+    const fulfillmentType = resolveSkuFulfillmentType(product.value, sku)
+    if (fulfillmentType === 'auto') return true
+    if (fulfillmentType === 'upstream') return true
+    if (fulfillmentType !== 'manual') return false
     const total = normalizeManualStockTotal(sku?.manual_stock_total)
     if (total === -1) return false
     return true
@@ -420,7 +425,7 @@ export function useProductDetail(options: { onLoaded?: () => void } = {}) {
     minPurchaseQuantity: normalizeOptionalLimitNumber(product.value.min_purchase_quantity) ?? undefined,
     maxPurchaseQuantity: normalizeOptionalLimitNumber(product.value.max_purchase_quantity) ?? undefined,
     purchaseType: product.value.purchase_type,
-    fulfillmentType: product.value.fulfillment_type,
+    fulfillmentType: resolveSkuFulfillmentType(product.value, sku),
     manualFormTiming: product.value.manual_form_timing,
     manualFormSchema: product.value.manual_form_schema || {},
     paymentChannelIds: Array.isArray(product.value.payment_channel_ids) && product.value.payment_channel_ids.length > 0 ? product.value.payment_channel_ids : undefined,
@@ -485,7 +490,7 @@ export function useProductDetail(options: { onLoaded?: () => void } = {}) {
         productId: Number(product.value.id),
         skuId: normalizeSkuId(sku?.id),
         quantity: quantity.value,
-        fulfillmentType: product.value.fulfillment_type,
+        fulfillmentType: resolveSkuFulfillmentType(product.value, sku),
       })
       router.push(`/orders/${encodeURIComponent(created.order_no)}`)
     } catch (err: any) {
@@ -522,6 +527,7 @@ export function useProductDetail(options: { onLoaded?: () => void } = {}) {
     if (isSkipPaymentEnabled(appStore.config) && !requiresCheckoutTimeManualForm({
       manualFormTiming: product.value.manual_form_timing,
       manualFormSchema: product.value.manual_form_schema,
+      fulfillmentType: resolveSkuFulfillmentType(product.value, sku),
     })) {
       buyNowSubmitting.value = true
       try {
@@ -529,7 +535,7 @@ export function useProductDetail(options: { onLoaded?: () => void } = {}) {
           productId: Number(product.value.id),
           skuId: normalizeSkuId(sku?.id),
           quantity: quantity.value,
-          fulfillmentType: product.value.fulfillment_type,
+          fulfillmentType: resolveSkuFulfillmentType(product.value, sku),
         })
         router.push(`/orders/${encodeURIComponent(created.order_no)}`)
       } catch (err: any) {
@@ -737,6 +743,7 @@ export function useProductDetail(options: { onLoaded?: () => void } = {}) {
   })
 
   return {
+    selectedFulfillmentType,
     // 国际化/格式化（模板需要）
     getLocalizedText, siteCurrency, formatPrice,
     getPurchaseTypeLabel, getFulfillmentTypeLabel, getStockBadgeVariant, getStockStatusLabel,

@@ -126,6 +126,11 @@ func (h *AdminProductHandler) GetAdminProducts(c *gin.Context) {
 		return
 	}
 
+	// 交付方式已下沉到 SKU 级：先按原始值算出每个商品实际涉及的交付方式集合，
+	// 再把对接商品的商品级字段替换成上游展示类型。
+	for i := range products {
+		products[i].FulfillmentTypes = productdomain.ProductFulfillmentTypes(&products[i])
+	}
 	h.applyUpstreamDisplayTypes(products)
 
 	pagination := response.BuildPagination(page, pageSize, total)
@@ -177,6 +182,7 @@ func (h *AdminProductHandler) GetAdminProduct(c *gin.Context) {
 	}
 	*product = temp[0]
 
+	temp[0].FulfillmentTypes = productdomain.ProductFulfillmentTypes(&temp[0])
 	h.applyUpstreamDisplayTypes(temp)
 	*product = temp[0]
 
@@ -194,7 +200,9 @@ type ProductSKURequest struct {
 	PointsPrice       int64                  `json:"points_price"`
 	ManualStockTotal  int                    `json:"manual_stock_total"`
 	CardSource        string                 `json:"card_source"`
+	FulfillmentType   string                 `json:"fulfillment_type"`
 	InstructionsJSON  map[string]interface{} `json:"instructions"`
+	PaymentChannelIDs []uint                 `json:"payment_channel_ids"`
 	AgisoConnectionID *uint                  `json:"agiso_connection_id"`
 	AgisoCpkID        *int64                 `json:"agiso_cpk_id"`
 	IsActive          *bool                  `json:"is_active"`
@@ -270,7 +278,9 @@ func toProductSKUInputs(items []ProductSKURequest) []productwrite.ProductSKUInpu
 			SKUCode:           item.SKUCode,
 			SpecValuesJSON:    item.SpecValuesJSON,
 			CardSource:        item.CardSource,
+			FulfillmentType:   item.FulfillmentType,
 			InstructionsJSON:  item.InstructionsJSON,
+			PaymentChannelIDs: item.PaymentChannelIDs,
 			PriceAmount:       decimal.NewFromFloat(item.PriceAmount),
 			CostPriceAmount:   decimal.NewFromFloat(item.CostPriceAmount),
 			PointsPrice:       item.PointsPrice,

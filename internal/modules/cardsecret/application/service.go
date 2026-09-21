@@ -52,12 +52,19 @@ func (s *Service) resolveCardSecretSKU(productID, rawSKUID uint) (*productdomain
 	if err != nil {
 		return nil, err
 	}
-	activeSKUs := make([]productdomain.ProductSKU, 0, len(skus))
+	// 交付方式已下沉到 SKU 级：只有实际走自动发卡的活跃 SKU 才是卡密的合法归属。
+	activeAutoSKUs := make([]productdomain.ProductSKU, 0, len(skus))
+	hasAutoSKU := false
 	for _, sku := range skus {
+		skuCopy := sku
+		if productdomain.EffectiveFulfillmentType(product, &skuCopy) != constants.FulfillmentTypeAuto {
+			continue
+		}
+		hasAutoSKU = true
 		if !sku.IsActive {
 			continue
 		}
-		activeSKUs = append(activeSKUs, sku)
+		activeAutoSKUs = append(activeAutoSKUs, sku)
 	}
 	if rawSKUID > 0 {
 		sku, err := s.productSKURepo.GetByID(rawSKUID)
@@ -67,17 +74,19 @@ func (s *Service) resolveCardSecretSKU(productID, rawSKUID uint) (*productdomain
 		if sku == nil || sku.ProductID != productID {
 			return nil, ErrProductSKUInvalid
 		}
-		if strings.TrimSpace(product.FulfillmentType) == constants.FulfillmentTypeAuto && !sku.IsActive {
+		// 卡密只能归属实际走自动发卡的规格：录到人工/内容规格上永远不会被发出去，
+		// 运营会误以为有货。停用的自动发卡规格同样不收。
+		if productdomain.EffectiveFulfillmentType(product, sku) != constants.FulfillmentTypeAuto || !sku.IsActive {
 			return nil, ErrProductSKUInvalid
 		}
 		return sku, nil
 	}
 
-	if strings.TrimSpace(product.FulfillmentType) == constants.FulfillmentTypeAuto {
-		switch len(activeSKUs) {
+	if hasAutoSKU || strings.TrimSpace(product.FulfillmentType) == constants.FulfillmentTypeAuto {
+		switch len(activeAutoSKUs) {
 		case 0:
 		case 1:
-			return &activeSKUs[0], nil
+			return &activeAutoSKUs[0], nil
 		default:
 			return nil, ErrProductSKURequired
 		}

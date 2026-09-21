@@ -267,7 +267,8 @@ func (h *UserHandler) GetOrderPaymentChannels(c *gin.Context) {
 			if item.ProductID == 0 {
 				continue
 			}
-			orderItems = append(orderItems, orderdomain.OrderItem{ProductID: item.ProductID})
+			// 带上 SKUID：支付方式已下沉到 SKU 级，渠道交集要按各自 SKU 解析。
+			orderItems = append(orderItems, orderdomain.OrderItem{ProductID: item.ProductID, SKUID: item.SKUID})
 		}
 		allowedIDs = h.payments.GetAllowedChannelIDsForOrder(orderItems)
 	}

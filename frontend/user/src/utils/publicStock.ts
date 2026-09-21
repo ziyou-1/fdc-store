@@ -1,3 +1,5 @@
+import { resolveSkuFulfillmentType } from './fulfillment'
+
 const STOCK_DISPLAY_EXACT = 'exact'
 const STOCK_DISPLAY_HIDDEN = 'hidden'
 const STOCK_STATUS_UNLIMITED = 'unlimited'
@@ -58,16 +60,19 @@ export const resolveSkuAvailableStock = (product: any, sku: any): number | null 
     if (status === STOCK_STATUS_OUT_OF_STOCK) return 0
     return null
   }
-  if (product?.fulfillment_type === 'upstream') {
+  // 按该规格自己的交付方式取库存字段（交付方式已下沉到 SKU）。
+  const fulfillmentType = resolveSkuFulfillmentType(product, sku)
+  if (fulfillmentType === 'upstream') {
     const upstreamStock = Number(sku?.upstream_stock ?? 0)
     if (upstreamStock === -1) return null
     return Math.max(Math.floor(upstreamStock), 0)
   }
-  if (product?.fulfillment_type === 'auto') {
+  if (fulfillmentType === 'auto') {
     const autoStock = Number(sku?.auto_stock_available ?? 0)
     if (autoStock < 0) return null
     return normalizeStockNumber(autoStock)
   }
+  if (fulfillmentType === 'content') return null
   const total = normalizeManualStockTotal(sku?.manual_stock_total)
   if (total === -1) return null
   return total

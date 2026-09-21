@@ -103,14 +103,14 @@ func (s *WriteService) Create(input CreateProductInput) (*productdomain.Product,
 			return nil, productcontract.ErrProductSKUInvalid
 		}
 		var normalizeErr error
-		normalizedSKUs, priceAmount, manualStockTotal, normalizeErr = s.normalizeProductSKUInputs(input.SKUs, fulfillmentType, cardSource, nil)
+		normalizedSKUs, priceAmount, manualStockTotal, normalizeErr = s.normalizeProductSKUInputs(input.SKUs, fulfillmentType, cardSource, false, nil)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
 		costPriceAmount = minActiveCostPrice(normalizedSKUs)
 	}
 	// 卡券库商品：按 SKU 有效绑定校验（单规格商品退化为校验商品级绑定）。
-	if err := validateAgisoSKUBindings(cardSource, agisoConnID, agisoCpkID, normalizedSKUs); err != nil {
+	if err := validateAgisoSKUBindings(fulfillmentType, cardSource, agisoConnID, agisoCpkID, normalizedSKUs); err != nil {
 		return nil, err
 	}
 	paymentChannelIDs, err := s.filterAvailablePaymentChannelIDs(input.PaymentChannelIDs)
@@ -149,7 +149,10 @@ func (s *WriteService) Create(input CreateProductInput) (*productdomain.Product,
 		IsActive:             isActive,
 		SortOrder:            input.SortOrder,
 	}
-	if fulfillmentType == constants.FulfillmentTypeManual {
+	// 人工交付表单是商品级共享配置：商品默认走人工，或任一 SKU 单独走人工，
+	// 都要保留表单结构与采集时机；完全没有人工交付时才清空。
+	if fulfillmentType == constants.FulfillmentTypeManual ||
+		anyNormalizedSKUFulfillment(fulfillmentType, normalizedSKUs, constants.FulfillmentTypeManual) {
 		normalizedSchemaJSON, err := manualform.NormalizeSchema(jsonmap.JSON(input.ManualFormSchemaJSON))
 		if err != nil {
 			return nil, err

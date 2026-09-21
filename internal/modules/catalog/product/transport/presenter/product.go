@@ -98,23 +98,26 @@ func WholesalePrices(tiers productdomain.WholesalePriceTiers) []WholesalePrice {
 
 // SKU 是公开商品 SKU 响应。
 type SKU struct {
-	ID                  uint         `json:"id"`
-	SKUCode             string       `json:"sku_code"`
-	SpecValues          jsonmap.JSON `json:"spec_values"`
-	PriceAmount         money.Amount `json:"price_amount"`
-	PointsPrice         int64        `json:"points_price"`
-	ManualStockTotal    int          `json:"manual_stock_total"`
-	ManualStockSold     int          `json:"manual_stock_sold"`
-	AutoStockAvailable  int64        `json:"auto_stock_available"`
-	UpstreamStock       int          `json:"upstream_stock"`
-	StockStatus         string       `json:"stock_status"`
-	StockDisplayMode    string       `json:"stock_display_mode"`
-	StockDisplay        string       `json:"stock_display"`
-	StockRangeMin       *int         `json:"stock_range_min,omitempty"`
-	StockRangeMax       *int         `json:"stock_range_max,omitempty"`
-	StockQuantityHidden bool         `json:"stock_quantity_hidden"`
-	IsSoldOut           bool         `json:"is_sold_out"`
-	IsActive            bool         `json:"is_active"`
+	ID          uint         `json:"id"`
+	SKUCode     string       `json:"sku_code"`
+	SpecValues  jsonmap.JSON `json:"spec_values"`
+	PriceAmount money.Amount `json:"price_amount"`
+	PointsPrice int64        `json:"points_price"`
+	// FulfillmentType 是该 SKU 实际生效的交付方式（auto/manual/content；上游代销按上游展示类型呈现）。
+	// 交付方式已下沉到 SKU 级，买家端应以所选 SKU 的值为准，商品级只是默认值。
+	FulfillmentType     string `json:"fulfillment_type"`
+	ManualStockTotal    int    `json:"manual_stock_total"`
+	ManualStockSold     int    `json:"manual_stock_sold"`
+	AutoStockAvailable  int64  `json:"auto_stock_available"`
+	UpstreamStock       int    `json:"upstream_stock"`
+	StockStatus         string `json:"stock_status"`
+	StockDisplayMode    string `json:"stock_display_mode"`
+	StockDisplay        string `json:"stock_display"`
+	StockRangeMin       *int   `json:"stock_range_min,omitempty"`
+	StockRangeMax       *int   `json:"stock_range_max,omitempty"`
+	StockQuantityHidden bool   `json:"stock_quantity_hidden"`
+	IsSoldOut           bool   `json:"is_sold_out"`
+	IsActive            bool   `json:"is_active"`
 
 	PromotionPriceAmount *money.Amount `json:"promotion_price_amount,omitempty"`
 	MemberPriceAmount    *money.Amount `json:"member_price_amount,omitempty"`

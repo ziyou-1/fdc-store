@@ -69,7 +69,10 @@ export function useProductLabels() {
       if (quantityHidden) {
         return t('products.stockStatus.lowStock')
       }
-      const count = Number(product?.fulfillment_type === 'manual' ? product?.manual_stock_available : product?.auto_stock_available)
+      // 交付方式已下沉到 SKU：商品级两个可用量分别是自动发卡/人工规格的汇总，混合商品要相加。
+      const manualCount = Math.max(Number(product?.manual_stock_available) || 0, 0)
+      const autoCount = Math.max(Number(product?.auto_stock_available) || 0, 0)
+      const count = manualCount + autoCount
       if (Number.isFinite(count) && count > 0) {
         return t('products.stockStatus.lowStockCount', { count })
       }

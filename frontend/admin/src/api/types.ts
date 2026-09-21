@@ -39,6 +39,8 @@ export interface AdminProductSKU {
   manual_stock_sold: number
   auto_stock_available: number
   auto_stock_total: number
+  // 该 SKU 的交付方式（auto / manual / content / upstream；空=跟随商品级）。
+  fulfillment_type?: string
   // 该 SKU 的卡密来源（local / agiso）与交付说明。
   card_source?: string
   instructions?: LocalizedText
@@ -78,6 +80,8 @@ export interface AdminProduct {
   max_purchase_quantity: number
   stock_display_mode: string
   fulfillment_type: string
+  // 商品下活跃 SKU 实际生效的交付方式集合（后台响应字段，混合交付时多于一个）。
+  fulfillment_types?: string[]
   manual_form_timing?: string
   instructions?: LocalizedText
   manual_form_schema: Record<string, unknown> | null

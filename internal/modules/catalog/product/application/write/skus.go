@@ -104,14 +104,22 @@ type normalizedProductSKU struct {
 	PointsPrice       int64
 	ManualStockTotal  int
 	CardSource        string // 该 SKU 单独来源（local/agiso）；空=跟随商品级
+	FulfillmentType   string // 该 SKU 单独交付方式（auto/manual/upstream/content）；空=跟随商品级
 	InstructionsJSON  jsonmap.JSON
+	PaymentChannelIDs string // 已编码的允许支付渠道 JSON；空=不单独限制
 	AgisoConnectionID uint
 	AgisoCpkID        int64
 	IsActive          bool
 	SortOrder         int
 }
 
-func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfillmentType, cardSource string, existingSKUMap map[uint]productdomain.ProductSKU) ([]normalizedProductSKU, decimal.Decimal, int, error) {
+// normalizeProductSKUInputs 归一化并校验 SKU 输入。
+//
+// 交付方式已下沉到 SKU 级：每个 SKU 按「自己指定的交付方式，否则商品级」决定
+// 哪些字段有意义——manual 才保留人工库存，auto 才保留卡密来源与卡种绑定；
+// upstream 只允许出现在对接商品（isMapped）上。返回的商品级人工库存是
+// 所有人工交付活跃 SKU 的汇总（任一无限则无限，没有人工 SKU 则为 0）。
+func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfillmentType, cardSource string, isMapped bool, existingSKUMap map[uint]productdomain.ProductSKU) ([]normalizedProductSKU, decimal.Decimal, int, error) {
 	if len(inputs) == 0 {
 		return nil, decimal.Zero, 0, productcontract.ErrProductSKUInvalid
 	}
@@ -121,6 +129,7 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 	minActivePrice := decimal.Zero
 	manualStockTotal := 0
 	hasUnlimitedStock := false
+	hasManualSKU := false
 
 	for _, input := range inputs {
 		skuCode := strings.TrimSpace(input.SKUCode)
@@ -142,11 +151,22 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 			return nil, decimal.Zero, 0, productcontract.ErrProductPriceInvalid
 		}
 
+		// 该 SKU 单独指定的交付方式：空=跟随商品级；非法值按空处理。
+		// upstream 依赖商品映射发货，只有对接商品才允许。
+		skuFulfillment := productdomain.NormalizeSKUFulfillmentType(input.FulfillmentType)
+		if skuFulfillment == constants.FulfillmentTypeUpstream && !isMapped {
+			return nil, decimal.Zero, 0, productcontract.ErrFulfillmentInvalid
+		}
+		effectiveFulfillment := skuFulfillment
+		if effectiveFulfillment == "" {
+			effectiveFulfillment = fulfillmentType
+		}
+
 		manualTotal := input.ManualStockTotal
 		if manualTotal < constants.ManualStockUnlimited {
 			return nil, decimal.Zero, 0, productcontract.ErrManualStockInvalid
 		}
-		if fulfillmentType != constants.FulfillmentTypeManual {
+		if effectiveFulfillment != constants.FulfillmentTypeManual {
 			manualTotal = 0
 		}
 		if existingSKUMap != nil && input.ID > 0 {
@@ -167,8 +187,13 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 
 		// 该 SKU 单独指定的卡密来源：local / agiso / 空（跟随商品级）。
 		// 非法值一律按空处理（跟随商品级），保证既有数据行为不变。
+		// 卡密来源只对自动发卡有意义：该 SKU 不走自动发卡时一并清空，
+		// 避免切成人工/内容后残留的 agiso 来源误导后台与库存逻辑。
 		skuCardSource := strings.ToLower(strings.TrimSpace(input.CardSource))
 		if skuCardSource != constants.CardSourceLocal && skuCardSource != constants.CardSourceAgiso {
+			skuCardSource = ""
+		}
+		if effectiveFulfillment != constants.FulfillmentTypeAuto {
 			skuCardSource = ""
 		}
 		// 有效来源 = SKU 自己选的（非空）否则商品级。用于决定是否保留 agiso 绑定。
@@ -177,11 +202,12 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 			effectiveSource = cardSource
 		}
 
-		// SKU 级卡种绑定只在该 SKU 有效来源为 agiso 时保留；切回本地时一并清空，
-		// 否则残留的卡种会让提卡/库存逻辑误以为还接着卡券库。
+		// SKU 级卡种绑定只在该 SKU 走自动发卡且有效来源为 agiso 时保留；
+		// 切回本地或切成其它交付方式时一并清空，否则残留的卡种会让提卡/库存逻辑
+		// 误以为还接着卡券库。
 		var agisoConnID uint
 		var agisoCpkID int64
-		if effectiveSource == constants.CardSourceAgiso {
+		if effectiveFulfillment == constants.FulfillmentTypeAuto && effectiveSource == constants.CardSourceAgiso {
 			if input.AgisoConnectionID != nil {
 				agisoConnID = *input.AgisoConnectionID
 			}
@@ -195,6 +221,16 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 			skuInstructions = jsonmap.JSON(input.InstructionsJSON)
 		}
 
+		// SKU 允许的支付渠道：按现存有效渠道过滤后编码，空表示不单独限制。
+		skuPaymentChannels := ""
+		if len(input.PaymentChannelIDs) > 0 {
+			filtered, filterErr := s.filterAvailablePaymentChannelIDs(input.PaymentChannelIDs)
+			if filterErr != nil {
+				return nil, decimal.Zero, 0, filterErr
+			}
+			skuPaymentChannels = productdomain.EncodePaymentChannelIDs(filtered)
+		}
+
 		normalized = append(normalized, normalizedProductSKU{
 			ID:                input.ID,
 			SKUCode:           skuCode,
@@ -204,7 +240,9 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 			PointsPrice:       input.PointsPrice,
 			ManualStockTotal:  manualTotal,
 			CardSource:        skuCardSource,
+			FulfillmentType:   skuFulfillment,
 			InstructionsJSON:  skuInstructions,
+			PaymentChannelIDs: skuPaymentChannels,
 			AgisoConnectionID: agisoConnID,
 			AgisoCpkID:        agisoCpkID,
 			IsActive:          isActive,
@@ -216,7 +254,8 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 				minActivePrice = priceAmount
 			}
 			hasActive = true
-			if fulfillmentType == constants.FulfillmentTypeManual {
+			if effectiveFulfillment == constants.FulfillmentTypeManual {
+				hasManualSKU = true
 				if manualTotal == constants.ManualStockUnlimited {
 					hasUnlimitedStock = true
 				} else {
@@ -229,7 +268,7 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 	if !hasActive {
 		return nil, decimal.Zero, 0, productcontract.ErrProductSKUInvalid
 	}
-	if fulfillmentType != constants.FulfillmentTypeManual {
+	if !hasManualSKU {
 		manualStockTotal = 0
 	} else if hasUnlimitedStock {
 		manualStockTotal = constants.ManualStockUnlimited
@@ -237,12 +276,33 @@ func (s *WriteService) normalizeProductSKUInputs(inputs []ProductSKUInput, fulfi
 	return normalized, minActivePrice, manualStockTotal, nil
 }
 
+// skuEffectiveFulfillmentType 返回已归一化 SKU 的有效交付方式（SKU 自己的否则商品级）。
+func skuEffectiveFulfillmentType(productFulfillmentType string, sku normalizedProductSKU) string {
+	if sku.FulfillmentType != "" {
+		return sku.FulfillmentType
+	}
+	return productFulfillmentType
+}
+
+// anyNormalizedSKUFulfillment 报告是否有任一活跃 SKU 实际走指定交付方式。
+func anyNormalizedSKUFulfillment(productFulfillmentType string, skus []normalizedProductSKU, target string) bool {
+	for _, sku := range skus {
+		if !sku.IsActive {
+			continue
+		}
+		if skuEffectiveFulfillmentType(productFulfillmentType, sku) == target {
+			return true
+		}
+	}
+	return false
+}
+
 // validateAgisoSKUBindings 校验卡券库商品每个 SKU 的有效绑定是否完整。
 //
 // 卡种绑定已下沉到 SKU 级：SKU 自己配了卡种就用 SKU 的，没配则回落到商品级。
 // 因此完整性要按「每个活跃 SKU 的有效绑定」逐个判，而不是只看商品级那一份。
 // 没有显式 SKU（单规格商品）时，商品级绑定就是唯一那份，直接校验它。
-func validateAgisoSKUBindings(cardSource string, productConnID uint, productCpkID int64, skus []normalizedProductSKU) error {
+func validateAgisoSKUBindings(fulfillmentType, cardSource string, productConnID uint, productCpkID int64, skus []normalizedProductSKU) error {
 	// 单规格（无显式 SKU）：商品级来源就是唯一那份。
 	if len(skus) == 0 {
 		if cardSource != constants.CardSourceAgiso {
@@ -250,10 +310,14 @@ func validateAgisoSKUBindings(cardSource string, productConnID uint, productCpkI
 		}
 		return productdomain.ValidateAgisoBinding(productConnID, productCpkID)
 	}
-	// 多规格：逐个按「该 SKU 的有效来源」判。来源为 agiso 的 SKU 才要求绑定完整，
-	// 因此同一商品下本地 SKU 与卡券库 SKU 可以共存。
+	// 多规格：逐个按「该 SKU 的有效交付方式与有效来源」判。只有走自动发卡且来源为
+	// agiso 的 SKU 才要求绑定完整，因此同一商品下人工/内容 SKU、本地 SKU 与卡券库
+	// SKU 可以共存。
 	for _, sku := range skus {
 		if !sku.IsActive {
+			continue
+		}
+		if skuEffectiveFulfillmentType(fulfillmentType, sku) != constants.FulfillmentTypeAuto {
 			continue
 		}
 		effectiveSource := sku.CardSource
@@ -326,7 +390,9 @@ func (s *WriteService) applyProductSKUsWithStockGuard(
 			existing.PointsPrice = row.PointsPrice
 			existing.ManualStockTotal = row.ManualStockTotal
 			existing.CardSource = row.CardSource
+			existing.FulfillmentType = row.FulfillmentType
 			existing.InstructionsJSON = row.InstructionsJSON
+			existing.PaymentChannelIDs = row.PaymentChannelIDs
 			existing.AgisoConnectionID = row.AgisoConnectionID
 			existing.AgisoCpkID = row.AgisoCpkID
 			existing.IsActive = row.IsActive
@@ -347,7 +413,9 @@ func (s *WriteService) applyProductSKUsWithStockGuard(
 			existing.PointsPrice = row.PointsPrice
 			existing.ManualStockTotal = row.ManualStockTotal
 			existing.CardSource = row.CardSource
+			existing.FulfillmentType = row.FulfillmentType
 			existing.InstructionsJSON = row.InstructionsJSON
+			existing.PaymentChannelIDs = row.PaymentChannelIDs
 			existing.AgisoConnectionID = row.AgisoConnectionID
 			existing.AgisoCpkID = row.AgisoCpkID
 			existing.IsActive = row.IsActive
@@ -374,7 +442,9 @@ func (s *WriteService) applyProductSKUsWithStockGuard(
 			ManualStockLocked: 0,
 			ManualStockSold:   0,
 			CardSource:        row.CardSource,
+			FulfillmentType:   row.FulfillmentType,
 			InstructionsJSON:  row.InstructionsJSON,
+			PaymentChannelIDs: row.PaymentChannelIDs,
 			AgisoConnectionID: row.AgisoConnectionID,
 			AgisoCpkID:        row.AgisoCpkID,
 			IsActive:          row.IsActive,
@@ -406,8 +476,20 @@ func (s *WriteService) ensureAutoSKUCardSecretStockSafe(
 	existingByID map[uint]productdomain.ProductSKU,
 	existingByCode map[string]productdomain.ProductSKU,
 ) error {
-	if cardSecretRepo == nil || productID == 0 || strings.TrimSpace(fulfillmentType) != constants.FulfillmentTypeAuto {
+	if cardSecretRepo == nil || productID == 0 {
 		return nil
+	}
+	// 只有「原本走自动发卡」的 SKU 才可能挂着本地卡密：SKU 自己标了 auto，
+	// 或没单独标而商品级是 auto。其余 SKU 停用/删除不必查卡密。
+	isAutoSKU := func(existing productdomain.ProductSKU) bool {
+		switch productdomain.NormalizeSKUFulfillmentType(existing.FulfillmentType) {
+		case constants.FulfillmentTypeAuto:
+			return true
+		case "":
+			return strings.TrimSpace(fulfillmentType) == constants.FulfillmentTypeAuto
+		default:
+			return false
+		}
 	}
 
 	nextActive := make(map[uint]bool, len(existingRows))
@@ -437,7 +519,7 @@ func (s *WriteService) ensureAutoSKUCardSecretStockSafe(
 		if _, ok := kept[existing.ID]; !ok {
 			nextActive[existing.ID] = false
 		}
-		if !existing.IsActive || nextActive[existing.ID] {
+		if !existing.IsActive || nextActive[existing.ID] || !isAutoSKU(existing) {
 			continue
 		}
 		total, available, used, err := cardSecretRepo.CountByProduct(productID, existing.ID)

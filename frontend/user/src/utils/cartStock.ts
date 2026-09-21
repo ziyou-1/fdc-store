@@ -2,6 +2,7 @@ import { productAPI } from '../api'
 import type { CartItem } from '../stores/cart'
 import { resolveCartPricingSnapshot } from './cartPricingSnapshot'
 import { normalizeSkuId } from './sku'
+import { resolveSkuFulfillmentType } from './fulfillment'
 
 interface CartStoreLike {
   items: CartItem[]
@@ -70,7 +71,7 @@ const resolveMatchedSku = (item: CartItem, activeSkus: any[]) => {
 const shouldEnforceSkuStock = (product: any, sku: any) => {
   if (!product || !sku) return false
   if (sku?.stock_quantity_hidden === true || product?.stock_quantity_hidden === true) return false
-  const type = String(product?.fulfillment_type || '').trim()
+  const type = resolveSkuFulfillmentType(product, sku)
   if (type === 'auto') return true
   if (type === 'upstream') return true
   if (type !== 'manual') return false
@@ -128,6 +129,8 @@ export const refreshCartStockSnapshots = async (cartStore: CartStoreLike) => {
 
     cartStore.patchItem(item.productId, item.skuId, {
       ...resolveCartPricingSnapshot(product, matchedSku),
+      // 交付方式按所选规格刷新（后台可能把某个规格改成别的交付方式）
+      fulfillmentType: resolveSkuFulfillmentType(product, matchedSku),
       skuCode: String(matchedSku?.sku_code || item.skuCode || ''),
       skuSpecValues: (matchedSku?.spec_values && typeof matchedSku.spec_values === 'object')
         ? matchedSku.spec_values

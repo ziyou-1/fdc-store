@@ -27,6 +27,21 @@ func DecodePaymentChannelIDs(raw string) []uint {
 	return result
 }
 
+// ResolveSKUPaymentChannelIDs 返回某订单项实际生效的允许支付渠道 ID。
+// 支付方式已下沉到 SKU 级：SKU 自己配了（非空）就用 SKU 的，否则回落商品级。
+// 返回 nil 表示不限制。
+func ResolveSKUPaymentChannelIDs(product *Product, sku *ProductSKU) []uint {
+	if sku != nil {
+		if ids := DecodePaymentChannelIDs(sku.PaymentChannelIDs); len(ids) > 0 {
+			return ids
+		}
+	}
+	if product != nil {
+		return DecodePaymentChannelIDs(product.PaymentChannelIDs)
+	}
+	return nil
+}
+
 // EncodePaymentChannelIDs 将有效支付渠道 ID 编码为商品持久化格式。
 func EncodePaymentChannelIDs(ids []uint) string {
 	if len(ids) == 0 {

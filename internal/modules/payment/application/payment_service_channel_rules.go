@@ -50,34 +50,107 @@ func computeProductChannelIntersection(products []productdomain.Product) []uint 
 	return result
 }
 
-// validateProductPaymentChannel 校验支付渠道是否被订单中的商品允许
+// computeItemsChannelIntersection 按订单项计算允许支付渠道的交集。
+// 支付方式已下沉到 SKU 级：每个订单项的允许渠道 = 该 SKU 配的（非空）否则商品级。
+// 空列表（该项不限制）不参与交集；返回 nil 表示整单无限制，空切片表示交集为空。
+func (s *PaymentService) computeItemsChannelIntersection(items []orderdomain.OrderItem, repo productcontract.Repository) []uint {
+	if len(items) == 0 {
+		return nil
+	}
+	if repo == nil {
+		repo = s.productRepo
+	}
+	prodIDSet := make(map[uint]struct{})
+	skuIDSet := make(map[uint]struct{})
+	for _, item := range items {
+		if item.ProductID > 0 {
+			prodIDSet[item.ProductID] = struct{}{}
+		}
+		if item.SKUID > 0 {
+			skuIDSet[item.SKUID] = struct{}{}
+		}
+	}
+	if len(prodIDSet) == 0 {
+		return nil
+	}
+	prodIDs := make([]uint, 0, len(prodIDSet))
+	for id := range prodIDSet {
+		prodIDs = append(prodIDs, id)
+	}
+	products, err := repo.ListByIDs(prodIDs)
+	if err != nil {
+		return nil
+	}
+	prodMap := make(map[uint]productdomain.Product, len(products))
+	for _, p := range products {
+		prodMap[p.ID] = p
+	}
+	skuMap := make(map[uint]productdomain.ProductSKU)
+	if s.productSKURepo != nil && len(skuIDSet) > 0 {
+		skuIDs := make([]uint, 0, len(skuIDSet))
+		for id := range skuIDSet {
+			skuIDs = append(skuIDs, id)
+		}
+		if skus, skuErr := s.productSKURepo.ListByIDs(skuIDs); skuErr == nil {
+			for _, sk := range skus {
+				skuMap[sk.ID] = sk
+			}
+		}
+	}
+
+	var intersection map[uint]struct{}
+	hasRestriction := false
+	for _, item := range items {
+		var pPtr *productdomain.Product
+		if p, ok := prodMap[item.ProductID]; ok {
+			pv := p
+			pPtr = &pv
+		}
+		var sPtr *productdomain.ProductSKU
+		if sk, ok := skuMap[item.SKUID]; ok {
+			sv := sk
+			sPtr = &sv
+		}
+		allowed := productdomain.ResolveSKUPaymentChannelIDs(pPtr, sPtr)
+		if len(allowed) == 0 {
+			continue // 该项不限制
+		}
+		hasRestriction = true
+		allowedSet := make(map[uint]struct{}, len(allowed))
+		for _, id := range allowed {
+			allowedSet[id] = struct{}{}
+		}
+		if intersection == nil {
+			intersection = allowedSet
+		} else {
+			for id := range intersection {
+				if _, ok := allowedSet[id]; !ok {
+					delete(intersection, id)
+				}
+			}
+		}
+	}
+	if !hasRestriction {
+		return nil
+	}
+	result := make([]uint, 0, len(intersection))
+	for id := range intersection {
+		result = append(result, id)
+	}
+	return result
+}
+
+// validateProductPaymentChannel 校验支付渠道是否被订单中的商品/SKU 允许
 // store 参数可选：在事务内调用时传入事务绑定的商品 Store，避免脱离工作单元。
 func (s *PaymentService) validateProductPaymentChannel(items []orderdomain.OrderItem, channelID uint, stores ...productcontract.Repository) error {
 	if len(items) == 0 {
 		return nil
 	}
-	productIDSet := make(map[uint]struct{})
-	for _, item := range items {
-		if item.ProductID > 0 {
-			productIDSet[item.ProductID] = struct{}{}
-		}
-	}
-	if len(productIDSet) == 0 {
-		return nil
-	}
-	productIDs := make([]uint, 0, len(productIDSet))
-	for id := range productIDSet {
-		productIDs = append(productIDs, id)
-	}
 	var repo productcontract.Repository = s.productRepo
 	if len(stores) > 0 && stores[0] != nil {
 		repo = stores[0]
 	}
-	products, err := repo.ListByIDs(productIDs)
-	if err != nil {
-		return ErrProductFetchFailed
-	}
-	allowed := computeProductChannelIntersection(products)
+	allowed := s.computeItemsChannelIntersection(items, repo)
 	if allowed == nil {
 		return nil // 无限制
 	}
@@ -174,29 +247,9 @@ func (s *PaymentService) GetWalletRechargeChannels() ([]paymentdomain.PaymentCha
 	return filtered, nil
 }
 
-// GetAllowedChannelIDsForOrder 获取订单中所有商品允许的支付渠道ID交集
+// GetAllowedChannelIDsForOrder 获取订单中所有订单项（按 SKU 生效）允许的支付渠道ID交集
 func (s *PaymentService) GetAllowedChannelIDsForOrder(items []orderdomain.OrderItem) []uint {
-	if len(items) == 0 {
-		return nil
-	}
-	productIDSet := make(map[uint]struct{})
-	for _, item := range items {
-		if item.ProductID > 0 {
-			productIDSet[item.ProductID] = struct{}{}
-		}
-	}
-	if len(productIDSet) == 0 {
-		return nil
-	}
-	productIDs := make([]uint, 0, len(productIDSet))
-	for id := range productIDSet {
-		productIDs = append(productIDs, id)
-	}
-	products, err := s.productRepo.ListByIDs(productIDs)
-	if err != nil {
-		return nil
-	}
-	return computeProductChannelIntersection(products)
+	return s.computeItemsChannelIntersection(items, nil)
 }
 
 // AvailablePaymentChannelFilter 可用支付渠道过滤参数。

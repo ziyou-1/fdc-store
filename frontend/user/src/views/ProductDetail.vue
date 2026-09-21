@@ -81,10 +81,11 @@
                     {{ getPurchaseTypeLabel(product.purchase_type) }}
                   </Badge>
 
-                  <Badge :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'">
-                    <Zap v-if="product.fulfillment_type === 'auto'" class="h-3 w-3" />
+                  <!-- 交付方式按所选规格展示（交付方式已下沉到 SKU） -->
+                  <Badge :variant="selectedFulfillmentType === 'auto' ? 'info' : 'neutral'">
+                    <Zap v-if="selectedFulfillmentType === 'auto'" class="h-3 w-3" />
                     <Pencil v-else class="h-3 w-3" />
-                    {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
+                    {{ getFulfillmentTypeLabel(selectedFulfillmentType) }}
                   </Badge>
 
                   <Badge :variant="getStockBadgeVariant(product.stock_status)">
@@ -474,7 +475,7 @@ const {
   hasPromotionRules, getPromotionRules,
   formatPromotionRule, formatWholesaleTier, formatRelatedPostDate, normalizeSkuId,
   loading, product, relatedPosts, currentImage, selectedSkuId, quantity, purchaseWarning,
-  activeSkus, selectedSku,
+  activeSkus, selectedSku, selectedFulfillmentType,
   selectedSkuMemberPrice, hasMemberPrice,
   hasSelectedSkuWholesalePrice, selectedSkuWholesaleFinalIsMember, selectedSkuWholesaleFinalPrice,
   selectedSkuWholesaleRules,

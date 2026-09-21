@@ -204,11 +204,15 @@ func (h *Handler) GetProduct(c *gin.Context) {
 func (h *Handler) applyUpstreamStockToProducts(products []productdomain.Product) {
 	for i := range products {
 		p := &products[i]
-		if p.FulfillmentType != constants.FulfillmentTypeUpstream {
+		if !productdomain.ProductHasFulfillmentType(p, constants.FulfillmentTypeUpstream) {
 			continue
 		}
 		for j := range p.SKUs {
 			sku := &p.SKUs[j]
+			// 交付方式已下沉到 SKU 级：只给实际走上游代销的 SKU 填上游库存。
+			if productdomain.EffectiveFulfillmentType(p, sku) != constants.FulfillmentTypeUpstream {
+				continue
+			}
 			mapping, err := h.SKUMappings.GetByLocalSKUID(sku.ID)
 			if err != nil || mapping == nil {
 				sku.UpstreamStock = 0
@@ -312,17 +316,10 @@ func (h *Handler) toUpstreamProductWithMemberPrice(p productdomain.Product, memb
 	return result
 }
 
-// computeSKUStock 计算 SKU 的库存状态和实际可用量
+// computeSKUStock 计算 SKU 的库存状态和实际可用量。
+// 交付方式已下沉到 SKU 级，按该 SKU 实际生效的交付方式取对应库存字段
+// （ManualStockTotal 已是扣除预占后的剩余库存，不能再次减 ManualStockLocked）。
 func computeSKUStock(p productdomain.Product, s productdomain.ProductSKU) (status string, quantity int) {
-	var available int64
-	switch p.FulfillmentType {
-	case constants.FulfillmentTypeManual:
-		// ManualStockTotal 已是扣除预占后的剩余库存，不能再次减 ManualStockLocked。
-		available = int64(s.ManualStockTotal)
-	case constants.FulfillmentTypeUpstream:
-		available = int64(s.UpstreamStock)
-	default:
-		available = s.AutoStockAvailable
-	}
+	available := productdomain.SKUStockQuantity(&p, &s)
 	return domaincatalog.UpstreamStockPolicy().Status(available), int(available)
 }

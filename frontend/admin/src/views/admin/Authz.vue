@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   adminAPI,
@@ -484,12 +484,23 @@ const resetAdminForm = () => {
   adminForm.isSuper = false
 }
 
+const adminFormPanel = ref<HTMLElement | null>(null)
+const adminUsernameInput = ref<any>(null)
+
 const openAdminEditForm = (admin: AdminAuthzAdmin) => {
   adminFormMode.value = 'edit'
   adminForm.id = admin.id
   adminForm.username = admin.username
   adminForm.password = ''
   adminForm.isSuper = Boolean(admin.is_super)
+  // 表单是列表下方/旁边的常驻面板，点「编辑」若不给视觉反馈，运营会以为「没反应」。
+  // 滚动到表单并聚焦用户名框，让编辑态明显可见。
+  nextTick(() => {
+    adminFormPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const el = adminUsernameInput.value?.$el ?? adminUsernameInput.value
+    el?.querySelector?.('input')?.focus?.()
+    el?.focus?.()
+  })
 }
 
 const pickAdminForRoles = (admin: AdminAuthzAdmin) => {
@@ -966,14 +977,14 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="rounded-lg border border-border p-4 space-y-3">
+        <div ref="adminFormPanel" class="rounded-lg border border-border p-4 space-y-3">
           <div class="flex items-center justify-between gap-2">
             <h3 class="text-sm font-medium">{{ adminFormTitle }}</h3>
             <Button size="sm" variant="ghost" @click="resetAdminForm">{{ text.adminFormReset }}</Button>
           </div>
           <div class="space-y-2">
             <label class="text-xs text-muted-foreground">{{ text.adminUsername }}</label>
-            <Input v-model="adminForm.username" :placeholder="text.adminUsernamePlaceholder" />
+            <Input ref="adminUsernameInput" v-model="adminForm.username" :placeholder="text.adminUsernamePlaceholder" />
           </div>
           <div class="space-y-2">
             <label class="text-xs text-muted-foreground">{{ text.adminPassword }}</label>

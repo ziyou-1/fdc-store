@@ -147,8 +147,9 @@ func (h *Handler) GetProducts(c *gin.Context) {
 		logger.Warnw("channel_catalog_apply_stock", "error", err)
 	}
 
-	// 批量解析映射商品的真实交付类型，并将上游 SKU 库存写回到本地库存字段
-	fulfillmentTypeMap := h.applyUpstreamMappings(products)
+	// 将上游 SKU 库存写回到本地库存字段（返回的展示类型映射列表页不再需要：
+	// 库存已按每个 SKU 自己的交付方式汇总）
+	_ = h.applyUpstreamMappings(products)
 
 	currency, err := h.SettingService.GetSiteCurrency("CNY")
 	if err != nil {
@@ -197,13 +198,9 @@ func (h *Handler) GetProducts(c *gin.Context) {
 			imageURL = string(p.Images[0])
 		}
 
-		// 映射商品使用真实交付类型计算库存
-		ft := p.FulfillmentType
-		if eft, ok := fulfillmentTypeMap[p.ID]; ok {
-			ft = eft
-		}
-
-		stockCount := domaincatalog.StockQuantity(ft, p.AutoStockAvailable, p.ManualStockTotal)
+		// 交付方式已下沉到 SKU 级：商品库存按各活跃 SKU 的交付方式分别算再汇总
+		// （上游代销 SKU 的库存已由 applyUpstreamMappings 写到 UpstreamStock）。
+		stockCount := productdomain.ProductStockQuantity(&p)
 		stockStatus := domaincatalog.StorefrontStockPolicy().Status(stockCount)
 		stockDisplay := domaincatalog.StorefrontStockPolicy().Display(p.StockDisplayMode, stockStatus, stockCount)
 		item := productItem{
@@ -322,7 +319,7 @@ func (h *Handler) GetProductDetail(c *gin.Context) {
 			continue
 		}
 		specValues := resolveLocalizedJSON(sku.SpecValuesJSON, locale, defaultLocale)
-		stockCount := domaincatalog.StockQuantity(effectiveFT, sku.AutoStockAvailable, sku.ManualStockTotal)
+		stockCount := productdomain.SKUStockQuantity(product, &sku)
 		stockStatus := domaincatalog.StorefrontStockPolicy().Status(stockCount)
 		stockDisplay := domaincatalog.StorefrontStockPolicy().Display(product.StockDisplayMode, stockStatus, stockCount)
 		si := skuItem{
@@ -356,7 +353,7 @@ func (h *Handler) GetProductDetail(c *gin.Context) {
 		}
 	}
 
-	stockCount := domaincatalog.StockQuantity(effectiveFT, product.AutoStockAvailable, product.ManualStockTotal)
+	stockCount := productdomain.ProductStockQuantity(product)
 	stockStatus := domaincatalog.StorefrontStockPolicy().Status(stockCount)
 	stockDisplay := domaincatalog.StorefrontStockPolicy().Display(product.StockDisplayMode, stockStatus, stockCount)
 	respondChannelSuccess(c, gin.H{
@@ -562,8 +559,13 @@ func (h *Handler) applyUpstreamMappings(products []productdomain.Product) map[ui
 
 		mapping := mappingByProduct[p.ID]
 		if mapping == nil {
-			// 无 mapping：写无限库存
+			// 无 mapping：写无限库存（含各上游代销 SKU）
 			writeProductStock(p, displayType, -1)
+			for j := range p.SKUs {
+				if productdomain.EffectiveFulfillmentType(p, &p.SKUs[j]) == constants.FulfillmentTypeUpstream {
+					writeSKUStock(&p.SKUs[j], displayType, -1)
+				}
+			}
 			continue
 		}
 
@@ -578,6 +580,10 @@ func (h *Handler) applyUpstreamMappings(products []productdomain.Product) map[ui
 
 		for j := range p.SKUs {
 			sku := &p.SKUs[j]
+			// 交付方式已下沉到 SKU 级：对接商品下被改成自发/人工/内容的 SKU 不走上游库存。
+			if productdomain.EffectiveFulfillmentType(p, sku) != constants.FulfillmentTypeUpstream {
+				continue
+			}
 			sm, ok := smByLocal[sku.ID]
 			if !ok || !sm.UpstreamIsActive {
 				writeSKUStock(sku, displayType, 0)
@@ -623,8 +629,9 @@ func writeProductStock(p *productdomain.Product, displayType string, stock int) 
 	}
 }
 
-// writeSKUStock 同 writeProductStock，作用于 SKU。
+// writeSKUStock 同 writeProductStock，作用于 SKU；同时写 UpstreamStock 供按 SKU 交付方式算库存。
 func writeSKUStock(sku *productdomain.ProductSKU, displayType string, stock int) {
+	sku.UpstreamStock = stock
 	if displayType == constants.FulfillmentTypeAuto {
 		if stock < 0 {
 			sku.AutoStockAvailable = -1
@@ -650,7 +657,9 @@ func setProductsUnlimited(products []productdomain.Product, ftMap map[uint]strin
 		}
 		writeProductStock(p, dt, -1)
 		for j := range p.SKUs {
-			writeSKUStock(&p.SKUs[j], dt, -1)
+			if productdomain.EffectiveFulfillmentType(p, &p.SKUs[j]) == constants.FulfillmentTypeUpstream {
+				writeSKUStock(&p.SKUs[j], dt, -1)
+			}
 		}
 	}
 }

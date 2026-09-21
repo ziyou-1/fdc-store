@@ -51,6 +51,9 @@ type Product struct {
 	AutoStockLocked    int64      `gorm:"-" json:"auto_stock_locked"`                                   // 自动发货库存占用量（仅结构，不写入数据库）
 	AutoStockSold      int64      `gorm:"-" json:"auto_stock_sold"`                                     // 自动发货库存已售量（仅结构，不写入数据库）
 	IsMapped           bool       `gorm:"not null;default:false;index" json:"is_mapped"`                // 是否为对接商品
+	// FulfillmentTypes 是商品下活跃 SKU 实际生效的交付方式集合（仅后台响应填充，不入库）。
+	// 交付方式已下沉到 SKU 级，FulfillmentType 只是商品级默认值，混合交付的商品靠它展示与筛选。
+	FulfillmentTypes []string `gorm:"-" json:"fulfillment_types,omitempty"`
 	IsActive           bool       `gorm:"default:false;index" json:"is_active"`                         // 是否上架
 	SortOrder          int        `gorm:"default:0;index" json:"sort_order"`                            // 排序权重
 	CreatedAt          time.Time  `gorm:"index" json:"created_at"`                                      // 创建时间

@@ -135,10 +135,14 @@ type ProductSKUInput struct {
 	AgisoCpkID        *int64
 	// CardSource 为该 SKU 单独指定的卡密来源（local / agiso / 空=跟随商品级）。
 	CardSource string
+	// FulfillmentType 为该 SKU 单独指定的交付方式（auto / manual / upstream / content / 空=跟随商品级）。
+	FulfillmentType string
 	// InstructionsJSON 为该 SKU 单独的交付说明（多语言）；为空回落商品级。
 	InstructionsJSON map[string]interface{}
-	IsActive         *bool
-	SortOrder        int
+	// PaymentChannelIDs 为该 SKU 允许的支付渠道；nil/空表示不单独限制（回落商品级）。
+	PaymentChannelIDs []uint
+	IsActive          *bool
+	SortOrder         int
 }
 
 func (s *WriteService) filterAvailablePaymentChannelIDs(ids []uint) ([]uint, error) {

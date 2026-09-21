@@ -73,7 +73,12 @@ func (s *Service) ListByUser(userID uint) ([]ItemDetail, error) {
 			_ = s.cartRepo.DeleteByUserProductSKU(userID, item.ProductID, item.SKUID)
 			continue
 		}
-		if strings.TrimSpace(product.FulfillmentType) == constants.FulfillmentTypeManual &&
+		// 交付方式按 SKU 生效（SKU 自己指定的，否则商品级）。
+		fulfillmentType := productdomain.EffectiveFulfillmentType(product, sku)
+		if fulfillmentType == "" {
+			fulfillmentType = constants.FulfillmentTypeManual
+		}
+		if fulfillmentType == constants.FulfillmentTypeManual &&
 			productdomain.ShouldEnforceManualSKUStock(product, sku) &&
 			productdomain.ManualSKUAvailable(sku) <= 0 {
 			_ = s.cartRepo.DeleteByUserProductSKU(userID, item.ProductID, item.SKUID)
@@ -89,11 +94,6 @@ func (s *Service) ListByUser(userID uint) ([]ItemDetail, error) {
 				return nil, err
 			}
 			unitPrice = discounted
-		}
-
-		fulfillmentType := strings.TrimSpace(product.FulfillmentType)
-		if fulfillmentType == "" {
-			fulfillmentType = constants.FulfillmentTypeManual
 		}
 
 		details = append(details, ItemDetail{
@@ -131,7 +131,8 @@ func (s *Service) UpsertItem(input UpsertItemInput) error {
 		return err
 	}
 
-	fulfillmentType := strings.TrimSpace(product.FulfillmentType)
+	// 交付方式按 SKU 生效（SKU 自己指定的，否则商品级）；上游代销规格不进购物车，与既有行为一致。
+	fulfillmentType := productdomain.EffectiveFulfillmentType(product, sku)
 	if fulfillmentType == "" {
 		fulfillmentType = constants.FulfillmentTypeManual
 	}

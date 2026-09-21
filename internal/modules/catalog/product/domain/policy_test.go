@@ -2,6 +2,7 @@ package productdomain
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	categorydomain "github.com/dujiao-next/internal/modules/catalog/category/domain"
@@ -204,5 +205,110 @@ func TestValidateCardSourceIgnoresLocal(t *testing.T) {
 		if err := ValidateCardSource(ft, constants.CardSourceLocal); err != nil {
 			t.Errorf("local 来源不应校验连接与卡种（%s）: %v", ft, err)
 		}
+	}
+}
+
+func TestEffectiveFulfillmentTypeFallsBackToProduct(t *testing.T) {
+	product := &Product{FulfillmentType: constants.FulfillmentTypeAuto}
+	if got := EffectiveFulfillmentType(product, &ProductSKU{}); got != constants.FulfillmentTypeAuto {
+		t.Fatalf("空 SKU 交付方式应回落商品级 auto，实际 %q", got)
+	}
+	if got := EffectiveFulfillmentType(product, &ProductSKU{FulfillmentType: "manual"}); got != constants.FulfillmentTypeManual {
+		t.Fatalf("SKU 自己指定 manual 应生效，实际 %q", got)
+	}
+	if got := EffectiveFulfillmentType(product, &ProductSKU{FulfillmentType: " CONTENT "}); got != constants.FulfillmentTypeContent {
+		t.Fatalf("SKU 交付方式应归一化，实际 %q", got)
+	}
+	if got := EffectiveFulfillmentType(product, &ProductSKU{FulfillmentType: "bogus"}); got != constants.FulfillmentTypeAuto {
+		t.Fatalf("非法 SKU 值应回落商品级，实际 %q", got)
+	}
+	if got := EffectiveFulfillmentType(&Product{}, nil); got != constants.FulfillmentTypeManual {
+		t.Fatalf("商品级为空应按 manual，实际 %q", got)
+	}
+	if got := EffectiveFulfillmentType(nil, nil); got != constants.FulfillmentTypeManual {
+		t.Fatalf("无商品应按 manual，实际 %q", got)
+	}
+}
+
+// upstream 只在对接商品上成立：非对接商品上残留的 upstream 必须回落商品级，
+// 否则下单后找不到映射会卡单。
+func TestEffectiveFulfillmentTypeUpstreamRequiresMappedProduct(t *testing.T) {
+	unmapped := &Product{FulfillmentType: constants.FulfillmentTypeManual}
+	if got := EffectiveFulfillmentType(unmapped, &ProductSKU{FulfillmentType: constants.FulfillmentTypeUpstream}); got != constants.FulfillmentTypeManual {
+		t.Fatalf("非对接商品的 upstream SKU 应回落商品级，实际 %q", got)
+	}
+	mapped := &Product{FulfillmentType: constants.FulfillmentTypeUpstream, IsMapped: true}
+	if got := EffectiveFulfillmentType(mapped, &ProductSKU{}); got != constants.FulfillmentTypeUpstream {
+		t.Fatalf("对接商品默认 SKU 应为 upstream，实际 %q", got)
+	}
+	if got := EffectiveFulfillmentType(mapped, &ProductSKU{FulfillmentType: constants.FulfillmentTypeAuto}); got != constants.FulfillmentTypeAuto {
+		t.Fatalf("对接商品下 SKU 可单独改成 auto，实际 %q", got)
+	}
+}
+
+func TestProductFulfillmentTypesCollectsActiveSKUs(t *testing.T) {
+	product := &Product{
+		FulfillmentType: constants.FulfillmentTypeManual,
+		SKUs: []ProductSKU{
+			{IsActive: true, FulfillmentType: constants.FulfillmentTypeContent},
+			{IsActive: true}, // 跟随商品级 manual
+			{IsActive: false, FulfillmentType: constants.FulfillmentTypeAuto}, // 停用不算
+			{IsActive: true, FulfillmentType: constants.FulfillmentTypeAuto},
+		},
+	}
+	got := ProductFulfillmentTypes(product)
+	want := []string{constants.FulfillmentTypeAuto, constants.FulfillmentTypeManual, constants.FulfillmentTypeContent}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("交付方式集合应为 %v（固定顺序、去重），实际 %v", want, got)
+	}
+	if !ProductHasFulfillmentType(product, constants.FulfillmentTypeAuto) || ProductHasFulfillmentType(product, constants.FulfillmentTypeUpstream) {
+		t.Fatalf("ProductHasFulfillmentType 判断错误")
+	}
+	// 没有活跃 SKU 时退化为商品级
+	none := &Product{FulfillmentType: constants.FulfillmentTypeAuto, SKUs: []ProductSKU{{IsActive: false, FulfillmentType: constants.FulfillmentTypeManual}}}
+	if got := ProductFulfillmentTypes(none); !reflect.DeepEqual(got, []string{constants.FulfillmentTypeAuto}) {
+		t.Fatalf("无活跃 SKU 应退化为商品级 auto，实际 %v", got)
+	}
+}
+
+func TestSKUAndProductStockQuantityByFulfillmentType(t *testing.T) {
+	product := &Product{FulfillmentType: constants.FulfillmentTypeAuto, IsMapped: true}
+	cases := []struct {
+		name string
+		sku  ProductSKU
+		want int64
+	}{
+		{"auto 用卡密可用量", ProductSKU{AutoStockAvailable: 7, ManualStockTotal: 99}, 7},
+		{"manual 用人工库存", ProductSKU{FulfillmentType: constants.FulfillmentTypeManual, AutoStockAvailable: 7, ManualStockTotal: 4}, 4},
+		{"manual 无限", ProductSKU{FulfillmentType: constants.FulfillmentTypeManual, ManualStockTotal: constants.ManualStockUnlimited}, -1},
+		{"content 恒无限", ProductSKU{FulfillmentType: constants.FulfillmentTypeContent}, -1},
+		{"upstream 用上游库存", ProductSKU{FulfillmentType: constants.FulfillmentTypeUpstream, UpstreamStock: 12, AutoStockAvailable: 1}, 12},
+		{"upstream 无限", ProductSKU{FulfillmentType: constants.FulfillmentTypeUpstream, UpstreamStock: -1}, -1},
+	}
+	for _, tc := range cases {
+		sku := tc.sku
+		if got := SKUStockQuantity(product, &sku); got != tc.want {
+			t.Fatalf("%s: 期望 %d 实际 %d", tc.name, tc.want, got)
+		}
+	}
+
+	mixed := &Product{
+		FulfillmentType: constants.FulfillmentTypeAuto,
+		SKUs: []ProductSKU{
+			{IsActive: true, AutoStockAvailable: 3},
+			{IsActive: true, FulfillmentType: constants.FulfillmentTypeManual, ManualStockTotal: 2},
+			{IsActive: false, FulfillmentType: constants.FulfillmentTypeManual, ManualStockTotal: 100},
+		},
+	}
+	if got := ProductStockQuantity(mixed); got != 5 {
+		t.Fatalf("混合商品应按活跃 SKU 求和 3+2=5，实际 %d", got)
+	}
+	mixed.SKUs = append(mixed.SKUs, ProductSKU{IsActive: true, FulfillmentType: constants.FulfillmentTypeContent})
+	if got := ProductStockQuantity(mixed); got != -1 {
+		t.Fatalf("任一活跃 SKU 无限则商品无限，实际 %d", got)
+	}
+	noSKU := &Product{FulfillmentType: constants.FulfillmentTypeManual, ManualStockTotal: 9}
+	if got := ProductStockQuantity(noSKU); got != 9 {
+		t.Fatalf("无 SKU 应按商品级人工库存 9，实际 %d", got)
 	}
 }

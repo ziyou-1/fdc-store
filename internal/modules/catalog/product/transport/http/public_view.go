@@ -37,8 +37,17 @@ type publicProductView struct {
 	PublicSKUs           []publicSKUView
 	ManualStockAvailable int
 	AutoStockAvailable   int64
-	StockStatus          string
-	IsSoldOut            bool
+	// StockQuantity 是按各 SKU 交付方式汇总后的商品级可用量（-1 无限），
+	// 混合交付的商品不能再从单一的 auto/manual 字段推出来。
+	StockQuantity int64
+	// UpstreamDisplayType 是对接商品的上游展示类型（auto/manual），
+	// 上游代销 SKU 对外以它作为交付方式展示。
+	UpstreamDisplayType string
+	// OriginalFulfillmentType 是商品级交付方式的原始值；对接商品的 Product.FulfillmentType
+	// 会被替换成上游展示类型，计算 SKU 有效交付方式时必须用原始值回落。
+	OriginalFulfillmentType string
+	StockStatus             string
+	IsSoldOut               bool
 }
 
 // toProductResp 将内部计算结构转换为公共 DTO
@@ -57,6 +66,7 @@ func (v *publicProductView) toProductResp() productpresenter.Product {
 			SpecValues:           sv.SpecValuesJSON,
 			PriceAmount:          sv.PriceAmount,
 			PointsPrice:          sv.PointsPrice,
+			FulfillmentType:      v.skuDisplayFulfillmentType(sv),
 			ManualStockTotal:     domaincatalog.MaskStockInt(mode, sv.ManualStockTotal),
 			ManualStockSold:      domaincatalog.MaskSoldCount(mode, sv.ManualStockSold),
 			AutoStockAvailable:   domaincatalog.MaskStockInt64(mode, sv.AutoStockAvailable),
@@ -119,15 +129,39 @@ func (v *publicProductView) productStockQuantity() int64 {
 	if v.StockStatus == constants.ProductStockStatusUnlimited {
 		return int64(constants.ManualStockUnlimited)
 	}
-	return domaincatalog.StockQuantity(v.Product.FulfillmentType, v.AutoStockAvailable, v.ManualStockAvailable)
+	return v.StockQuantity
+}
+
+// skuEffectiveFulfillmentType 返回 SKU 实际生效的交付方式（SKU 自己的否则商品级）。
+// 注意要用原始商品级值回落：v.Product.FulfillmentType 可能已被替换成上游展示类型，
+// 直接用它会把上游代销 SKU 误判成 auto/manual。
+func (v *publicProductView) skuEffectiveFulfillmentType(sv publicSKUView) string {
+	carrier := v.Product
+	if v.OriginalFulfillmentType != "" {
+		carrier.FulfillmentType = v.OriginalFulfillmentType
+	}
+	fulfillmentType := productdomain.EffectiveFulfillmentType(&carrier, &sv.ProductSKU)
+	if fulfillmentType == "" {
+		return constants.FulfillmentTypeManual
+	}
+	return fulfillmentType
+}
+
+// skuDisplayFulfillmentType 返回 SKU 对外展示的交付方式：上游代销按上游展示类型
+// （auto/manual）呈现，与商品级对接商品的展示口径一致；其余原样。
+func (v *publicProductView) skuDisplayFulfillmentType(sv publicSKUView) string {
+	fulfillmentType := v.skuEffectiveFulfillmentType(sv)
+	if fulfillmentType != constants.FulfillmentTypeUpstream {
+		return fulfillmentType
+	}
+	if v.UpstreamDisplayType == constants.FulfillmentTypeAuto {
+		return constants.FulfillmentTypeAuto
+	}
+	return constants.FulfillmentTypeManual
 }
 
 func (v *publicProductView) skuStockState(sv publicSKUView) (string, int64) {
-	fulfillmentType := strings.TrimSpace(v.Product.FulfillmentType)
-	if fulfillmentType == "" {
-		fulfillmentType = constants.FulfillmentTypeManual
-	}
-	quantity := domaincatalog.StockQuantity(fulfillmentType, sv.AutoStockAvailable, sv.ManualStockTotal)
+	quantity := publicSKUStockQuantity(v.skuEffectiveFulfillmentType(sv), &sv.ProductSKU)
 	status := domaincatalog.StorefrontStockPolicy().Status(quantity)
 	return status, quantity
 }

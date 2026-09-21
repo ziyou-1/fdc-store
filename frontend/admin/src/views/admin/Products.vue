@@ -202,7 +202,19 @@ const purchaseTypeBadgeClass = (product: AdminProduct) => {
     : 'border-indigo-200 bg-indigo-50 text-indigo-700'
 }
 
+// 交付方式已下沉到 SKU：后端返回的 fulfillment_types 是活跃规格实际生效的集合，
+// 多于一种时按「混合交付」展示，库存徽标也按各自口径都显示。
+const productFulfillmentTypes = (product: AdminProduct): string[] => {
+  const list = Array.isArray(product?.fulfillment_types) ? product.fulfillment_types : []
+  return list.length > 0 ? list : [String(product?.fulfillment_type || 'manual')]
+}
+const isMixedFulfillment = (product: AdminProduct) => productFulfillmentTypes(product).length > 1
+const hasFulfillmentType = (product: AdminProduct, type: string) => productFulfillmentTypes(product).includes(type)
+
 const fulfillmentTypeBadgeClass = (product: AdminProduct) => {
+  if (isMixedFulfillment(product)) {
+    return 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700'
+  }
   if (product?.fulfillment_type === 'auto') {
     return 'border-violet-200 bg-violet-50 text-violet-700'
   }
@@ -213,6 +225,11 @@ const fulfillmentTypeBadgeClass = (product: AdminProduct) => {
 }
 
 const fulfillmentTypeLabel = (product: AdminProduct) => {
+  if (isMixedFulfillment(product)) {
+    return `${t('admin.products.fulfillmentType.mixed')}：${productFulfillmentTypes(product)
+      .map((type) => t(`admin.products.fulfillmentType.${type}`))
+      .join(' / ')}`
+  }
   if (product?.fulfillment_type === 'auto') return t('admin.products.fulfillmentType.auto')
   if (product?.fulfillment_type === 'content') return t('admin.products.fulfillmentType.content')
   return t('admin.products.fulfillmentType.manual')
@@ -649,14 +666,14 @@ watch(
                       {{ product.is_affiliate_enabled ? t('admin.products.affiliate.enabled') : t('admin.products.affiliate.disabled') }}
                     </span>
                     <span
-                      v-if="product.fulfillment_type === 'manual'"
+                      v-if="hasFulfillmentType(product, 'manual')"
                       class="rounded-full border px-2 py-0.5 text-[11px]"
                       :class="manualStockBadgeClass(product)"
                     >
                       {{ formatManualStockSummary(product) }}
                     </span>
                     <span
-                      v-if="product.fulfillment_type === 'auto'"
+                      v-if="hasFulfillmentType(product, 'auto')"
                       class="rounded-full border px-2 py-0.5 text-[11px]"
                       :class="autoStockBadgeClass(product)"
                     >
